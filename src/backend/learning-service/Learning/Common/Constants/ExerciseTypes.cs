@@ -1,5 +1,22 @@
 namespace Sellevate.Learning.Common.Constants;
 
+/// <summary>
+/// The exercise type keys, split by how an answer to each is judged.
+///
+/// <para>
+/// <b>Persisted and compared in SQL.</b> Every <c>Exercise.Type</c> column, every frozen
+/// <c>LessonVersion</c> snapshot, and the seeder's import files hold these exact strings, and the
+/// frontend editors mirror them. Extend this class; never change a value — a renamed key silently
+/// orphans every existing row of that type.
+/// </para>
+///
+/// <para>
+/// <b><see cref="AiPowered"/> is a partition, not a hint.</b> <c>ExerciseEvaluationFactory</c> builds an
+/// AI strategy for exactly these types and expects a DI-registered deterministic strategy for the rest,
+/// so moving a type between the two groups is what changes how it is graded. A type added to
+/// <see cref="All"/> and to neither group has no strategy at all and throws when a learner answers it.
+/// </para>
+/// </summary>
 public static class ExerciseTypes
 {
     public const string ChooseOption = "choose_option";

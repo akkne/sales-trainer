@@ -96,7 +96,7 @@ public sealed class PlatformAdminController(IPlatformAdminService platformAdminS
         return new PlatformAdminActor(
             actorUserId,
             User.FindFirstValue(ClaimTypes.Email) ?? string.Empty,
-            User.FindFirstValue("displayName") ?? string.Empty,
+            User.FindFirstValue(ClaimTypeNames.DisplayName) ?? string.Empty,
             IsAlreadyImpersonating: User.HasClaim(
                 claim => claim.Type == ImpersonationClaimNames.IsImpersonation));
     }

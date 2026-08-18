@@ -1,4 +1,7 @@
+using Microsoft.Extensions.Options;
+using Sellevate.Analytics.Common.Constants;
 using Sellevate.Analytics.Features.Presence.Services.Abstract;
+using Sellevate.Analytics.Infrastructure.Configuration;
 using StackExchange.Redis;
 
 namespace Sellevate.Analytics.Features.Presence.Services.Implementation;
@@ -40,14 +43,17 @@ internal sealed class PresenceTracker : IPresenceTracker
     /// </summary>
     internal const string OrganizationRegistryKey = "presence:organizations";
 
-    private static readonly TimeSpan PresenceWindow = TimeSpan.FromMinutes(5);
-
     private readonly IConnectionMultiplexer _redisConnection;
+    private readonly TimeSpan _presenceWindow;
 
-    public PresenceTracker(IConnectionMultiplexer redisConnection)
+    public PresenceTracker(
+        IConnectionMultiplexer redisConnection,
+        IOptions<PresenceConfiguration> presenceConfiguration)
     {
         ArgumentNullException.ThrowIfNull(redisConnection);
+        ArgumentNullException.ThrowIfNull(presenceConfiguration);
         _redisConnection = redisConnection;
+        _presenceWindow = TimeSpan.FromMinutes(presenceConfiguration.Value.WindowMinutes);
     }
 
     public async Task MarkSeenAsync(Guid organizationId, string userId, CancellationToken cancellationToken = default)
@@ -66,14 +72,13 @@ internal sealed class PresenceTracker : IPresenceTracker
     {
         RequireOrganization(organizationId);
 
-        var windowStartUnixSeconds = DateTimeOffset.UtcNow.Subtract(PresenceWindow).ToUnixTimeSeconds();
         return await _redisConnection.GetDatabase()
-            .SortedSetLengthAsync(OnlineKey(organizationId), windowStartUnixSeconds, double.PositiveInfinity);
+            .SortedSetLengthAsync(OnlineKey(organizationId), WindowStartUnixSeconds(), double.PositiveInfinity);
     }
 
     public async Task<long> CountOnlineAcrossAllOrganizationsAsync(CancellationToken cancellationToken = default)
     {
-        var windowStartUnixSeconds = DateTimeOffset.UtcNow.Subtract(PresenceWindow).ToUnixTimeSeconds();
+        var windowStartUnixSeconds = WindowStartUnixSeconds();
         var database = _redisConnection.GetDatabase();
 
         var total = 0L;
@@ -86,9 +91,14 @@ internal sealed class PresenceTracker : IPresenceTracker
         return total;
     }
 
+    /// <summary>
+    /// Drops members that fell out of the window, then forgets an organization whose whole team went
+    /// offline: an emptied sorted set is deleted by Redis itself, and dropping the registry entry with
+    /// it stops a churned customer costing a round trip on every tick forever.
+    /// </summary>
     public async Task PruneAsync(CancellationToken cancellationToken = default)
     {
-        var windowStartUnixSeconds = DateTimeOffset.UtcNow.Subtract(PresenceWindow).ToUnixTimeSeconds();
+        var windowStartUnixSeconds = WindowStartUnixSeconds();
         var database = _redisConnection.GetDatabase();
 
         foreach (var organizationId in await ReadRegisteredOrganizationsAsync(database))
@@ -96,9 +106,6 @@ internal sealed class PresenceTracker : IPresenceTracker
             await database.SortedSetRemoveRangeByScoreAsync(
                 OnlineKey(organizationId), double.NegativeInfinity, windowStartUnixSeconds, Exclude.Stop);
 
-            // An organization whose whole team went offline leaves an empty sorted set, which Redis
-            // deletes on its own; drop the registry entry with it so a customer that churned does
-            // not cost a round trip on every tick forever.
             if (await database.SortedSetLengthAsync(OnlineKey(organizationId)) == 0)
             {
                 await database.SetRemoveAsync(OrganizationRegistryKey, organizationId.ToString("N"));
@@ -106,15 +113,17 @@ internal sealed class PresenceTracker : IPresenceTracker
         }
     }
 
-    private static async Task<List<Guid>> ReadRegisteredOrganizationsAsync(IDatabase database)
+    /// <summary>
+    /// A member that does not parse as a GUID is skipped rather than thrown on: it can only come from
+    /// a manual Redis edit, and one bad entry must not stop the gauge for every other organization.
+    /// </summary>
+    private static async Task<IReadOnlyList<Guid>> ReadRegisteredOrganizationsAsync(IDatabase database)
     {
         var members = await database.SetMembersAsync(OrganizationRegistryKey);
 
         var organizationIds = new List<Guid>(members.Length);
         foreach (var member in members)
         {
-            // A malformed member is skipped rather than thrown on: it can only come from a manual
-            // Redis edit, and one bad entry must not stop the gauge for every other organization.
             if (Guid.TryParse(member.ToString(), out var organizationId))
             {
                 organizationIds.Add(organizationId);
@@ -134,7 +143,15 @@ internal sealed class PresenceTracker : IPresenceTracker
     {
         if (organizationId == Guid.Empty)
         {
-            throw new InvalidOperationException("Organization context is not set.");
+            throw new InvalidOperationException(ErrorMessages.OrganizationContextNotSet);
         }
     }
+
+    /// <summary>
+    /// The lower score bound of the presence window. Every read derives it from "now" at call time
+    /// rather than caching it, so a long-lived singleton cannot go on answering with a window that
+    /// closed hours ago.
+    /// </summary>
+    private long WindowStartUnixSeconds() =>
+        DateTimeOffset.UtcNow.Subtract(_presenceWindow).ToUnixTimeSeconds();
 }

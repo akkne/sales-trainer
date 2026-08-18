@@ -137,8 +137,9 @@ public sealed record DialogReviewResolvedEvent(
     int? AdjustedScore,
     string? Resolution);
 
-// User-profile replica events — consumed to resolve a recipient's email/display name locally
-// (the notification service has no database, so the replica is held in Redis).
+/// <summary>Published by Identity on e-mail and first-time Google sign-up. Consumed to resolve a
+/// recipient's email and display name locally: the notification service has no database, so the user
+/// replica is held in Redis.</summary>
 public sealed record UserRegisteredEvent(Guid UserId, string Email, string DisplayName, string? AvatarKey);
 
 public sealed record UserUpdatedEvent(Guid UserId, string DisplayName, string? AvatarKey);

@@ -38,6 +38,15 @@ internal sealed class ContentAdaptationJobService(
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Lists the organization's adaptation batches.
+    ///
+    /// <para>
+    /// The per-status counts come from one grouped query for the whole page rather than one query per
+    /// batch. This admin list is a screen a sales lead leaves open, and N+1 on a list of runs is the
+    /// shape that makes it feel broken.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<ContentAdaptationJobSummaryDto>> GetJobsAsync(
         string? mode,
         string? status,
@@ -79,8 +88,6 @@ internal sealed class ContentAdaptationJobService(
 
         var jobIds = jobs.Select(job => job.Id).ToList();
 
-        // One grouped count for the whole page rather than one query per batch: the admin list is the
-        // screen a РОП leaves open, and N+1 on a list of runs is the shape that makes it feel broken.
         var counts = await databaseContext.ContentAdaptationItems
             .AsNoTracking()
             .Where(item => jobIds.Contains(item.JobId))
@@ -132,6 +139,35 @@ internal sealed class ContentAdaptationJobService(
         return item is null ? null : await DescribeItemAsync(item, cancellationToken);
     }
 
+    /// <summary>
+    /// Opens a batch over one stage's exercises and queues an item per exercise.
+    ///
+    /// <para>
+    /// <b>The live-batch check here is for the message; the truth is enforced by
+    /// <c>UX_ContentAdaptationJobs_Live</c>.</b> Two clicks a second apart would both read no live
+    /// batch under READ COMMITTED, and the customer would pay twice for the same sixty rewrites. The
+    /// read exists so the second click gets a sentence instead of a unique-violation.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>An oversized stage is refused with its number, never truncated to the ceiling.</b> "Every
+    /// exercise in the stage" is a promise, and silently adapting the first sixty of four hundred is
+    /// the kind of half-kept promise nobody discovers until a manager asks why half the stage still
+    /// sounds generic.
+    /// </para>
+    ///
+    /// <para>
+    /// Each item records the fingerprint of the body the model is about to be shown, <b>before</b> the
+    /// call rather than after it: what accept compares against must be what the proposal was made
+    /// from, and a hash taken later would silently absorb an edit made in between.
+    /// </para>
+    ///
+    /// <para>
+    /// The result is read back <b>before</b> the commit. Outside the transaction there is no
+    /// <c>SET LOCAL app.organization_id</c>, so the row-level-security policy returns nothing and the
+    /// response would describe an empty batch that had in fact just been written.
+    /// </para>
+    /// </summary>
     public async Task<ContentAdaptationJobDto> StartAsync(
         StartContentAdaptationRequestDto request,
         Guid? actorId,
@@ -161,10 +197,6 @@ internal sealed class ContentAdaptationJobService(
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
-        // Checked here for the message, enforced by UX_ContentAdaptationJobs_Live for the truth: two
-        // clicks a second apart would both read no live batch under READ COMMITTED, and the customer
-        // would pay twice for the same sixty rewrites. The read exists so the second click gets a
-        // sentence instead of a unique-violation.
         var liveJob = await databaseContext.ContentAdaptationJobs
             .AsNoTracking()
             .FirstOrDefaultAsync(
@@ -190,9 +222,6 @@ internal sealed class ContentAdaptationJobService(
                 $"Stage '{stageKey}' has no exercises to adapt.");
         }
 
-        // Refused with the number rather than truncated to the ceiling. «Все упражнения этапа» is a
-        // promise, and silently adapting the first sixty of four hundred is the kind of half-kept
-        // promise nobody discovers until a manager asks why half the stage still sounds generic.
         if (scopeSize > maximumItems)
         {
             throw new ContentAdaptationValidationException(
@@ -232,9 +261,6 @@ internal sealed class ContentAdaptationJobService(
                 LessonTitle = Truncate(row.LessonTitle, MaximumLessonTitleLength),
                 ExerciseType = row.ExerciseType,
                 OrderInLesson = row.OrderInLesson,
-                // The fingerprint of the body the model is about to be shown, recorded before the
-                // call rather than after it: what accept has to compare against is what was proposed
-                // from, and a hash taken later would silently absorb an edit made in between.
                 BaseContentHash = HashExercise(row.ExerciseType, row.SerializedContent, row.CustomAiPrompt),
                 Status = ContentAdaptationItemStatuses.Pending,
                 CreatedAt = now,
@@ -244,9 +270,6 @@ internal sealed class ContentAdaptationJobService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Read back before the commit, not after. Outside a transaction there is no
-        // SET LOCAL app.organization_id, so the row-level-security policy returns nothing and the
-        // response would describe an empty batch that was in fact just written.
         var items = await ReadItemsAsync(job.Id, cancellationToken);
 
         await tenantScope.CommitAsync(cancellationToken);
@@ -260,6 +283,35 @@ internal sealed class ContentAdaptationJobService(
             items.Select(ToItemSummary).ToList());
     }
 
+    /// <summary>
+    /// Applies one accepted proposal to the exercise it targets.
+    ///
+    /// <para>
+    /// <b>A review finding is a diagnosis, not a patch.</b> The review half deliberately produces
+    /// nothing that can be applied, so a model can never be the thing that edited a customer's
+    /// curriculum.
+    /// </para>
+    ///
+    /// <para>
+    /// The proposal is <b>re-validated on the way out as well as on the way in</b>. It may have been
+    /// written by an older build, and an exercise the renderers cannot play is worse than one that
+    /// reads generically: the second is disappointing, the first is a blank screen mid-lesson.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The staleness check compares against the row about to be written, not the row the proposal
+    /// was read from.</b> For a lesson the organization owns those are the same row; for one it does
+    /// not, they are the base and its fresh copy — byte-identical, which is exactly why one comparison
+    /// covers both cases. When they differ, somebody edited the exercise after the model saw it, and
+    /// applying would discard their edit. 40.18 refused to build a three-way merge for precisely this
+    /// situation, and refusing here is the same answer.
+    /// </para>
+    ///
+    /// <para>
+    /// The item is described before the commit, for the reason <see cref="StartAsync"/> gives: outside
+    /// the transaction the tenant session variable is gone and every read comes back empty.
+    /// </para>
+    /// </summary>
     public async Task<ContentAdaptationItemDto?> AcceptItemAsync(
         Guid jobId,
         Guid itemId,
@@ -282,8 +334,6 @@ internal sealed class ContentAdaptationJobService(
             return null;
         }
 
-        // A finding is a diagnosis, not a patch. The review half deliberately produces nothing that
-        // can be applied, so that a model can never be the thing that edited a customer's curriculum.
         if (job.Mode != ContentAdaptationModes.ToneRewrite)
         {
             throw new ContentAdaptationStateException(
@@ -304,9 +354,6 @@ internal sealed class ContentAdaptationJobService(
 
         var proposed = ParseOrThrow(item.ProposedContent, itemId);
 
-        // Re-validated on the way out as well as on the way in. The proposal may have been written by
-        // an older build, and an exercise the renderers cannot play is worse than one that reads
-        // generically — the second is disappointing, the first is a blank screen mid-lesson.
         var validationErrors = ExerciseContentValidator.Validate(item.ExerciseType, proposed.RootElement);
         if (validationErrors.Count > 0)
         {
@@ -316,13 +363,6 @@ internal sealed class ContentAdaptationJobService(
 
         var target = await ResolveTargetExerciseAsync(item, actorId, cancellationToken);
 
-        // The staleness check, and it is deliberately made against the row about to be written rather
-        // than against the row the proposal was read from. Those are the same row for a lesson the
-        // organization owns, and they are the base and its fresh copy for one it does not — a copy
-        // that is byte-identical, which is exactly why the same comparison covers both. When they
-        // differ, somebody edited the exercise after the model saw it, and applying would discard
-        // their edit: 40.18 refused to build a three-way merge for precisely this, and refusing is
-        // the same answer.
         var currentHash = HashExercise(target.Type, target.SerializedContent, target.CustomAiPrompt);
         if (!string.Equals(currentHash, item.BaseContentHash, StringComparison.Ordinal))
         {
@@ -346,8 +386,6 @@ internal sealed class ContentAdaptationJobService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Described before the commit, for the reason StartAsync gives: outside the transaction the
-        // tenant session variable is gone and every read comes back empty.
         var described = await DescribeItemAsync(item, cancellationToken);
 
         await tenantScope.CommitAsync(cancellationToken);
@@ -360,6 +398,16 @@ internal sealed class ContentAdaptationJobService(
         return described;
     }
 
+    /// <summary>
+    /// Records a rejection of one proposal.
+    ///
+    /// <para>
+    /// Nothing is written to content and nothing is remembered about the refusal beyond the row itself.
+    /// <b>A rejected rewrite is not a standing instruction:</b> the next batch is a new question asked
+    /// of a possibly different profile, and suppressing it here would quietly turn one "no" into a
+    /// permanent exemption nobody can find later.
+    /// </para>
+    /// </summary>
     public async Task<ContentAdaptationItemDto?> RejectItemAsync(
         Guid jobId,
         Guid itemId,
@@ -394,10 +442,6 @@ internal sealed class ContentAdaptationJobService(
         item.ResolvedAt = now;
         item.UpdatedAt = now;
 
-        // Nothing is written to content and nothing is remembered about the refusal beyond the row
-        // itself. A rejected rewrite is not a standing instruction — the next batch is a new question
-        // asked of a possibly different profile, and suppressing it here would quietly turn one «нет»
-        // into a permanent exemption nobody can find later.
         await RefreshJobStatusAsync(job, now, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -557,6 +601,15 @@ internal sealed class ContentAdaptationJobService(
             .ThenBy(item => item.Id)
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Describes one item, computing staleness rather than reading it.
+    ///
+    /// <para>
+    /// Staleness is computed here and stored nowhere — the shape 40.18 chose. There is no flag to set,
+    /// so there is no flag to be wrong, and an item stops being stale the moment the exercise is put
+    /// back the way it was.
+    /// </para>
+    /// </summary>
     private async Task<ContentAdaptationItemDto> DescribeItemAsync(
         ContentAdaptationItem item,
         CancellationToken cancellationToken)
@@ -572,9 +625,6 @@ internal sealed class ContentAdaptationJobService(
         var changes = ContentFieldChangeSummarizer.Compare(
             currentExercise?.SerializedContent, item.ProposedContent);
 
-        // Staleness is computed here and stored nowhere, the shape 40.18 chose: there is no flag to
-        // set, so there is no flag to be wrong, and an item stops being stale the moment the exercise
-        // is put back the way it was.
         var isStale = currentExercise is not null
                       && item.Status == ContentAdaptationItemStatuses.Proposed
                       && !string.Equals(

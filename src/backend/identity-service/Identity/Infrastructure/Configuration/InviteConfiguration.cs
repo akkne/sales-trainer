@@ -1,5 +1,8 @@
 namespace Sellevate.Identity.Infrastructure.Configuration;
 
+/// <summary>
+/// Invite token signing and lifetime, plus the acceptance URL the invitation email links to.
+/// </summary>
 public sealed class InviteConfiguration
 {
     public const string SectionName = "Invites";

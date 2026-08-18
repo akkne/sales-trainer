@@ -115,6 +115,11 @@ public sealed class AdminAssignmentsController(
         }
     }
 
+    /// <summary>
+    /// Editing an issued assignment re-resolves its audience (40.23), so this route inherits the same
+    /// failure as issuing and answers 503 when identity-service cannot say who works here. Nothing is
+    /// written in that case: the top-up happens inside the same transaction as the edit.
+    /// </summary>
     [HttpPut("admin/assignments/{assignmentId:guid}")]
     public async Task<ActionResult<AssignmentDto>> Update(
         Guid assignmentId,
@@ -134,9 +139,6 @@ public sealed class AdminAssignmentsController(
         }
         catch (AssignmentAudienceUnavailableException unavailableException)
         {
-            // Editing an issued assignment re-resolves its audience (40.23), so this route inherits
-            // the same failure as issuing. Nothing was written: the top-up happens inside the same
-            // transaction as the edit.
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
                 new { message = unavailableException.Message });

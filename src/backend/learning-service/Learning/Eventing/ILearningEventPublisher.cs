@@ -1,5 +1,11 @@
 namespace Sellevate.Learning.Eventing;
 
+/// <summary>
+/// The single seam through which learning-service announces anything to the rest of the platform.
+/// Every method only <b>stages</b> an event: it is enqueued on the caller's ambient transaction and
+/// becomes visible when that transaction commits, so an implementation must never produce to a broker
+/// synchronously.
+/// </summary>
 public interface ILearningEventPublisher
 {
     Task PublishExerciseCompletedAsync(ExerciseCompletedEvent payload, CancellationToken cancellationToken = default);

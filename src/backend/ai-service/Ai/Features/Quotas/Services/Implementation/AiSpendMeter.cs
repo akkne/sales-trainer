@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Features.Quotas.Constants;
 using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -27,28 +28,30 @@ internal sealed class AiSpendMeter : IAiSpendMeter
     /// </summary>
     public const string WorkloadHeaderName = "X-Ai-Workload";
 
-    private const string BatchWorkloadHeaderValue = "batch";
-
     /// <summary>
-    /// Atomic check-and-increment, byte-identical in behaviour to the one
-    /// <c>VoiceUsageService</c> has used since the voice feature shipped: the decision is derived
-    /// from the value the same call writes, never read first and written second.
+    /// Atomic check-and-increment, behaviourally identical to the one <c>VoiceUsageService</c> has
+    /// used since the voice feature shipped: the decision is derived from the value the same call
+    /// writes, never read first and written second. Returns <c>-1</c> when the reservation would cross
+    /// the limit, and the new counter value otherwise.
     /// </summary>
     private const string ReserveLuaScript = @"
-local key   = KEYS[1]
-local limit = tonumber(ARGV[1])
-local delta = tonumber(ARGV[2])
-local ttl   = tonumber(ARGV[3])
-local cur   = redis.call('GET', key)
-local val   = cur and tonumber(cur) or 0
-if limit > 0 and val + delta > limit then
+local key             = KEYS[1]
+local limit           = tonumber(ARGV[1])
+local delta           = tonumber(ARGV[2])
+local expiresAtUnix   = tonumber(ARGV[3])
+local stored          = redis.call('GET', key)
+local currentValue    = stored and tonumber(stored) or 0
+if limit > 0 and currentValue + delta > limit then
     return -1
 end
-local newval = redis.call('INCRBY', key, delta)
-if ttl > 0 then
-    redis.call('EXPIREAT', key, ttl)
+local reservedValue = redis.call('INCRBY', key, delta)
+if expiresAtUnix > 0 then
+    redis.call('EXPIREAT', key, expiresAtUnix)
 end
-return newval";
+return reservedValue";
+
+    /// <summary>Ledger row written when a provider reported no model name at all.</summary>
+    private const string UnknownModelName = "unknown";
 
     private readonly AiDbContext _databaseContext;
     private readonly ITenantContext _tenantContext;
@@ -81,19 +84,29 @@ return newval";
         get
         {
             var declared = _httpContextAccessor.HttpContext?.Request.Headers[WorkloadHeaderName].ToString();
-            return string.Equals(declared, BatchWorkloadHeaderValue, StringComparison.OrdinalIgnoreCase)
+            return string.Equals(declared, AiWorkloadClassNames.Batch, StringComparison.OrdinalIgnoreCase)
                 ? AiWorkloadClass.Batch
                 : AiWorkloadClass.Interactive;
         }
     }
 
+    /// <summary>
+    /// <para>
+    /// Platform staff and system callers reading their own installation pass through ungated: they
+    /// have no organization and no budget of their own, and refusing them would break the admin
+    /// screens. Everything else with no tenant is a caller that forgot the header, and is refused.
+    /// </para>
+    ///
+    /// <para>
+    /// A refusal is logged at <c>Information</c>, not <c>Warning</c>: an organization reaching a limit
+    /// somebody set for it is the feature working, exactly as 40.28 says of a sufficiency refusal. A
+    /// run of these against one customer is a commercial signal, not an incident.
+    /// </para>
+    /// </summary>
     public async Task EnsureLlmAllowanceAsync(string operation, CancellationToken cancellationToken = default)
     {
         if (_tenantContext.OrganizationId is not { } organizationId)
         {
-            // Platform staff reading their own installation still pass through here; they have no
-            // organization and no budget of their own, and refusing them would break the admin
-            // screens. Everything else with no tenant is a caller that forgot the header.
             if (_tenantContext.IsPlatformWide || _tenantContext.IsSystem)
             {
                 return;
@@ -117,18 +130,17 @@ return newval";
             return;
         }
 
-        var period = workloadClass == AiWorkloadClass.Batch ? "month_batch_reserve" : "month";
+        var period = workloadClass == AiWorkloadClass.Batch
+            ? AiQuotaPeriods.MonthBatchReserve
+            : AiQuotaPeriods.Month;
 
-        // Information, not Warning: an organization reaching a limit somebody set for it is the
-        // feature working, exactly as 40.28 says of a sufficiency refusal. A run of these against
-        // one customer is a commercial signal, not an incident.
         _logger.LogInformation(
             "LLM quota reached for organization {OrganizationId} on {Operation} ({Workload}): {Used} of {Ceiling} tokens",
             organizationId, operation, workloadClass, spentTokens, ceiling);
 
-        AiSpendMetrics.QuotaRefusals.WithLabels("llm_tokens", period).Inc();
+        AiSpendMetrics.QuotaRefusals.WithLabels(AiQuotaResources.LlmTokens, period).Inc();
 
-        throw new AiQuotaExceededException("llm_tokens", period, spentTokens, ceiling);
+        throw new AiQuotaExceededException(AiQuotaResources.LlmTokens, period, spentTokens, ceiling);
     }
 
     public async Task<bool> HasLlmAllowanceAsync(
@@ -205,7 +217,7 @@ return newval";
         var dayKey = AiVoiceQuotaKeys.Day(_tenantContext.OrganizationId.Value, now);
         var monthKey = AiVoiceQuotaKeys.Month(_tenantContext.OrganizationId.Value, now);
 
-        var dayLimitSeconds = quota.VoiceDailyLimitMinutes * 60;
+        var dayLimitSeconds = quota.VoiceDailyLimitMinutes * AiQuotaScales.SecondsPerMinute;
         var dayResult = await ReserveAsync(dayKey, dayLimitSeconds, seconds, AiVoiceQuotaKeys.DayExpiryUnix(now));
         if (dayResult < 0)
         {
@@ -213,12 +225,16 @@ return newval";
                 "Organization voice day limit reached for {OrganizationId}: {Limit}s",
                 _tenantContext.OrganizationId, dayLimitSeconds);
 
-            AiSpendMetrics.QuotaRefusals.WithLabels("voice_minutes", "day").Inc();
+            AiSpendMetrics.QuotaRefusals.WithLabels(AiQuotaResources.VoiceMinutes, AiQuotaPeriods.Day).Inc();
 
-            throw new AiQuotaExceededException("voice_minutes", "day", await ReadAsync(dayKey), dayLimitSeconds);
+            throw new AiQuotaExceededException(
+                AiQuotaResources.VoiceMinutes,
+                AiQuotaPeriods.Day,
+                await ReadAsync(dayKey),
+                dayLimitSeconds);
         }
 
-        var monthLimitSeconds = quota.VoiceMonthlyLimitMinutes * 60;
+        var monthLimitSeconds = quota.VoiceMonthlyLimitMinutes * AiQuotaScales.SecondsPerMinute;
         var monthResult = await ReserveAsync(monthKey, monthLimitSeconds, seconds, AiVoiceQuotaKeys.MonthExpiryUnix(now));
         if (monthResult < 0)
         {
@@ -228,12 +244,21 @@ return newval";
                 "Organization voice month limit reached for {OrganizationId}: {Limit}s",
                 _tenantContext.OrganizationId, monthLimitSeconds);
 
-            AiSpendMetrics.QuotaRefusals.WithLabels("voice_minutes", "month").Inc();
+            AiSpendMetrics.QuotaRefusals.WithLabels(AiQuotaResources.VoiceMinutes, AiQuotaPeriods.Month).Inc();
 
-            throw new AiQuotaExceededException("voice_minutes", "month", await ReadAsync(monthKey), monthLimitSeconds);
+            throw new AiQuotaExceededException(
+                AiQuotaResources.VoiceMinutes,
+                AiQuotaPeriods.Month,
+                await ReadAsync(monthKey),
+                monthLimitSeconds);
         }
     }
 
+    /// <summary>
+    /// Returns the unused tail of a reservation, swallowing any Redis failure. A lost refund costs the
+    /// organization headroom it already paid for; a thrown refund costs the caller their reply. The
+    /// reservation window closes on its own either way.
+    /// </summary>
     public async Task RefundVoiceSecondsAsync(int seconds, CancellationToken cancellationToken = default)
     {
         if (seconds <= 0 || _tenantContext.OrganizationId is null)
@@ -251,8 +276,6 @@ return newval";
         }
         catch (Exception exception)
         {
-            // A lost refund costs the organization headroom it already paid for; a thrown refund
-            // costs the caller their reply. The reservation window closes on its own either way.
             _logger.LogWarning(exception, "Voice quota refund of {Seconds}s failed", seconds);
         }
     }
@@ -271,27 +294,26 @@ return newval";
             (int)await ReadAsync(AiVoiceQuotaKeys.Month(organizationId, now)));
     }
 
-    private static long CeilingFor(ResolvedAiQuota quota, AiWorkloadClass workloadClass)
-    {
-        if (workloadClass != AiWorkloadClass.Batch)
-        {
-            return quota.LlmMonthlyTokenLimit;
-        }
+    private static long CeilingFor(ResolvedAiQuota quota, AiWorkloadClass workloadClass) =>
+        workloadClass == AiWorkloadClass.Batch ? quota.BatchTokenCeiling : quota.LlmMonthlyTokenLimit;
 
-        var reservePercent = Math.Clamp(quota.BatchReservePercent, 0, 90);
-        return quota.LlmMonthlyTokenLimit - (quota.LlmMonthlyTokenLimit * reservePercent / 100);
-    }
-
+    /// <summary>
+    /// The organization's LLM tokens spent in the current month bucket.
+    ///
+    /// <para>
+    /// The organization predicate is explicit rather than left to the query filter, which reads
+    /// <c>IsPlatformWide || …</c> and so admits every row for Sellevate staff holding a membership —
+    /// metering the whole installation's tokens against one customer's ceiling. Review, 40.34.
+    /// Aggregated in the database rather than materialised and summed in memory, because this runs on
+    /// every LLM call.
+    /// </para>
+    /// </summary>
     private async Task<long> SumMonthlyTokensAsync(Guid organizationId, CancellationToken cancellationToken)
     {
         var periodKey = AiUsagePeriod.Current();
 
         await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
 
-        // The organization predicate is explicit rather than left to the query filter, which reads
-        // `IsPlatformWide || …` and so admits every row for Sellevate staff holding a membership —
-        // metering the whole installation's tokens against one customer's ceiling. Review, 40.34.
-        // SumAsync rather than ToListAsync + Sum: this runs on every LLM call.
         return await _databaseContext.AiUsageRecords
             .Where(record => record.OrganizationId == organizationId
                 && record.PeriodKey == periodKey
@@ -303,7 +325,20 @@ return newval";
     /// The charge. A single <c>INSERT … ON CONFLICT DO UPDATE SET x = x + excluded.x</c>, so two
     /// concurrent completions on one organization cannot lose each other's tokens — the same
     /// property 40.27 required of the pipeline claim, for the same reason: the alternative costs
-    /// money rather than a retry.
+    /// money rather than a retry. The raw SQL is deliberate: EF Core cannot express the upsert, and a
+    /// read-modify-write in its place would lose tokens under concurrency.
+    ///
+    /// <para>
+    /// The Prometheus counters are platform-wide, unlabelled by organization, and emitted before the
+    /// per-organization write so that a Postgres hiccup cannot make the platform total silently
+    /// understate itself.
+    /// </para>
+    ///
+    /// <para>
+    /// Never throws. By the time this runs the call has already been made and already been billed by
+    /// the provider. Losing our own record of it understates the month; throwing would also lose the
+    /// answer the customer paid for, which is strictly worse.
+    /// </para>
     /// </summary>
     private async Task AddToLedgerAsync(
         string kind,
@@ -314,8 +349,6 @@ return newval";
         bool wasEstimated,
         CancellationToken cancellationToken)
     {
-        // Platform-wide, unlabelled by organization, and emitted before the per-organization write so
-        // that a Postgres hiccup cannot make the platform total silently understate itself.
         if (kind == AiUsageKinds.Llm)
         {
             AiSpendMetrics.LlmTokens.WithLabels("prompt").Inc(promptTokens);
@@ -364,9 +397,6 @@ return newval";
         }
         catch (Exception exception)
         {
-            // The call has already been made and already been billed by the provider. Losing our own
-            // record of it understates the month; throwing here would also lose the answer the
-            // customer paid for, which is strictly worse.
             _logger.LogWarning(
                 exception,
                 "Failed to record {Kind} usage for organization {OrganizationId} on model {Model}",
@@ -374,9 +404,14 @@ return newval";
         }
     }
 
+    /// <summary>
+    /// Fits a provider model name into the ledger's key column. A blank name becomes
+    /// <see cref="UnknownModelName"/> rather than an empty string, so an unattributable charge still
+    /// lands on a row somebody can find.
+    /// </summary>
     private static string Truncate(string model) =>
-        string.IsNullOrWhiteSpace(model) ? "unknown"
-        : model.Length > 128 ? model[..128]
+        string.IsNullOrWhiteSpace(model) ? UnknownModelName
+        : model.Length > AiQuotaColumnLengths.Model ? model[..AiQuotaColumnLengths.Model]
         : model;
 
     private async Task<long> ReserveAsync(string key, int limit, int delta, long expiryUnix)

@@ -4,6 +4,14 @@ using Sellevate.Learning.Features.SkillTree.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps one learner's standing on one skill. Organization first, per docs/TENANCY/TENANCY.md §3.
+///
+/// <para>
+/// The index is <b>deliberately not unique</b>: the table had no unique constraint before 40.10 and
+/// existing databases may already hold duplicate (user, skill) rows, which a unique index would refuse.
+/// </para>
+/// </summary>
 public sealed class UserSkillProgressEntityConfiguration : IEntityTypeConfiguration<UserSkillProgress>
 {
     public void Configure(EntityTypeBuilder<UserSkillProgress> builder)
@@ -11,9 +19,6 @@ public sealed class UserSkillProgressEntityConfiguration : IEntityTypeConfigurat
         builder.Property(progress => progress.OrganizationId)
             .IsRequired();
 
-        // Phase 40.10: organization first, per docs/TENANCY/TENANCY.md section 3. Deliberately not
-        // unique: the table had no unique constraint before this block and existing databases may
-        // already hold duplicate (UserId, SkillId) rows, which a unique index would refuse.
         builder.HasIndex(progress => new { progress.OrganizationId, progress.UserId, progress.SkillId });
     }
 }

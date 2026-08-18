@@ -19,6 +19,21 @@ namespace Sellevate.Ai.Eventing;
 /// matters more here than in learning, because guessing wrong would apply one customer's compliance
 /// list to another's calls.
 /// </para>
+///
+/// <para>
+/// <b>The read and the write share one tenant transaction, and must.</b>
+/// <c>SET LOCAL app.organization_id</c> is issued by <c>TenantConnectionInterceptor</c> on
+/// <c>TransactionStarted</c>, so a bare lookup outside a transaction runs with no tenant set: once RLS is
+/// actually enforced it would return nothing, the handler would add a row that already exists, and the
+/// save would fail the primary key — three retries, then the dead-letter queue. Every profile update after
+/// the first would be lost while the neutral fallback wording made it look normal. Review, 40.34.
+/// </para>
+///
+/// <para>
+/// The jsonb columns are NOT NULL here as they are at the source, and <c>System.Text.Json</c> will happily
+/// leave a non-nullable record property null when the field is absent from the message — hence the empty
+/// literal fallbacks rather than trust in the envelope.
+/// </para>
 /// </summary>
 internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundService
 {
@@ -49,12 +64,6 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
 
         var databaseContext = scopedServices.GetRequiredService<AiDbContext>();
 
-        // The read and the write share one tenant transaction. `SET LOCAL app.organization_id` is
-        // issued by TenantConnectionInterceptor on TransactionStarted, so a bare FindAsync outside a
-        // transaction runs with no tenant set: once RLS is actually enforced it would return nothing,
-        // the handler would Add a row that already exists, and SaveChanges would fail the primary key
-        // — three retries, then the dead-letter queue. Every profile update after the first would be
-        // lost while the neutral fallback wording made it look normal. Review, 40.34.
         await using var tenantScope = await AiTenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         var existing = await databaseContext.OrganizationProfileReplicas
@@ -70,8 +79,6 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
         existing.Icp = payload.Icp;
         existing.Tone = payload.Tone;
 
-        // The jsonb columns are NOT NULL here as they are at the source, and System.Text.Json will
-        // happily leave a non-nullable record property null when a field is absent from the message.
         existing.ObjectionsJson = Coalesce(payload.ObjectionsJson, "[]");
         existing.ScriptJson = Coalesce(payload.ScriptJson, "[]");
         existing.GlossaryJson = Coalesce(payload.GlossaryJson, "{}");

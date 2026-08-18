@@ -3,6 +3,7 @@ using System.Text.Json;
 using Sellevate.Ai.Features.ContentGeneration.Models;
 using Sellevate.Ai.Features.ContentGeneration.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.ContentGeneration.Services.Implementation;
 
@@ -21,6 +22,14 @@ namespace Sellevate.Ai.Features.ContentGeneration.Services.Implementation;
 /// in prompts"): at most ten objections, and any one value bounded, so a pasted-in product manual
 /// cannot walk out of here as a single 40 000-character «product» and push the generation call out
 /// of its context window.
+/// </para>
+///
+/// <para>
+/// <b>An unparseable completion raises; it never degrades to an empty structure.</b> An empty structure
+/// looks exactly like "your material said nothing", and the РОП would go and rewrite a deck that was fine.
+/// For the same reason, gap codes the model invented are dropped rather than passed on: learning-service
+/// has one sentence per known code and nothing at all to say about an unknown one, so an invented code
+/// would reach the РОП as an empty bullet in a list of what to add.
 /// </para>
 /// </summary>
 internal sealed class MaterialStructuringService(
@@ -41,7 +50,6 @@ internal sealed class MaterialStructuringService(
     /// The material is a document, and documents are long. Big enough for a deck or a script, small
     /// enough that one paste cannot cost the price of a book.
     /// </summary>
-    public const int MaximumMaterialLength = 60000;
 
     private const int MaximumResponseTokenCount = 3000;
 
@@ -116,8 +124,6 @@ internal sealed class MaterialStructuringService(
         using var document = AiJsonResponseReader.TryReadObject(completion);
         if (document is null)
         {
-            // Never degrade to an empty structure: an empty structure looks exactly like "your
-            // material said nothing", and the РОП would go and rewrite a deck that was fine.
             logger.LogWarning("AI returned an unparseable structure while structuring uploaded material");
             throw new InvalidOperationException("AI returned an unparseable response.");
         }
@@ -136,9 +142,9 @@ internal sealed class MaterialStructuringService(
     private static string BuildUserPrompt(StructureMaterialRequestDto request)
     {
         var material = request.Material ?? string.Empty;
-        if (material.Length > MaximumMaterialLength)
+        if (material.Length > AiRequestSizeLimits.MaximumSourceMaterialCharacters)
         {
-            material = material[..MaximumMaterialLength];
+            material = material[..AiRequestSizeLimits.MaximumSourceMaterialCharacters];
         }
 
         var promptBuilder = new StringBuilder();
@@ -183,9 +189,6 @@ internal sealed class MaterialStructuringService(
             return MaterialSufficiencyDto.Sufficient;
         }
 
-        // Codes the model invented are dropped rather than passed on: learning-service has one
-        // sentence per known code and nothing at all to say about an unknown one, so an invented code
-        // would reach the РОП as an empty bullet in a list of what to add.
         var missingCodes = AiJsonResponseReader
             .ReadStringArray(sufficiencyElement, "missing", MaterialGapCodes.All.Length * 2)
             .Select(code => code.ToLowerInvariant())
@@ -211,8 +214,6 @@ internal sealed class MaterialStructuringService(
         {
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            // Models answer a boolean question with the string "true" often enough to be worth one
-            // line here; anything else is treated as the field not being there at all.
             JsonValueKind.String when bool.TryParse(property.GetString(), out var parsed) => parsed,
             _ => defaultValue
         };

@@ -27,6 +27,7 @@ namespace Sellevate.Identity.Common.Security;
 public sealed class InternalServiceAuthFilter : IActionFilter
 {
     private const string HeaderName = "X-Internal-Service-Secret";
+    private const string ForbiddenMessage = "Forbidden";
 
     private readonly string? _expectedSecret;
     private readonly bool _isDevelopment;
@@ -51,7 +52,7 @@ public sealed class InternalServiceAuthFilter : IActionFilter
 
             _logger.LogError(
                 "InternalAuth:ServiceSecret is not configured; refusing internal request to {Path}", context.HttpContext.Request.Path);
-            context.Result = new ObjectResult(new { message = "Forbidden" })
+            context.Result = new ObjectResult(new { message = ForbiddenMessage })
             {
                 StatusCode = StatusCodes.Status403Forbidden,
             };
@@ -66,7 +67,7 @@ public sealed class InternalServiceAuthFilter : IActionFilter
                 context.HttpContext.Request.Path,
                 context.HttpContext.Connection.RemoteIpAddress);
 
-            context.Result = new ObjectResult(new { message = "Forbidden" })
+            context.Result = new ObjectResult(new { message = ForbiddenMessage })
             {
                 StatusCode = StatusCodes.Status403Forbidden,
             };

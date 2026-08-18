@@ -32,6 +32,23 @@ internal sealed class AssignmentAudienceResolver(
     IOrganizationMemberDirectory memberDirectory,
     ILogger<AssignmentAudienceResolver> logger) : IAssignmentAudienceResolver
 {
+    /// <summary>
+    /// Turns one audience rule into the ids it currently means.
+    ///
+    /// <para>
+    /// <b>A <c>group</c> audience is refused with a 400.</b> 40.21 accepted the kind structurally so
+    /// this block would need no migration, and nothing in the platform defines a group yet. Refused
+    /// rather than quietly widened to the whole team: "I sent it to the new hires" turning into "I sent
+    /// it to everybody" is the kind of surprise that gets a product distrusted. When groups appear, this
+    /// is the one <c>switch</c> to change.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>An unreachable identity-service is translated, not allowed to bubble as a 500.</b> "We could
+    /// not find out who works here" must never be reachable from the same code path as "nobody works
+    /// here", and it must never look like a defect in the assignment the РОП just wrote.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<Guid>> ResolveAsync(
         AssignmentAudienceDto audience,
         CancellationToken cancellationToken = default)
@@ -40,10 +57,6 @@ internal sealed class AssignmentAudienceResolver(
 
         if (audience.Kind == AssignmentAudienceKinds.Group)
         {
-            // 40.21 accepted the kind structurally so this block would need no migration, and
-            // nothing in the platform defines a group yet. Refused rather than quietly widened to
-            // the whole team: "I sent it to the new hires" turning into "I sent it to everybody" is
-            // the kind of surprise that gets a product distrusted.
             throw new AssignmentValidationException(
                 "Groups do not exist in the platform yet, so an assignment cannot be issued to one. "
                 + "Use a list of people or the whole team.");
@@ -56,9 +69,6 @@ internal sealed class AssignmentAudienceResolver(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Translated rather than allowed to bubble as a 500. "We could not find out who works
-            // here" must never be reachable from the same code path as "nobody works here", and it
-            // must never look like a defect in the assignment the РОП just wrote.
             throw new AssignmentAudienceUnavailableException(
                 "The list of people in this organization could not be read just now, so the assignment "
                 + "was not issued to anybody. Nothing was changed — try again in a moment.",
@@ -83,6 +93,15 @@ internal sealed class AssignmentAudienceResolver(
         return resolved;
     }
 
+    /// <summary>
+    /// The named ids that are still on the roster.
+    ///
+    /// <para>
+    /// A dropped id is logged rather than refused. The РОП asked for the people they can still reach,
+    /// and failing the whole issue because one person left last week would make offboarding break every
+    /// assignment that ever named them.
+    /// </para>
+    /// </summary>
     private static List<Guid> IntersectWithRoster(
         IReadOnlyList<Guid>? namedUserIds,
         IReadOnlyList<Guid> activeMemberIds,
@@ -94,14 +113,12 @@ internal sealed class AssignmentAudienceResolver(
         }
 
         var roster = activeMemberIds.ToHashSet();
-        var resolved = namedUserIds.Distinct().Where(roster.Contains).ToList();
+        var distinctNamedUserIds = namedUserIds.Distinct().ToList();
+        var resolved = distinctNamedUserIds.Where(roster.Contains).ToList();
 
-        var droppedCount = namedUserIds.Distinct().Count() - resolved.Count;
+        var droppedCount = distinctNamedUserIds.Count - resolved.Count;
         if (droppedCount > 0)
         {
-            // Logged rather than refused. The РОП asked for the people they can still reach, and
-            // failing the whole issue because one person left last week would make offboarding
-            // break every assignment that ever named them.
             logger.LogInformation(
                 "Assignment audience named {DroppedCount} user(s) with no active membership here; they were left out.",
                 droppedCount);

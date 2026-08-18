@@ -1,15 +1,26 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Infrastructure.Configuration;
 
 namespace Sellevate.Company.Infrastructure.Ai;
 
+/// <summary>
+/// Calls ai-service to score how ready a salesperson is for a given company, derived from the
+/// feedback on their practice sessions.
+///
+/// <para>
+/// The only client of the four with a third outcome: <see cref="HttpStatusCode.NoContent"/> means
+/// ai-service fanned out over the supplied sessions and found no usable feedback. That is a
+/// legitimate "not yet", not a failure, and it must stay distinguishable from one — the caller
+/// negative-caches it, and treating it as an error would instead retry the whole fan-out on every
+/// request.
+/// </para>
+/// </summary>
 internal sealed class ReadinessAiClient : IReadinessAiClient
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const string FailureLogTemplate = "AI readiness generation returned {StatusCode}: {Body}";
+    private const string ServiceLabel = "AI readiness service";
 
     private readonly HttpClient _httpClient;
     private readonly AiServiceConfiguration _configuration;
@@ -34,38 +45,17 @@ internal sealed class ReadinessAiClient : IReadinessAiClient
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.ReadinessPath;
-
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = JsonContent.Create(request, options: SerializerOptions),
-        };
-
-        // Phase 40.33. ai-service meters LLM spend per organization and refuses a call that names
-        // none, so the tenant travels with the request rather than being inferred there.
-        AiCallHeaders.Apply(httpRequest, _tenantContext);
-
-        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        using var response = await AiServiceCall.PostAsync(
+            _httpClient,
+            _tenantContext,
+            AiServiceCall.BuildRequestUri(_configuration.BaseUrl, _configuration.ReadinessPath),
+            request,
+            cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.NoContent)
             return null;
 
-        if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning(
-                "AI readiness generation returned {StatusCode}: {Body}",
-                response.StatusCode, responseBody);
-            throw new InvalidOperationException(
-                $"AI readiness service returned {(int)response.StatusCode}.");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<ReadinessAiResult>(
-            SerializerOptions, cancellationToken);
-
-        if (result is null)
-            throw new InvalidOperationException("AI readiness service returned an empty body.");
-
-        return result;
+        return await AiServiceCall.ReadResultAsync<ReadinessAiResult>(
+            response, _logger, FailureLogTemplate, ServiceLabel, cancellationToken);
     }
 }

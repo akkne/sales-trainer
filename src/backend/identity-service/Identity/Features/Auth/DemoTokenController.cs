@@ -4,16 +4,27 @@ using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Infrastructure.Configuration;
 
 namespace Sellevate.Identity.Features.Auth;
 
+/// <summary>
+/// Mints an unauthenticated throwaway token so the frontend can be exercised without an account. Every
+/// route answers 404 in Production — the guard is the whole reason this controller can exist at all, and
+/// the token it issues carries no role and no organization.
+/// </summary>
 [ApiController]
 [Route("demo")]
 public sealed class DemoTokenController(
     IOptions<JwtConfiguration> jwtOptions,
     IWebHostEnvironment environment) : ControllerBase
 {
+    private const string IsDemoClaimType = "isDemo";
+    private const string DemoUserEmail = "demo@salestrainer.app";
+    private const string DemoUserDisplayName = "Demo User";
+    private const int SecondsPerHour = 3600;
+
     [HttpPost("token")]
     public IActionResult IssueDemoToken()
     {
@@ -21,7 +32,6 @@ public sealed class DemoTokenController(
         {
             return NotFound();
         }
-
 
         var demoUserId = Guid.NewGuid();
         var signingKey = new SymmetricSecurityKey(
@@ -32,9 +42,9 @@ public sealed class DemoTokenController(
             Subject = new ClaimsIdentity(
             [
                 new Claim(JwtRegisteredClaimNames.Sub, demoUserId.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, "demo@salestrainer.app"),
-                new Claim("displayName", "Demo User"),
-                new Claim("isDemo", "true")
+                new Claim(JwtRegisteredClaimNames.Email, DemoUserEmail),
+                new Claim(ClaimTypeNames.DisplayName, DemoUserDisplayName),
+                new Claim(IsDemoClaimType, bool.TrueString.ToLowerInvariant())
             ]),
             Expires = DateTime.UtcNow.AddHours(jwtOptions.Value.DemoTokenLifetimeHours),
             Issuer = jwtOptions.Value.Issuer,
@@ -46,6 +56,6 @@ public sealed class DemoTokenController(
         var tokenHandler = new JwtSecurityTokenHandler();
         var accessToken = tokenHandler.WriteToken(tokenHandler.CreateToken(tokenDescriptor));
 
-        return Ok(new { accessToken, expiresInSeconds = jwtOptions.Value.DemoTokenLifetimeHours * 3600 });
+        return Ok(new { accessToken, expiresInSeconds = jwtOptions.Value.DemoTokenLifetimeHours * SecondsPerHour });
     }
 }

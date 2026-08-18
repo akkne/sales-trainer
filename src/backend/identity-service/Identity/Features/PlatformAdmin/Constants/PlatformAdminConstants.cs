@@ -1,5 +1,9 @@
 namespace Sellevate.Identity.Features.PlatformAdmin.Constants;
 
+/// <summary>
+/// Wording and limits of the platform-superadmin surface. Each message pairs with a member of
+/// <c>PlatformAdminRejectionReason</c>, which is what the controller maps onto a status code.
+/// </summary>
 public static class PlatformAdminConstants
 {
     public const string OrganizationNotKnownMessage =

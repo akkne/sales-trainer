@@ -1,3 +1,4 @@
+using Sellevate.Learning.Features.Exercises.Configuration;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Infrastructure.Ai;
@@ -21,6 +22,13 @@ public static class ExerciseDialogServiceCollectionExtensions
     /// <c>OPENAI_API_KEY</c> or <c>YANDEX_TTS_API_KEY</c> at all, which is a smaller secret surface
     /// as well as a smaller code one.
     /// </para>
+    ///
+    /// <para>
+    /// Both clients carry the same service-to-service secret header as the evaluation and
+    /// content-pipeline clients: ai-service's <c>InternalServiceAuthFilter</c> rejects a request without
+    /// it once the secret is configured, and leaves the route open in development when it is not — so an
+    /// unset secret is a working local setup rather than a broken one.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddExerciseDialogServices(
         this IServiceCollection services,
@@ -33,6 +41,9 @@ public static class ExerciseDialogServiceCollectionExtensions
         services.AddHttpClient<IOpenAiChatService, AiChatClient>(ConfigureAiServiceClient);
         services.AddHttpClient<ITtsRouter, AiTtsClient>(ConfigureAiServiceClient);
 
+        services.Configure<ExerciseDialogOptions>(
+            configuration.GetSection(ExerciseDialogOptions.SectionName));
+
         services.AddScoped<IExerciseDialogService, ExerciseDialogService>();
 
         return services;
@@ -41,9 +52,6 @@ public static class ExerciseDialogServiceCollectionExtensions
         {
             httpClient.Timeout = chatTimeout;
 
-            // Same service-to-service auth as the evaluation and content-pipeline clients: ai-service's
-            // InternalServiceAuthFilter rejects a request without it once the secret is configured, and
-            // leaves the route open in dev when it is not.
             var internalServiceSecret = configuration["InternalAuth:ServiceSecret"];
             if (!string.IsNullOrWhiteSpace(internalServiceSecret))
                 httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);

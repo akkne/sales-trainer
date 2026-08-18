@@ -1,3 +1,5 @@
+using Sellevate.Ai.Features.Quotas.Constants;
+
 namespace Sellevate.Ai.Features.Quotas.Models;
 
 /// <summary>
@@ -23,7 +25,22 @@ public sealed record ResolvedAiQuota(
     int VoiceMonthlyLimitMinutes,
     long LlmMonthlyTokenLimit,
     int BatchReservePercent,
-    bool IsOrganizationSpecific);
+    bool IsOrganizationSpecific)
+{
+    /// <summary>
+    /// The monthly token count past which <see cref="AiWorkloadClass.Batch"/> work is refused while
+    /// interactive work runs on to <see cref="LlmMonthlyTokenLimit"/>. The clamp is applied on read as
+    /// well as on write, because a row persisted before the ceiling existed may hold anything.
+    /// </summary>
+    public long BatchTokenCeiling
+    {
+        get
+        {
+            var reservePercent = Math.Clamp(BatchReservePercent, 0, AiQuotaScales.MaximumBatchReservePercent);
+            return LlmMonthlyTokenLimit - (LlmMonthlyTokenLimit * reservePercent / AiQuotaScales.PercentScale);
+        }
+    }
+}
 
 /// <summary>
 /// Phase 40.33. Raised when an organization has spent its allowance. Carries the numbers rather than

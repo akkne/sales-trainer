@@ -52,11 +52,13 @@ public class AuthFlowTests
         body!.AccessToken.Should().NotBeNullOrEmpty();
     }
 
+    /// <summary>
+    /// Outside Development the refresh cookie is issued with <c>Secure=true</c>, so the client has to
+    /// talk https or the cookie container never sends it back and <c>/auth/refresh</c> sees none.
+    /// </summary>
     [Test]
     public async Task Refresh_RotatesToken_ViaCookie()
     {
-        // Outside Development the refresh cookie is issued with Secure=true, so the client has
-        // to talk https or the cookie container never sends it back and /auth/refresh sees none.
         var client = Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
             HandleCookies = true,

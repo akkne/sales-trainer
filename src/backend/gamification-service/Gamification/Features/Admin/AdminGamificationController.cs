@@ -41,25 +41,25 @@ public sealed class AdminGamificationController(
     {
         if (request.DailyXpGoal <= 0 || request.WeeklyXpGoal <= 0)
         {
-            return BadRequest(new { message = "Daily and weekly XP goals must be positive" });
+            return BadRequest(new { message = ErrorMessages.ExperiencePointsGoalsMustBePositive });
         }
 
         if (request.DialogXpMultiplier <= 0)
         {
-            return BadRequest(new { message = "Dialog XP multiplier must be positive" });
+            return BadRequest(new { message = ErrorMessages.DialogMultiplierMustBePositive });
         }
 
         if (request.DialogWeightConfidence < 0 || request.DialogWeightStructure < 0 ||
             request.DialogWeightObjection < 0 || request.DialogWeightGoal < 0)
         {
-            return BadRequest(new { message = "Dialog criterion weights cannot be negative" });
+            return BadRequest(new { message = ErrorMessages.DialogWeightsCannotBeNegative });
         }
 
         var totalWeight = request.DialogWeightConfidence + request.DialogWeightStructure +
                           request.DialogWeightObjection + request.DialogWeightGoal;
         if (totalWeight <= 0)
         {
-            return BadRequest(new { message = "The sum of dialog criterion weights must be positive" });
+            return BadRequest(new { message = ErrorMessages.DialogWeightSumMustBePositive });
         }
 
         var settings = await gamificationSettingsService.GetSettingsAsync(cancellationToken);
@@ -116,7 +116,7 @@ public sealed class AdminGamificationController(
     {
         if (request.BaseXpReward < 0)
         {
-            return BadRequest(new { message = "Base XP reward cannot be negative" });
+            return BadRequest(new { message = ErrorMessages.BaseExperiencePointsRewardCannotBeNegative });
         }
 
         var reward = await databaseContext.ExerciseTypeRewards
@@ -168,7 +168,7 @@ public sealed class AdminGamificationController(
 
         if (await databaseContext.StreakMilestones.AnyAsync(milestone => milestone.DayCount == request.DayCount, cancellationToken))
         {
-            return BadRequest(new { message = $"A milestone for {request.DayCount} days already exists" });
+            return BadRequest(new { message = ErrorMessages.StreakMilestoneAlreadyExists(request.DayCount) });
         }
 
         var milestone = new StreakMilestone
@@ -205,7 +205,7 @@ public sealed class AdminGamificationController(
 
         if (await databaseContext.StreakMilestones.AnyAsync(record => record.DayCount == request.DayCount && record.Id != id, cancellationToken))
         {
-            return BadRequest(new { message = $"A milestone for {request.DayCount} days already exists" });
+            return BadRequest(new { message = ErrorMessages.StreakMilestoneAlreadyExists(request.DayCount) });
         }
 
         milestone.DayCount = request.DayCount;
@@ -238,12 +238,12 @@ public sealed class AdminGamificationController(
     {
         if (request.DayCount <= 0)
         {
-            return "Day count must be positive";
+            return ErrorMessages.StreakMilestoneDayCountMustBePositive;
         }
 
         if (request.XpReward < 0)
         {
-            return "XP reward cannot be negative";
+            return ErrorMessages.StreakMilestoneRewardCannotBeNegative;
         }
 
         return null;

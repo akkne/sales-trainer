@@ -3,6 +3,21 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Sellevate.BuildingBlocks.Tenancy;
 
+/// <summary>
+/// The write-side half of tenant isolation (docs/TENANCY/TENANCY.md §2), and the only layer that acts
+/// on a save. The EF query filter is read-side ergonomics and does nothing here; Postgres RLS is the
+/// real boundary but reports a violation as zero affected rows, which is a silent no-op rather than a
+/// diagnosis. This interceptor is what turns a cross-tenant write into a named exception at the
+/// moment the offending code runs.
+///
+/// <para>
+/// It stamps the scope's organization onto a new <see cref="ITenantScoped"/> row that has none, and
+/// refuses any entry — added, modified or deleted — that names a different one. It is a guard, not a
+/// filter: a service must still add it to its <c>DbContext</c> via <c>AddInterceptors</c>, and a
+/// context registered with EF Core's pooled helper would defeat the whole model (see
+/// docs/CODESTYLE.md §6).
+/// </para>
+/// </summary>
 public sealed class TenantSaveChangesInterceptor(ITenantContext tenantContext) : SaveChangesInterceptor
 {
     public override InterceptionResult<int> SavingChanges(

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Features.Quotas.Constants;
 using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -79,7 +80,7 @@ internal sealed class AiQuotaService : IAiQuotaService
         row.VoiceMonthlyLimitMinutes = NonNegativeOrNull(model.VoiceMonthlyLimitMinutes);
         row.LlmMonthlyTokenLimit = model.LlmMonthlyTokenLimit is { } tokens && tokens >= 0 ? tokens : null;
         row.BatchReservePercent = model.BatchReservePercent is { } percent
-            ? Math.Clamp(percent, 0, 90)
+            ? Math.Clamp(percent, 0, AiQuotaScales.MaximumBatchReservePercent)
             : null;
         row.Note = string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim();
         row.UpdatedAt = DateTime.UtcNow;
@@ -90,18 +91,35 @@ internal sealed class AiQuotaService : IAiQuotaService
         return ToSettings(row, Resolve(row));
     }
 
+    /// <summary>
+    /// The month's spend for the caller's organization, or the installation-wide total when the
+    /// caller carries no organization.
+    ///
+    /// <para>
+    /// The row query is constrained to the caller's organization *when there is one*, and left to the
+    /// query filter when there is not. The distinction is the whole point. A platform administrator
+    /// carrying no organization is meant to read the installation-wide total, and does. A platform
+    /// administrator who also holds a membership is asking about that membership's organization — but
+    /// the filter reads <c>IsPlatformWide || …</c>, so without the explicit predicate they were shown
+    /// the installation total under their own organization's heading. Review, 40.34.
+    /// </para>
+    ///
+    /// <para>
+    /// <see cref="AiSpendReportDto.EstimatedCost"/> is null as soon as any line is unpriced, because a
+    /// partial total is worse than none. Skipping unpriced lines and summing the rest produced a
+    /// concrete-looking figure that omitted the dominant cost: the shipped price table lists
+    /// yandex-tts and no LLM model at all, so the whole LLM bill contributed zero while
+    /// <c>HasUnpricedModels</c> sat quietly beside a number that read as complete. The same reasoning
+    /// already governs the per-line value — an unpriced model reports null, never zero, because zero
+    /// reads as "this model is free". Review, 40.34.
+    /// </para>
+    /// </summary>
     public async Task<AiSpendReportDto> GetSpendReportAsync(CancellationToken cancellationToken = default)
     {
         var configuration = _quotaOptions.Value;
         var periodKey = AiUsagePeriod.Current();
         var quota = await ResolveAsync(cancellationToken);
 
-        // Constrained to the caller's organization *when there is one*, and left to the query filter
-        // when there is not. The distinction is the whole point. A platform administrator carrying no
-        // organization is meant to read the installation-wide total, and does. A platform
-        // administrator who also holds a membership is asking about that membership's organization —
-        // but the filter reads `IsPlatformWide || …`, so without this predicate they were shown the
-        // installation total under their own organization's heading. Review, 40.34.
         var organizationId = _tenantContext.OrganizationId;
         var rows = await _databaseContext.AiUsageRecords
             .Where(record => record.PeriodKey == periodKey)
@@ -118,12 +136,6 @@ internal sealed class AiQuotaService : IAiQuotaService
             var lineCost = PriceLine(row, configuration, out var unpriced);
             hasUnpricedModels |= unpriced;
 
-            // A partial total is worse than none. Skipping unpriced lines and summing the rest
-            // produced a concrete-looking figure that omitted the dominant cost, because the shipped
-            // price table lists yandex-tts and no LLM model at all — the whole LLM bill contributed
-            // zero while `hasUnpricedModels` sat quietly beside a number that read as complete. The
-            // same reasoning already governs the per-line value: an unpriced model reports null, and
-            // never zero, because zero reads as "this model is free". Review, 40.34.
             if (lineCost is { } cost)
             {
                 totalCost = (totalCost ?? 0m) + cost;
@@ -160,9 +172,9 @@ internal sealed class AiQuotaService : IAiQuotaService
             LlmCallCount = llmRows.Sum(row => row.CallCount),
             LlmEstimatedCallCount = llmRows.Sum(row => row.EstimatedCallCount),
             SpeechCharacters = rows.Where(row => row.Kind != AiUsageKinds.Llm).Sum(row => row.SpeechCharacters),
-            VoiceUsedMinutesToday = daySeconds / 60,
+            VoiceUsedMinutesToday = daySeconds / AiQuotaScales.SecondsPerMinute,
             VoiceDailyLimitMinutes = quota.VoiceDailyLimitMinutes,
-            VoiceUsedMinutesThisMonth = monthSeconds / 60,
+            VoiceUsedMinutesThisMonth = monthSeconds / AiQuotaScales.SecondsPerMinute,
             VoiceMonthlyLimitMinutes = quota.VoiceMonthlyLimitMinutes,
             EstimatedCost = hasUnpricedModels ? null : totalCost,
             HasUnpricedModels = hasUnpricedModels,
@@ -180,25 +192,30 @@ internal sealed class AiQuotaService : IAiQuotaService
     {
         if (quota.LlmMonthlyTokenLimit <= 0)
         {
-            return "ok";
+            return AiQuotaStates.Ok;
         }
 
         if (spentTokens >= quota.LlmMonthlyTokenLimit)
         {
-            return "exhausted";
+            return AiQuotaStates.Exhausted;
         }
 
-        var reservePercent = Math.Clamp(quota.BatchReservePercent, 0, 90);
-        var batchCeiling = quota.LlmMonthlyTokenLimit - (quota.LlmMonthlyTokenLimit * reservePercent / 100);
-        if (spentTokens >= batchCeiling)
+        if (spentTokens >= quota.BatchTokenCeiling)
         {
-            return "batch_paused";
+            return AiQuotaStates.BatchPaused;
         }
 
-        var warningPercent = Math.Clamp(configuration.SoftWarningPercent, 1, 100);
-        return spentTokens >= quota.LlmMonthlyTokenLimit * warningPercent / 100 ? "warning" : "ok";
+        var warningPercent = Math.Clamp(configuration.SoftWarningPercent, 1, AiQuotaScales.PercentScale);
+        return spentTokens >= quota.LlmMonthlyTokenLimit * warningPercent / AiQuotaScales.PercentScale
+            ? AiQuotaStates.Warning
+            : AiQuotaStates.Ok;
     }
 
+    /// <summary>
+    /// Prices one usage row, reporting a model nobody priced as unpriced rather than as free. Zero
+    /// looks like "this model costs nothing", which is the one reading of a spend report that must
+    /// never be accidental.
+    /// </summary>
     private static decimal? PriceLine(AiUsageRecord row, AiQuotaConfiguration configuration, out bool unpriced)
     {
         var billableUnits = row.Kind == AiUsageKinds.Llm
@@ -214,14 +231,13 @@ internal sealed class AiQuotaService : IAiQuotaService
         if (configuration.PricePerMillionTokens.TryGetValue(row.Model, out var pricePerMillion))
         {
             unpriced = false;
-            return billableUnits * pricePerMillion / 1_000_000m;
+            return billableUnits * pricePerMillion / AiQuotaScales.PriceUnitTokens;
         }
 
-        // A model nobody priced is reported as unpriced rather than as free. Zero looks like "this
-        // model costs nothing", which is the one reading of a spend report that must never be
-        // accidental.
         unpriced = configuration.FallbackPricePerMillionTokens <= 0m;
-        return unpriced ? null : billableUnits * configuration.FallbackPricePerMillionTokens / 1_000_000m;
+        return unpriced
+            ? null
+            : billableUnits * configuration.FallbackPricePerMillionTokens / AiQuotaScales.PriceUnitTokens;
     }
 
     private async Task<(int DaySeconds, int MonthSeconds)> ReadVoiceSecondsAsync()
@@ -238,14 +254,21 @@ internal sealed class AiQuotaService : IAiQuotaService
         return (day.HasValue ? (int)day : 0, month.HasValue ? (int)month : 0);
     }
 
+    /// <summary>
+    /// The caller organization's quota row, or null when there is no organization on the request.
+    ///
+    /// <para>
+    /// The organization predicate is explicit rather than left to the global query filter. That filter
+    /// reads <c>IsPlatformWide || OrganizationId == current</c>, so for Sellevate staff who also hold
+    /// a membership — a combination <c>TenantContext</c> supports on purpose — a filter-only query
+    /// returns whichever row Postgres hands back first. <c>GET /admin/ai-quota</c> would render
+    /// another customer's limits and free-text note, and a <c>PUT</c> of that same form would copy
+    /// them onto the caller's own organization. Found in review, 40.34;
+    /// <see cref="SaveSettingsAsync"/> always had it.
+    /// </para>
+    /// </summary>
     private async Task<OrganizationQuota?> LoadRowAsync(CancellationToken cancellationToken)
     {
-        // The predicate is explicit rather than left to the global query filter. That filter reads
-        // `IsPlatformWide || OrganizationId == current`, so for Sellevate staff who also hold a
-        // membership — a combination TenantContext supports on purpose — a filter-only query returns
-        // whichever row Postgres hands back first. GET /admin/ai-quota would render another
-        // customer's limits and free-text note, and a PUT of that same form would copy them onto the
-        // caller's own organization. Found in review, 40.34; SaveSettingsAsync above always had it.
         if (_tenantContext.OrganizationId is not { } organizationId)
         {
             return null;

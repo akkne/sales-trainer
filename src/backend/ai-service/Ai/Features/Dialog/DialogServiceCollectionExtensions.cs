@@ -7,6 +7,23 @@ using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+/// <summary>
+/// Registers the dialog roleplay feature.
+///
+/// <para>
+/// Everything here is scoped, and for one reason in three guises: the session repository closes over the
+/// per-request <c>ITenantContext</c> (Phase 40.11) and is the only door to the <c>dialog_sessions</c>
+/// collection; the organization profile provider memoizes per request and reads whichever tenant the
+/// request belongs to (40.19); the assignment client asks learning-service about the caller. A singleton
+/// among them would capture one request's tenant and serve it to every later request.
+/// </para>
+///
+/// <para>
+/// The assignment client is registered here rather than as a feature of its own because
+/// <c>DialogService</c> is its only caller, and it is the only thing that makes an assignment's persona
+/// reach a prompt (40.23).
+/// </para>
+/// </summary>
 public static class DialogServiceCollectionExtensions
 {
     public static IServiceCollection AddDialogFeatureServices(
@@ -15,20 +32,12 @@ public static class DialogServiceCollectionExtensions
     {
         services.Configure<OpenAiConfiguration>(configuration.GetSection(OpenAiConfiguration.SectionName));
         services.AddScoped<IOpenAiChatService, OpenAiChatService>();
-        // Phase 40.11: scoped, because it closes over the per-request ITenantContext. It is the
-        // only door to the dialog_sessions collection — see IDialogSessionRepository.
         services.AddScoped<IDialogSessionRepository, DialogSessionRepository>();
         services.AddScoped<IDialogService, DialogService>();
         services.AddScoped<IScenarioValidationService, ScenarioValidationService>();
         services.AddScoped<IDialogModeOverrideService, DialogModeOverrideService>();
 
-        // Phase 40.19. Scoped, not singleton: the memo inside it is per request and the profile it
-        // reads is whichever tenant's the request belongs to.
         services.AddScoped<IOrganizationProfileProvider, OrganizationProfileProvider>();
-
-        // Phase 40.23. Asks learning-service whether the conversation about to start is somebody's
-        // assignment. Registered here rather than in a feature of its own because the one caller is
-        // DialogService, and it is the only thing that makes an assignment's persona reach a prompt.
         services.AddLearningAssignmentClient(configuration);
 
         return services;

@@ -125,6 +125,15 @@ internal sealed class AssignmentService(
         return assignment is null ? null : ToDto(assignment);
     }
 
+    /// <summary>
+    /// Phase 40.21. Writes a new draft.
+    ///
+    /// <para>
+    /// Phase 40.31. The generated source is resolved <b>before</b> the write scope opens, like the
+    /// roster read in <see cref="UpdateAsync"/>: it is one extra query on a rare route, and it decides
+    /// the source type, the source reference and the content of the row below.
+    /// </para>
+    /// </summary>
     public async Task<AssignmentDto> CreateAsync(
         Guid? actorId,
         CreateAssignmentRequestDto requestDto,
@@ -133,8 +142,6 @@ internal sealed class AssignmentService(
         var title = RequireTitle(requestDto.Title);
         var goal = NormalizeGoal(requestDto.Goal);
 
-        // Phase 40.31. Read before the write scope opens, like the roster read in UpdateAsync: it is
-        // one extra query on a rare route, and it decides three of the fields below.
         var generatedSource = await ResolveGeneratedSourceAsync(
             requestDto.ContentGenerationJobId, cancellationToken);
 
@@ -180,6 +187,39 @@ internal sealed class AssignmentService(
         return ToDto(assignment);
     }
 
+    /// <summary>
+    /// Phase 40.21. Re-saves an assignment, and — 40.23 — fans it out again if it is already issued.
+    ///
+    /// <para>
+    /// <b>The roster is read before the write transaction opens.</b> Editing an issued assignment's
+    /// audience is an ordinary act the 40.21 freeze deliberately allows, so an update has to be able to
+    /// fan out. Resolving the roster means calling identity-service, and that call must not happen with
+    /// a write transaction open: the pre-flight read costs one extra query on a rare route and keeps a
+    /// network round trip out of a transaction holding locks on the progress table.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A change to a frozen field is refused rather than ignored.</b> An administrator who believes
+    /// they moved a threshold and did not is worse off than one who is told they cannot. The freeze
+    /// trigger says the same thing one layer down, where it cannot be bypassed.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Moving the deadline re-arms its notice.</b> A РОП who extends a due date is asking for the
+    /// team to be told about the new one, and the notification's dedupe key carries the deadline for
+    /// the same reason — otherwise the extension would be announced to nobody and the original warning
+    /// would stand for a date that no longer exists.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The fan-out is a top-up, never a removal.</b> Somebody added to a running assignment gets a
+    /// row and is told; somebody taken out of the audience keeps theirs, because the row is the record
+    /// that they were asked and deleting it would rewrite what already happened — the same argument
+    /// that made the foreign key <c>RESTRICT</c> in 40.21. It also means re-saving a
+    /// <c>whole_team</c> assignment is how a РОП brings a new hire into work that is already running,
+    /// which is the only answer this block has for people who arrive after the issue.
+    /// </para>
+    /// </summary>
     public async Task<AssignmentWriteResult> UpdateAsync(
         Guid assignmentId,
         UpdateAssignmentRequestDto requestDto,
@@ -196,11 +236,6 @@ internal sealed class AssignmentService(
         var completionRule = AssignmentDocumentSerializer.SerializeCompletionRule(requestDto.CompletionRule);
         var repeatSchedule = AssignmentDocumentSerializer.SerializeRepeatSchedule(requestDto.RepeatSchedule);
 
-        // Phase 40.23. Editing an issued assignment's audience is an ordinary act the 40.21 freeze
-        // deliberately allows, so an update has to be able to fan out. Resolving the roster needs a
-        // call to identity-service, and that call must not happen with a write transaction open —
-        // hence the pre-flight read. It costs one extra query on a rare route and keeps a network
-        // round trip out of a transaction that holds locks on the progress table.
         var statusBeforeUpdate = await ReadStatusAsync(assignmentId, cancellationToken);
         var recipientIds = statusBeforeUpdate == AssignmentStatuses.Active
             ? await ResolveRecipientsAsync(
@@ -223,9 +258,6 @@ internal sealed class AssignmentService(
 
         if (assignment.Status != AssignmentStatuses.Draft)
         {
-            // Refused rather than ignored: an administrator who believes they moved a threshold and
-            // did not is worse off than one who is told they cannot. The freeze trigger says the same
-            // thing one layer down, where it cannot be bypassed.
             var frozenFields = CollectFrozenFieldChanges(
                 assignment, sourceType, sourceRef, content, completionRule);
 
@@ -243,10 +275,7 @@ internal sealed class AssignmentService(
         assignment.SourceRef = sourceRef;
         assignment.Content = content;
         assignment.Audience = audience;
-        // Phase 40.23. Moving the deadline re-arms its notice. A РОП who extends a due date is
-        // asking for the team to be told about the new one, and the notification's dedupe key
-        // carries the deadline for the same reason — otherwise the extension would be announced to
-        // nobody and the original warning would stand for a date that no longer exists.
+
         if (assignment.Deadline != requestDto.Deadline)
         {
             assignment.DeadlineNoticeSentAt = null;
@@ -258,12 +287,6 @@ internal sealed class AssignmentService(
         assignment.RepeatSchedule = repeatSchedule;
         assignment.UpdatedAt = DateTime.UtcNow;
 
-        // Phase 40.23. Top-up, never removal. Somebody added to a running assignment gets a row and
-        // is told; somebody taken out of the audience keeps theirs, because the row is the record
-        // that they were asked and deleting it would rewrite what already happened — the same
-        // argument that made the foreign key RESTRICT in 40.21. It also means re-saving a
-        // whole_team assignment is how a РОП brings a new hire into work that is already running,
-        // which is the only answer this block has for people who arrive after the issue.
         if (recipientIds is not null && assignment.Status == AssignmentStatuses.Active)
         {
             var addedCount = await AssignmentFanOut.IssueAsync(
@@ -375,6 +398,19 @@ internal sealed class AssignmentService(
     /// РОП most needs to reach, and 40.22 separated that state from "not started" precisely so they
     /// would not be lost among people who never opened it.
     /// </para>
+    ///
+    /// <para>
+    /// Phase 40.26. <b>The roster is consulted, fail-closed.</b> A progress row outlives employment on
+    /// purpose, so "still owes the work" and "should be nudged about it" are different sets, and the
+    /// difference is an email to somebody's former employee. Fail-closed like issuing and unlike the
+    /// dashboard: a nudge nobody sent can be sent again in a minute, and a nudge sent to the wrong
+    /// person cannot be taken back.
+    /// </para>
+    ///
+    /// <para>
+    /// One instant is stamped on the whole press, so every reminder from this click shares a dedupe key
+    /// suffix and a redelivery of any of them collapses onto the original.
+    /// </para>
     /// </summary>
     public async Task<AssignmentReminderResultDto?> RemindAsync(
         Guid assignmentId,
@@ -414,11 +450,6 @@ internal sealed class AssignmentService(
             .Select(record => record.UserId)
             .ToListAsync(cancellationToken);
 
-        // Phase 40.26. The roster is consulted here for the reason 40.23 consults it in the deadline
-        // sweep: a progress row outlives employment on purpose, so "still owes the work" and "should
-        // be nudged about it" are different sets, and the difference is an email to somebody's former
-        // employee. Fail-closed, like issuing and unlike the dashboard — a nudge nobody sent can be
-        // sent again in a minute, and a nudge sent to the wrong person cannot be taken back.
         IReadOnlyList<Guid> activeMemberIds;
         try
         {
@@ -435,8 +466,6 @@ internal sealed class AssignmentService(
         var liveMemberIds = activeMemberIds.ToHashSet();
         var recipientUserIds = candidateUserIds.Where(liveMemberIds.Contains).ToList();
 
-        // One instant for the whole press, so every reminder from this click shares a dedupe key
-        // suffix and a redelivery of any of them collapses onto the original.
         var requestedAt = DateTime.UtcNow;
 
         foreach (var userId in recipientUserIds)
@@ -583,6 +612,13 @@ internal sealed class AssignmentService(
     /// <summary>
     /// Phase 40.23. Everything that stops an assignment from being issued, in one place because it
     /// is asked twice — once before the roster lookup and once inside the write transaction.
+    ///
+    /// <para>
+    /// Phase 40.22. This is the last moment the rule and the content can still be reconciled: issuing
+    /// freezes both, so a rule that measures something the assignment does not ask for produces an
+    /// assignment nobody can ever complete — and on the РОП's screen that is indistinguishable from a
+    /// team that has not started. Refused here, where the administrator can still fix it.
+    /// </para>
     /// </summary>
     private static AssignmentWriteResult? DescribeActivationRefusal(Assignment assignment)
     {
@@ -599,10 +635,6 @@ internal sealed class AssignmentService(
                 "An assignment with no content asks people to do nothing. Add exercises, a dialogue or theory first.");
         }
 
-        // Phase 40.22. The last moment the rule and the content can still be reconciled: issuing
-        // freezes both, so a rule that measures something the assignment does not ask for produces
-        // an assignment nobody can ever complete — and on the РОП's screen that is indistinguishable
-        // from a team that has not started. Refused here, where the administrator can still fix it.
         return DescribeUnmeasurableRule(assignment.CompletionRule, content) is { } unmeasurable
             ? AssignmentWriteResult.RejectedByStatus(unmeasurable)
             : null;
@@ -773,6 +805,12 @@ internal sealed class AssignmentService(
     /// assignment pointing at a lesson that does not exist yet would be issued to the team the moment
     /// somebody pressed activate, and 40.21 froze <c>Content</c> at that moment on purpose.
     /// </para>
+    ///
+    /// <para>
+    /// The reference is built with <see cref="LessonVersionSourceRefs"/> — 40.21's rule applied at the
+    /// one call site that can honour it automatically: content is named by the frozen version and never
+    /// by the lesson, because a lesson id silently re-points at whatever the lesson has since become.
+    /// </para>
     /// </summary>
     private async Task<GeneratedAssignmentSource?> ResolveGeneratedSourceAsync(
         Guid? contentGenerationJobId,
@@ -812,10 +850,8 @@ internal sealed class AssignmentService(
             ? AssignmentSourceTypes.Training
             : AssignmentSourceTypes.GapDetected;
 
-        // 40.21's rule, applied at the one call site that can honour it automatically: content is
-        // named by the frozen version and never by the lesson, because a lesson id silently
-        // re-points at whatever the lesson has since become.
-        var sourceRef = job.GapSourceRef ?? $"lesson-version:{job.ProducedLessonVersionId}";
+        var sourceRef = job.GapSourceRef
+                        ?? LessonVersionSourceRefs.Build(job.ProducedLessonVersionId.Value);
 
         return new GeneratedAssignmentSource(
             sourceType,

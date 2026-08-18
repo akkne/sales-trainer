@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.ContentAdaptation.Models;
 using Sellevate.Ai.Features.ContentAdaptation.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Models;
@@ -51,17 +52,23 @@ public sealed class ContentAdaptationController(
         catch (OpenAiException openAiException)
         {
             logger.LogWarning(openAiException, "AI provider error while rewriting an exercise");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             logger.LogWarning(invalidOperationException, "Rewriting an exercise failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             logger.LogWarning(httpRequestException, "AI provider unreachable while rewriting an exercise");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 
@@ -82,17 +89,23 @@ public sealed class ContentAdaptationController(
         catch (OpenAiException openAiException)
         {
             logger.LogWarning(openAiException, "AI provider error while reviewing an exercise");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             logger.LogWarning(invalidOperationException, "Reviewing an exercise failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             logger.LogWarning(httpRequestException, "AI provider unreachable while reviewing an exercise");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 }

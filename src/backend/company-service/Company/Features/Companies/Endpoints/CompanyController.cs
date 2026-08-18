@@ -1,17 +1,33 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Company.Common.Constants;
+using Sellevate.Company.Features.Companies.Constants;
 using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
 
 namespace Sellevate.Company.Features.Companies.Endpoints;
 
+/// <summary>
+/// HTTP surface for the CRM: companies and their call logs, practice calls, contacts and personas,
+/// plus the four AI-backed endpoints. Holds no business logic — every action resolves the caller's
+/// user id from the token, delegates to <see cref="ICompanyService"/>, and maps the result to a
+/// status code.
+///
+/// <para>
+/// The mapping is the contract worth respecting. A null service result means "no such row for this
+/// caller" and becomes 404, never 403: whether a company exists is itself scoped, so distinguishing
+/// "not yours" from "not there" would confirm a competitor's row to anyone who guessed its id. A
+/// token with no usable subject is 401. An unresolvable AI dependency is 503, because nothing was
+/// written and a retry may succeed.
+/// </para>
+/// </summary>
 [ApiController]
 [Authorize]
 public sealed class CompanyController(ICompanyService companyService) : ControllerBase
 {
-    [HttpGet("companies")]
+    [HttpGet(CompanyRouteTemplates.Companies)]
     public async Task<ActionResult<IReadOnlyList<CompanySummaryDto>>> ListCompanies(
         [FromQuery] string? search,
         CancellationToken cancellationToken)
@@ -23,7 +39,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(companies);
     }
 
-    [HttpPost("companies")]
+    [HttpPost(CompanyRouteTemplates.Companies)]
     public async Task<ActionResult<CompanyDetailDto>> CreateCompany(
         [FromBody] CreateCompanyRequestDto request,
         CancellationToken cancellationToken)
@@ -32,10 +48,10 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             return Unauthorized();
 
         var company = await companyService.CreateCompanyAsync(userId, request, cancellationToken);
-        return Created($"/companies/{company.Id}", company);
+        return Created(CompanyRouteTemplates.CompanyLocation(company.Id), company);
     }
 
-    [HttpGet("companies/{companyId:guid}")]
+    [HttpGet(CompanyRouteTemplates.CompanyById)]
     public async Task<ActionResult<CompanyDetailDto>> GetCompany(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -50,7 +66,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(company);
     }
 
-    [HttpPut("companies/{companyId:guid}")]
+    [HttpPut(CompanyRouteTemplates.CompanyById)]
     public async Task<ActionResult<CompanyDetailDto>> UpdateCompany(
         Guid companyId,
         [FromBody] UpdateCompanyRequestDto request,
@@ -66,7 +82,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(company);
     }
 
-    [HttpPut("companies/{companyId:guid}/status")]
+    [HttpPut(CompanyRouteTemplates.CompanyStatus)]
     public async Task<ActionResult<CompanyDetailDto>> UpdateCompanyStatus(
         Guid companyId,
         [FromBody] UpdateCompanyStatusRequestDto request,
@@ -89,7 +105,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
     }
 
-    [HttpPut("companies/{companyId:guid}/follow-up")]
+    [HttpPut(CompanyRouteTemplates.CompanyFollowUp)]
     public async Task<ActionResult<CompanyDetailDto>> UpdateCompanyFollowUp(
         Guid companyId,
         [FromBody] UpdateCompanyFollowUpRequestDto request,
@@ -105,7 +121,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(company);
     }
 
-    [HttpPost("companies/{companyId:guid}/briefing")]
+    [HttpPost(CompanyRouteTemplates.CompanyBriefing)]
     public async Task<IActionResult> GenerateBriefing(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -123,16 +139,15 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (InvalidOperationException invalidOperationException)
         {
-            return StatusCode(503, new { message = invalidOperationException.Message });
+            return AiServiceUnavailable(invalidOperationException.Message);
         }
         catch (HttpRequestException)
         {
-            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return AiServiceUnavailable(CompanyErrorMessages.AiServiceUnavailable);
         }
     }
 
-    [HttpGet("companies/{companyId:guid}/briefing")]
+    [HttpGet(CompanyRouteTemplates.CompanyBriefing)]
     public async Task<IActionResult> GetBriefing(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -150,7 +165,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(briefing);
     }
 
-    [HttpGet("companies/{companyId:guid}/readiness")]
+    [HttpGet(CompanyRouteTemplates.CompanyReadiness)]
     public async Task<IActionResult> GetReadiness(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -171,16 +186,15 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (InvalidOperationException invalidOperationException)
         {
-            return StatusCode(503, new { message = invalidOperationException.Message });
+            return AiServiceUnavailable(invalidOperationException.Message);
         }
         catch (HttpRequestException)
         {
-            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return AiServiceUnavailable(CompanyErrorMessages.AiServiceUnavailable);
         }
     }
 
-    [HttpDelete("companies/{companyId:guid}")]
+    [HttpDelete(CompanyRouteTemplates.CompanyById)]
     public async Task<IActionResult> DeleteCompany(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -195,7 +209,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
-    [HttpPost("companies/{companyId:guid}/logs/parse")]
+    [HttpPost(CompanyRouteTemplates.CompanyCallLogParse)]
     public async Task<IActionResult> ParseCallLog(
         Guid companyId,
         [FromBody] ParseCallLogRequestDto request,
@@ -214,16 +228,15 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (InvalidOperationException invalidOperationException)
         {
-            return StatusCode(503, new { message = invalidOperationException.Message });
+            return AiServiceUnavailable(invalidOperationException.Message);
         }
         catch (HttpRequestException)
         {
-            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return AiServiceUnavailable(CompanyErrorMessages.AiServiceUnavailable);
         }
     }
 
-    [HttpGet("companies/{companyId:guid}/logs")]
+    [HttpGet(CompanyRouteTemplates.CompanyCallLogs)]
     public async Task<ActionResult<IReadOnlyList<CallLogEntryDto>>> ListCallLogEntries(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -238,7 +251,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(entries);
     }
 
-    [HttpPost("companies/{companyId:guid}/logs")]
+    [HttpPost(CompanyRouteTemplates.CompanyCallLogs)]
     public async Task<ActionResult<CallLogEntryDto>> CreateCallLogEntry(
         Guid companyId,
         [FromBody] CreateCallLogEntryRequestDto request,
@@ -253,7 +266,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             if (entry is null)
                 return NotFound();
 
-            return Created($"/companies/{companyId}/logs/{entry.Id}", entry);
+            return Created(CompanyRouteTemplates.CallLogLocation(companyId, entry.Id), entry);
         }
         catch (ContactNotFoundInCompanyException contactNotFoundException)
         {
@@ -261,7 +274,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
     }
 
-    [HttpPut("companies/{companyId:guid}/logs/{logId:guid}")]
+    [HttpPut(CompanyRouteTemplates.CompanyCallLogById)]
     public async Task<ActionResult<CallLogEntryDto>> UpdateCallLogEntry(
         Guid companyId,
         Guid logId,
@@ -285,7 +298,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
     }
 
-    [HttpDelete("companies/{companyId:guid}/logs/{logId:guid}")]
+    [HttpDelete(CompanyRouteTemplates.CompanyCallLogById)]
     public async Task<IActionResult> DeleteCallLogEntry(
         Guid companyId,
         Guid logId,
@@ -301,7 +314,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
-    [HttpPost("companies/{companyId:guid}/practice-calls")]
+    [HttpPost(CompanyRouteTemplates.CompanyPracticeCalls)]
     public async Task<ActionResult<PracticeCallDto>> CreatePracticeCall(
         Guid companyId,
         [FromBody] CreatePracticeCallRequestDto request,
@@ -314,10 +327,10 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (practiceCall is null)
             return NotFound();
 
-        return Created($"/companies/{companyId}/practice-calls/{practiceCall.Id}", practiceCall);
+        return Created(CompanyRouteTemplates.PracticeCallLocation(companyId, practiceCall.Id), practiceCall);
     }
 
-    [HttpGet("companies/{companyId:guid}/practice-calls")]
+    [HttpGet(CompanyRouteTemplates.CompanyPracticeCalls)]
     public async Task<ActionResult<IReadOnlyList<PracticeCallDto>>> ListPracticeCalls(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -332,7 +345,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(practiceCalls);
     }
 
-    [HttpGet("companies/{companyId:guid}/recent-goals")]
+    [HttpGet(CompanyRouteTemplates.CompanyRecentGoals)]
     public async Task<ActionResult<IReadOnlyList<string>>> GetRecentGoals(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -347,7 +360,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(goals);
     }
 
-    [HttpGet("companies/{companyId:guid}/contacts")]
+    [HttpGet(CompanyRouteTemplates.CompanyContacts)]
     public async Task<ActionResult<IReadOnlyList<CompanyContactDto>>> ListContacts(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -362,7 +375,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(contacts);
     }
 
-    [HttpPost("companies/{companyId:guid}/contacts")]
+    [HttpPost(CompanyRouteTemplates.CompanyContacts)]
     public async Task<ActionResult<CompanyContactDto>> CreateContact(
         Guid companyId,
         [FromBody] CreateCompanyContactRequestDto request,
@@ -375,10 +388,10 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (contact is null)
             return NotFound();
 
-        return Created($"/companies/{companyId}/contacts/{contact.Id}", contact);
+        return Created(CompanyRouteTemplates.ContactLocation(companyId, contact.Id), contact);
     }
 
-    [HttpPut("companies/{companyId:guid}/contacts/{contactId:guid}")]
+    [HttpPut(CompanyRouteTemplates.CompanyContactById)]
     public async Task<ActionResult<CompanyContactDto>> UpdateContact(
         Guid companyId,
         Guid contactId,
@@ -395,7 +408,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(contact);
     }
 
-    [HttpDelete("companies/{companyId:guid}/contacts/{contactId:guid}")]
+    [HttpDelete(CompanyRouteTemplates.CompanyContactById)]
     public async Task<IActionResult> DeleteContact(
         Guid companyId,
         Guid contactId,
@@ -411,7 +424,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
-    [HttpGet("companies/{companyId:guid}/personas")]
+    [HttpGet(CompanyRouteTemplates.CompanyPersonas)]
     public async Task<ActionResult<IReadOnlyList<CompanyPersonaDto>>> ListPersonas(
         Guid companyId,
         CancellationToken cancellationToken)
@@ -426,7 +439,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(personas);
     }
 
-    [HttpPost("companies/{companyId:guid}/personas")]
+    [HttpPost(CompanyRouteTemplates.CompanyPersonas)]
     public async Task<ActionResult<CompanyPersonaDto>> CreatePersona(
         Guid companyId,
         [FromBody] CreateCompanyPersonaRequestDto request,
@@ -439,10 +452,10 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (persona is null)
             return NotFound();
 
-        return Created($"/companies/{companyId}/personas/{persona.Id}", persona);
+        return Created(CompanyRouteTemplates.PersonaLocation(companyId, persona.Id), persona);
     }
 
-    [HttpDelete("companies/{companyId:guid}/personas/{personaId:guid}")]
+    [HttpDelete(CompanyRouteTemplates.CompanyPersonaById)]
     public async Task<IActionResult> DeletePersona(
         Guid companyId,
         Guid personaId,
@@ -458,7 +471,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
-    [HttpPost("companies/{companyId:guid}/personas/generate")]
+    [HttpPost(CompanyRouteTemplates.CompanyPersonaGenerate)]
     public async Task<IActionResult> GeneratePersona(
         Guid companyId,
         [FromBody] GenerateCompanyPersonaRequestDto request,
@@ -477,18 +490,33 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (InvalidOperationException invalidOperationException)
         {
-            return StatusCode(503, new { message = invalidOperationException.Message });
+            return AiServiceUnavailable(invalidOperationException.Message);
         }
         catch (HttpRequestException)
         {
-            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return AiServiceUnavailable(CompanyErrorMessages.AiServiceUnavailable);
         }
     }
 
+    /// <summary>
+    /// Reads the caller's user id from the validated access token. Returns false — never throws and
+    /// never falls back to a default id — when the token carries no parseable subject, so a
+    /// malformed-but-signed token cannot be mistaken for a real user.
+    /// </summary>
     private bool TryGetCurrentUserId(out Guid userId)
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(claim, out userId);
     }
+
+    /// <summary>
+    /// The single shape of an AI-backed failure response: 503 with a <c>message</c> body. Both
+    /// causes land here — ai-service refusing the call (<see cref="InvalidOperationException"/>,
+    /// whose message describes the refusal) and never reaching it at all
+    /// (<see cref="HttpRequestException"/>, which gets the generic message because a DNS or socket
+    /// error says nothing a caller can act on). 503 rather than 500 because the request is worth
+    /// retrying and nothing was persisted.
+    /// </summary>
+    private ObjectResult AiServiceUnavailable(string message)
+        => StatusCode(StatusCodes.Status503ServiceUnavailable, new { message });
 }

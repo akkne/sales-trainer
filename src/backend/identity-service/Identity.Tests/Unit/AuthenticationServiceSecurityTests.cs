@@ -17,6 +17,17 @@ using Sellevate.Identity.Tests.Helpers;
 
 namespace Sellevate.Identity.Tests.Unit;
 
+/// <summary>
+/// The security invariants of token issuance: a refresh token is only ever persisted as its SHA-256
+/// hash, and Google sign-in never provisions an account.
+///
+/// <para>
+/// <c>RefreshAccessToken_AlreadyRevokedToken_ThrowsAndRevokesFamily</c> is deliberately absent here:
+/// the atomic rotation it would exercise uses <c>ExecuteUpdateAsync</c>, which the EF in-memory
+/// provider does not implement. That scenario lives in <c>AuthFlowTests</c>, which runs against a real
+/// PostgreSQL container.
+/// </para>
+/// </summary>
 [TestFixture]
 public class AuthenticationServiceSecurityTests
 {
@@ -30,19 +41,21 @@ public class AuthenticationServiceSecurityTests
         DemoTokenLifetimeHours = 1
     });
 
-    // Phase 40.8: the resolver and the provider collection are wired with their real
-    // implementations rather than substitutes — the whole point of the seam is which provider the
-    // resolved method dispatches to, and a stub would assert nothing about that.
+    /// <summary>
+    /// Phase 40.8: the resolver and the provider collection are wired with their real implementations
+    /// rather than substitutes — the whole point of the seam is which provider the resolved method
+    /// dispatches to, and a stub would assert nothing about that.
+    /// </summary>
     private static AuthenticationService BuildService(
-        IdentityDbContext db,
+        IdentityDbContext databaseContext,
         IGoogleTokenValidator? googleTokenValidator = null) =>
         new(
-            db,
+            databaseContext,
             Substitute.For<IEmailVerificationService>(),
             googleTokenValidator ?? Substitute.For<IGoogleTokenValidator>(),
             new OrganizationAuthConfigurationResolver(
-                db, NullLogger<OrganizationAuthConfigurationResolver>.Instance),
-            [new PasswordAuthProvider(db, NullLogger<PasswordAuthProvider>.Instance)],
+                databaseContext, NullLogger<OrganizationAuthConfigurationResolver>.Instance),
+            [new PasswordAuthProvider(databaseContext, NullLogger<PasswordAuthProvider>.Instance)],
             JwtOptions,
             NullLogger<AuthenticationService>.Instance);
 
@@ -52,12 +65,10 @@ public class AuthenticationServiceSecurityTests
         return Convert.ToHexString(hashBytes);
     }
 
-    // ── ID5: Refresh tokens stored as SHA-256 hash ────────────────────────────
-
     [Test]
     public async Task LoginWithEmail_StoresHashedRefreshToken_NotRawToken()
     {
-        await using var db = InMemoryDbContextFactory.Create();
+        await using var databaseContext = InMemoryDbContextFactory.Create();
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -67,27 +78,30 @@ public class AuthenticationServiceSecurityTests
             CreatedAt = DateTime.UtcNow,
             IsEmailVerified = true
         };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(user);
+        await databaseContext.SaveChangesAsync();
 
-        var service = BuildService(db);
+        var service = BuildService(databaseContext);
         var result = await service.LoginWithEmailAsync("hash@test.com", "Password1!");
 
         var rawToken = result.RefreshToken;
         var expectedHash = ComputeTokenHash(rawToken);
 
-        var storedToken = await db.RefreshTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
+        var storedToken = await databaseContext.RefreshTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
         storedToken.Should().NotBeNull();
         storedToken!.Token.Should().Be(expectedHash, "only the SHA-256 hash should be persisted");
         storedToken.Token.Should().NotBe(rawToken, "raw token must not be stored in plaintext");
     }
 
+    /// <summary>
+    /// Verifies the hash round-trip without calling <c>RefreshAccessTokenAsync</c>, which uses
+    /// <c>ExecuteUpdateAsync</c> and is unsupported by the EF in-memory provider. The stored hash must
+    /// equal <c>SHA-256(rawToken)</c>, which is what makes lookup by hash possible at all.
+    /// </summary>
     [Test]
     public async Task LoginWithEmail_StoredTokenHash_CanBeVerifiedByReHashingRawToken()
     {
-        // This test verifies the hash round-trip without calling RefreshAccessTokenAsync
-        // (which uses ExecuteUpdateAsync, unsupported by the EF in-memory provider).
-        await using var db = InMemoryDbContextFactory.Create();
+        await using var databaseContext = InMemoryDbContextFactory.Create();
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -97,26 +111,28 @@ public class AuthenticationServiceSecurityTests
             CreatedAt = DateTime.UtcNow,
             IsEmailVerified = true
         };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(user);
+        await databaseContext.SaveChangesAsync();
 
-        var service = BuildService(db);
+        var service = BuildService(databaseContext);
         var loginResult = await service.LoginWithEmailAsync("refresh@test.com", "Password1!");
         var rawToken = loginResult.RefreshToken;
 
-        // The stored hash must equal SHA-256(rawToken), making lookup by hash possible.
         var expectedHash = ComputeTokenHash(rawToken);
-        var stored = await db.RefreshTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
+        var stored = await databaseContext.RefreshTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
         stored.Should().NotBeNull();
         stored!.Token.Should().Be(expectedHash, "service must look up tokens by their SHA-256 hash");
     }
 
+    /// <summary>
+    /// Passing the stored hash as if it were the raw token must fail: the service hashes what it is
+    /// given, so a double hash matches nothing. Exercises the expired-or-missing path, which keeps
+    /// <c>ExecuteUpdateAsync</c> out of the picture.
+    /// </summary>
     [Test]
     public async Task RefreshAccessToken_WithHashDirectly_Fails()
     {
-        // Passing the hash as if it were the raw token must fail (double-hash → not found).
-        // Uses expired/missing path — ExecuteUpdateAsync not exercised.
-        await using var db = InMemoryDbContextFactory.Create();
+        await using var databaseContext = InMemoryDbContextFactory.Create();
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -126,59 +142,48 @@ public class AuthenticationServiceSecurityTests
             CreatedAt = DateTime.UtcNow,
             IsEmailVerified = true
         };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(user);
+        await databaseContext.SaveChangesAsync();
 
-        var service = BuildService(db);
+        var service = BuildService(databaseContext);
         var loginResult = await service.LoginWithEmailAsync("hashfail@test.com", "Password1!");
         var rawToken = loginResult.RefreshToken;
         var hash = ComputeTokenHash(rawToken);
 
-        // Double-hashing means the stored record won't be found → UnauthorizedException.
         var act = async () => await service.RefreshAccessTokenAsync(hash);
         await act.Should().ThrowAsync<UnauthorizedAccessException>(
             "passing the hash as the raw token should not find the stored record (double-hash)");
     }
 
-    // ── ID4: Atomic rotation — revoked token triggers family revocation ───────
-    // NOTE: RefreshAccessToken_AlreadyRevokedToken_ThrowsAndRevokesFamily requires
-    // ExecuteUpdateAsync which is not supported by the EF in-memory provider.
-    // This scenario is covered by the integration test suite (AuthFlowTests) which
-    // runs against a real PostgreSQL container.
-
-    // ── ID6: Google login — EmailVerified guard ───────────────────────────────
-
     [Test]
     public async Task LoginWithGoogle_UnverifiedEmail_ThrowsUnauthorized()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var service = BuildService(db, StubGoogleValidator("unverified@test.com", isEmailVerified: false));
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        var service = BuildService(databaseContext, StubGoogleValidator("unverified@test.com", isEmailVerified: false));
 
         var act = async () => await service.LoginWithGoogleAsync("google-id-token");
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
-    // ── 40.7: Google login is invite-only — no implicit account creation ──────
-
     [Test]
     public async Task LoginWithGoogle_UnknownEmail_ThrowsAndCreatesNoUser()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var service = BuildService(db, StubGoogleValidator("stranger@test.com"));
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        var service = BuildService(databaseContext, StubGoogleValidator("stranger@test.com"));
 
         var act = async () => await service.LoginWithGoogleAsync("google-id-token");
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        (await db.Users.CountAsync()).Should().Be(0, "Google sign-in must never provision an account");
+        (await databaseContext.Users.CountAsync()).Should().Be(0, "Google sign-in must never provision an account");
     }
 
     [Test]
     public async Task LoginWithGoogle_ExistingUserWithoutMembership_ThrowsUnauthorized()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        await SeedGoogleUserAsync(db, "no-membership@test.com");
-        var service = BuildService(db, StubGoogleValidator("no-membership@test.com"));
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        await SeedGoogleUserAsync(databaseContext, "no-membership@test.com");
+        var service = BuildService(databaseContext, StubGoogleValidator("no-membership@test.com"));
 
         var act = async () => await service.LoginWithGoogleAsync("google-id-token");
 
@@ -188,9 +193,9 @@ public class AuthenticationServiceSecurityTests
     [Test]
     public async Task LoginWithGoogle_ExistingUserWithDeactivatedMembership_ThrowsUnauthorized()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var user = await SeedGoogleUserAsync(db, "deactivated@test.com");
-        db.Memberships.Add(new Membership
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        var user = await SeedGoogleUserAsync(databaseContext, "deactivated@test.com");
+        databaseContext.Memberships.Add(new Membership
         {
             UserId = user.Id,
             OrganizationId = Guid.NewGuid(),
@@ -199,8 +204,8 @@ public class AuthenticationServiceSecurityTests
             JoinedAt = DateTime.UtcNow.AddDays(-10),
             DeactivatedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
-        var service = BuildService(db, StubGoogleValidator("deactivated@test.com"));
+        await databaseContext.SaveChangesAsync();
+        var service = BuildService(databaseContext, StubGoogleValidator("deactivated@test.com"));
 
         var act = async () => await service.LoginWithGoogleAsync("google-id-token");
 
@@ -210,10 +215,10 @@ public class AuthenticationServiceSecurityTests
     [Test]
     public async Task LoginWithGoogle_ExistingUserWithActiveMembership_IssuesTokensWithOrgClaims()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var user = await SeedGoogleUserAsync(db, "member@test.com");
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        var user = await SeedGoogleUserAsync(databaseContext, "member@test.com");
         var organizationId = Guid.NewGuid();
-        db.Memberships.Add(new Membership
+        databaseContext.Memberships.Add(new Membership
         {
             UserId = user.Id,
             OrganizationId = organizationId,
@@ -221,16 +226,14 @@ public class AuthenticationServiceSecurityTests
             Status = MembershipStatus.Active,
             JoinedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
-        var service = BuildService(db, StubGoogleValidator("member@test.com"));
+        await databaseContext.SaveChangesAsync();
+        var service = BuildService(databaseContext, StubGoogleValidator("member@test.com"));
 
         var issuedTokenPair = await service.LoginWithGoogleAsync("google-id-token");
 
         issuedTokenPair.OrgId.Should().Be(organizationId.ToString());
         issuedTokenPair.OrgRole.Should().Be("TenancyAdmin");
     }
-
-    // ── 40.8: the login method is per-organization configuration ──────────────
 
     /// <summary>
     /// The behaviour that makes the seam more than a shape: an organization configured for a
@@ -240,7 +243,7 @@ public class AuthenticationServiceSecurityTests
     [Test]
     public async Task LoginWithEmail_ForOrganizationConfiguredForSso_IsRejectedDespiteCorrectPassword()
     {
-        await using var db = InMemoryDbContextFactory.Create();
+        await using var databaseContext = InMemoryDbContextFactory.Create();
         var organizationId = Guid.NewGuid();
         var user = new User
         {
@@ -251,8 +254,8 @@ public class AuthenticationServiceSecurityTests
             CreatedAt = DateTime.UtcNow,
             IsEmailVerified = true
         };
-        db.Users.Add(user);
-        db.Memberships.Add(new Membership
+        databaseContext.Users.Add(user);
+        databaseContext.Memberships.Add(new Membership
         {
             UserId = user.Id,
             OrganizationId = organizationId,
@@ -260,28 +263,28 @@ public class AuthenticationServiceSecurityTests
             Status = MembershipStatus.Active,
             JoinedAt = DateTime.UtcNow
         });
-        db.OrganizationAuthConfigurations.Add(new OrganizationAuthConfiguration
+        databaseContext.OrganizationAuthConfigurations.Add(new OrganizationAuthConfiguration
         {
             OrganizationId = organizationId,
             Method = AuthMethodNames.Oidc,
             AllowedEmailDomains = ["bigcustomer.test"],
             CreatedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        var service = BuildService(db);
+        var service = BuildService(databaseContext);
 
         var act = async () => await service.LoginWithEmailAsync("employee@bigcustomer.test", "Password1!");
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
-        (await db.RefreshTokens.CountAsync()).Should().Be(0, "no session may be issued for a refused method");
+        (await databaseContext.RefreshTokens.CountAsync()).Should().Be(0, "no session may be issued for a refused method");
     }
 
     [Test]
     public async Task ResolveLoginMethodAsync_ForAnUnknownAddress_StillAnswersPassword()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var service = BuildService(db);
+        await using var databaseContext = InMemoryDbContextFactory.Create();
+        var service = BuildService(databaseContext);
 
         var resolved = await service.ResolveLoginMethodAsync("stranger@nowhere.test");
 
@@ -296,7 +299,7 @@ public class AuthenticationServiceSecurityTests
         return validator;
     }
 
-    private static async Task<User> SeedGoogleUserAsync(IdentityDbContext db, string email)
+    private static async Task<User> SeedGoogleUserAsync(IdentityDbContext databaseContext, string email)
     {
         var user = new User
         {
@@ -307,8 +310,8 @@ public class AuthenticationServiceSecurityTests
             CreatedAt = DateTime.UtcNow,
             IsEmailVerified = true
         };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(user);
+        await databaseContext.SaveChangesAsync();
         return user;
     }
 }

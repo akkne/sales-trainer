@@ -113,6 +113,31 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
         return ToDto(draft);
     }
 
+    /// <summary>
+    /// Freezes the lesson's current content as its next published version. <c>null</c> means the
+    /// lesson does not exist or is not visible to this organization.
+    ///
+    /// <para>
+    /// <b>An unchanged content hash publishes nothing.</b> Publishing something identical to what is
+    /// already published would add a version number that means nothing and a break in every metric
+    /// series joined on version — the exact failure <c>content_hash</c> exists to prevent
+    /// (docs/TENANCY/CONTENT_MODEL.md §2.1). The open draft goes away with it: it described changes
+    /// that turned out not to exist. The caller sees <c>CreatedNewVersion: false</c> and the existing
+    /// version.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The version number is re-derived here, not trusted from draft creation time.</b> Another
+    /// version of this lesson could have been published in between, and a version number is not
+    /// something to guess at.
+    /// </para>
+    ///
+    /// <para>
+    /// <paramref name="isBreaking"/> is the author's declaration, never inferred from the diff: only a
+    /// person can say whether an edit changes what the lesson measures. It is what
+    /// <c>LessonAccuracyService</c> splits its series on and what a programme switch warns about.
+    /// </para>
+    /// </summary>
     public async Task<PublishLessonVersionResultDto?> PublishAsync(
         Guid lessonId,
         bool isBreaking,
@@ -138,10 +163,6 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
 
         var draft = await FindDraftAsync(lessonId, cancellationToken);
 
-        // Publishing something identical to what is already published would add a version number
-        // that means nothing and a break in every metric series joined on version — the exact
-        // failure content_hash exists to prevent (CONTENT_MODEL.md §2.1). The open draft goes away
-        // with it: it described changes that turned out not to exist.
         if (latestPublishedVersion is not null && latestPublishedVersion.ContentHash == contentHash)
         {
             if (draft is not null)
@@ -170,8 +191,6 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
             databaseContext.LessonVersions.Add(draft);
         }
 
-        // Re-derived rather than trusted from draft creation time: another lesson version could
-        // have been published in between, and a version number is not something to guess at.
         draft.VersionNumber = await ResolveNextVersionNumberAsync(lessonId, cancellationToken);
         draft.Content = canonicalContent;
         draft.ContentHash = contentHash;
@@ -185,6 +204,18 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
         return new PublishLessonVersionResultDto(ToDto(draft), CreatedNewVersion: true);
     }
 
+    /// <summary>
+    /// The id of the lesson's newest published version, minting version 1 when the lesson has never
+    /// been published. <c>null</c> only when the lesson itself is gone or invisible.
+    ///
+    /// <para>
+    /// <b>Losing the mint race is not an error.</b> Two learners answering the first exercise of a
+    /// never-published lesson at the same moment both reach the insert and both write version 1; the
+    /// unique index on <c>(LessonId, VersionNumber)</c> lets exactly one through. The loser adopts the
+    /// row the winner produced — which is the very row it wanted — rather than failing a learner's
+    /// submission over a bookkeeping collision.
+    /// </para>
+    /// </summary>
     /// <remarks>
     /// Three separate transactions on purpose, and it must be called with none of its own already
     /// open (see the note on the caller in <c>ExerciseService</c>). A unique-index violation aborts
@@ -208,11 +239,6 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
         }
         catch (DbUpdateException)
         {
-            // Two learners answering the first exercise of a never-published lesson at the same
-            // moment both reach this point and both insert version 1; the unique index on
-            // (LessonId, VersionNumber) lets exactly one of them through. Losing that race is not an
-            // error — the other transaction produced the very row this one wanted — so the loser
-            // adopts it instead of failing a learner's submission over a bookkeeping collision.
             databaseContext.ChangeTracker.Clear();
             return await ReadLatestPublishedVersionIdAsync(lessonId, cancellationToken);
         }

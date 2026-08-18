@@ -39,6 +39,12 @@ internal static class OrganizationProfileGapInspector
     public const int MaximumQuestionLimit = 7;
 
     /// <summary>
+    /// The fewest. A caller asking for zero or a negative number gets one question rather than an empty
+    /// list, because an empty list is indistinguishable from «профиль заполнен» on the screen.
+    /// </summary>
+    public const int MinimumQuestionLimit = 1;
+
+    /// <summary>
     /// Everything still missing from <paramref name="profile"/>, ordered by
     /// <c>OrganizationProfileGapCodes.All</c> and cut to <paramref name="questionLimit"/>.
     /// </summary>
@@ -55,7 +61,7 @@ internal static class OrganizationProfileGapInspector
 
         var blockingGapCount = missingCodes.Count(OrganizationProfileGapCodes.IsBlocking);
 
-        var boundedLimit = Math.Clamp(questionLimit, 1, MaximumQuestionLimit);
+        var boundedLimit = Math.Clamp(questionLimit, MinimumQuestionLimit, MaximumQuestionLimit);
 
         var questions = missingCodes
             .Take(boundedLimit)
@@ -75,7 +81,16 @@ internal static class OrganizationProfileGapInspector
     /// <summary>
     /// The codes, in asking order. Kept separate from the DTO assembly above so that the ordering
     /// lives in exactly one place — <c>OrganizationProfileGapCodes.All</c> — rather than being
-    /// re-established by whoever adds the eighth field.
+    /// re-established by whoever adds the eighth field. The result is reordered by that list rather
+    /// than returned in the order the checks below happen to run in, so reordering a check can never
+    /// quietly reorder the interview.
+    ///
+    /// <para>
+    /// Objections and script stages are counted against a threshold rather than tested for «any»,
+    /// because one objection in the profile is what a persona then raises every session, and a persona
+    /// with one objection is recognisable as a script — see
+    /// <c>OrganizationProfileGapCodes.MinimumObjectionCount</c>.
+    /// </para>
     /// </summary>
     private static List<string> FindMissingCodes(OrganizationProfileDto? profile)
     {
@@ -91,8 +106,6 @@ internal static class OrganizationProfileGapInspector
             missing.Add(OrganizationProfileGapCodes.Icp);
         }
 
-        // A count rather than "any", because one objection in the profile is what a persona then
-        // raises every session, and a persona with one objection is recognisable as a script.
         if (CountNonEmpty(profile?.Objections?.Select(objection => objection.Text))
             < OrganizationProfileGapCodes.MinimumObjectionCount)
         {
@@ -119,8 +132,6 @@ internal static class OrganizationProfileGapInspector
             missing.Add(OrganizationProfileGapCodes.Glossary);
         }
 
-        // Ordered by the code list rather than by the order the checks happen to run in, so that
-        // reordering the checks can never quietly reorder the interview.
         return OrganizationProfileGapCodes.All.Where(missing.Contains).ToList();
     }
 

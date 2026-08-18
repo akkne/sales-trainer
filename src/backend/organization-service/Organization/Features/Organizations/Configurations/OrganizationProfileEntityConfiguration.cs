@@ -4,6 +4,16 @@ using Sellevate.Organization.Features.Organizations.Models;
 
 namespace Sellevate.Organization.Features.Organizations.Configurations;
 
+/// <summary>
+/// The profile table's schema: one row per organization, keyed by the tenant column itself, which is
+/// what makes «свой профиль» a lookup rather than a filter.
+///
+/// <para>
+/// The four <c>jsonb</c> columns are <c>IsRequired</c> with an empty-collection default rather than
+/// nullable, so no reader anywhere has to distinguish «no objections» from «column never written».
+/// Row-level security on this table is applied by migration, not from here.
+/// </para>
+/// </summary>
 public sealed class OrganizationProfileEntityConfiguration : IEntityTypeConfiguration<OrganizationProfile>
 {
     public void Configure(EntityTypeBuilder<OrganizationProfile> builder)

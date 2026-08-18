@@ -33,6 +33,18 @@ public sealed class KafkaTopicProvisioner : IHostedService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Creates every base topic plus its dead-letter companion — both are produced and consumed at
+    /// run time, so provisioning only one half would still fail a consume loop.
+    ///
+    /// <para>
+    /// Both <c>catch</c> blocks are deliberately tolerant. A <c>CreateTopicsException</c> whose
+    /// per-topic results are all <c>TopicAlreadyExists</c> is the normal, expected case on every
+    /// restart. Any other exception means the broker was unreachable at startup; crashing the host
+    /// would be worse than continuing, because the consume loop retries and librdkafka refreshes
+    /// metadata once the broker and its topics become available.
+    /// </para>
+    /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (!_settings.ProvisionTopics)
@@ -40,7 +52,6 @@ public sealed class KafkaTopicProvisioner : IHostedService
             return;
         }
 
-        // Base topics plus their dead-letter companions — both are produced/consumed at runtime.
         var topicNames = Topics.All
             .SelectMany(topic => new[] { topic, Topics.DeadLetterFor(topic) })
             .Distinct()
@@ -67,7 +78,6 @@ public sealed class KafkaTopicProvisioner : IHostedService
         }
         catch (CreateTopicsException exception)
         {
-            // Per-topic results: a topic that already exists is the normal, expected case.
             var realFailures = exception.Results
                 .Where(result => result.Error.Code != ErrorCode.NoError
                                  && result.Error.Code != ErrorCode.TopicAlreadyExists)
@@ -90,8 +100,6 @@ public sealed class KafkaTopicProvisioner : IHostedService
         }
         catch (Exception exception)
         {
-            // Broker unreachable at startup, etc. Don't crash the host — the consume loop retries
-            // and librdkafka refreshes metadata once the broker/topics become available.
             _logger.LogError(exception, "Kafka topic provisioning failed; continuing startup");
         }
     }

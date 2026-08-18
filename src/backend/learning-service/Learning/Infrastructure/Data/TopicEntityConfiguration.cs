@@ -4,6 +4,11 @@ using Sellevate.Learning.Features.SkillTree.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps a topic, which may be a global library row or one organization's own. The iconic name is unique
+/// per organization with a partial unique index over the global rows — Phase 40.10, same reasoning as
+/// <see cref="SkillEntityConfiguration"/>.
+/// </summary>
 public sealed class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
 {
     public void Configure(EntityTypeBuilder<Topic> builder)
@@ -19,7 +24,6 @@ public sealed class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
             .HasForeignKey(topic => topic.SkillId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Phase 40.10, same reasoning as SkillEntityConfiguration.
         builder.HasIndex(topic => new { topic.OrganizationId, topic.IconicName })
             .IsUnique();
         builder.HasIndex(topic => topic.IconicName)

@@ -7,6 +7,23 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Achievements.Services.Implementation;
 
+/// <summary>
+/// Evaluates the achievement catalogue against a user's current counters and unlocks whatever the
+/// latest activity earned.
+///
+/// <para>
+/// Only locked achievements are considered, and an unlock is never reversed — so this may be called
+/// after every event without re-publishing a notification somebody has already seen. An unrecognised
+/// condition type unlocks nothing rather than throwing, so a catalogue row added by a newer version of
+/// the service degrades to "not yet unlockable" instead of failing every evaluation.
+/// </para>
+///
+/// <para>
+/// All newly unlocked rows and their notifications are written in one scope and committed together:
+/// an achievement that exists in the database but whose event never went out would leave the user
+/// with a silently unlocked badge.
+/// </para>
+/// </summary>
 internal sealed class AchievementService(
     GamificationDbContext databaseContext,
     IGamificationEventPublisher eventPublisher) : IAchievementService

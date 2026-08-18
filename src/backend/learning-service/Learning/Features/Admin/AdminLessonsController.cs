@@ -50,12 +50,15 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
         return Ok(lessons);
     }
 
+    /// <summary>
+    /// Platform staff only: creating a lesson creates a row in the shared library. An organization
+    /// customizes what already exists through the override route instead; originating content of its own
+    /// is 40.19/40.20.
+    /// </summary>
     [HttpPost("admin/topics/{topicIconicName}/lessons")]
     public async Task<ActionResult<AdminLessonDto>> Create(
         string topicIconicName, [FromBody] CreateLessonRequestDto requestDto, CancellationToken cancellationToken = default)
     {
-        // Creating a lesson creates a row in the library. An organization customizes what exists
-        // through the override route instead; originating content is 40.19/40.20.
         if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
 
         var topic = await database.Topics.FirstOrDefaultAsync(candidate => candidate.IconicName == topicIconicName, cancellationToken);
@@ -87,6 +90,21 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
             lesson.Id, lesson.TopicId, lesson.Title, lesson.OrderInTopic, lesson.Slug, lesson.IsArchived));
     }
 
+    /// <summary>
+    /// Both optional fields are <b>omit-means-leave-alone</b>, and neither may be treated as a reset.
+    ///
+    /// <para>
+    /// Phase 40.15: an omitted slug leaves the existing one alone rather than regenerating it.
+    /// Regenerating would silently change the lesson's stable identifier on every title edit, which is
+    /// the one thing a slug must not do.
+    /// </para>
+    ///
+    /// <para>
+    /// Phase 40.27: an omitted archive flag leaves the lesson's visibility alone. Setting it is the way
+    /// back for a generated lesson, which lands archived so unreviewed model output never appears in the
+    /// team's tree before somebody has looked at it.
+    /// </para>
+    /// </summary>
     [HttpPut("admin/lessons/{id:guid}")]
     public async Task<ActionResult<AdminLessonDto>> Update(
         Guid id, [FromBody] CreateLessonRequestDto requestDto, CancellationToken cancellationToken = default)
@@ -95,9 +113,6 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
         if (lesson is null) return NotFound();
         if (!ContentAuthoringGuard.MayAuthor(User, lesson.OrganizationId)) return Forbid();
 
-        // Phase 40.15: an omitted slug leaves the existing one alone rather than regenerating it.
-        // Regenerating would silently change the lesson's stable identifier on every title edit,
-        // which is the one thing a slug must not do.
         if (requestDto.Slug is not null)
         {
             if (!LessonSlugGenerator.TryNormalize(requestDto.Slug, out var normalizedSlug))
@@ -111,9 +126,6 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
         lesson.Title = requestDto.Title;
         lesson.OrderInTopic = requestDto.OrderInTopic;
 
-        // Phase 40.27: an omitted flag leaves the lesson's visibility alone. This is the way back for
-        // a generated lesson, which lands archived so unreviewed model output never appears in the
-        // team's tree before somebody has looked at it.
         if (requestDto.IsArchived is { } isArchived)
         {
             lesson.IsArchived = isArchived;

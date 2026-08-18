@@ -148,6 +148,24 @@ internal sealed class ContentAdaptationStepRunner(
         return claimedJob is null ? null : new ClaimedContentAdaptationJob(claimedJob.Id, claimedJob.Mode, now);
     }
 
+    /// <summary>
+    /// Answers every pending item of one claimed batch.
+    ///
+    /// <para>
+    /// The organization profile is read <b>once per tick, not once per item</b>: it is one row and it
+    /// does not change between two calls a few seconds apart. An empty profile is passed as nothing at
+    /// all rather than as an object of nulls — the same rule 40.27 follows. It is normalized for the
+    /// same reason the generation runner normalizes it (found in the 40.34 review): the profile columns
+    /// carry no length limit of their own, and this value is repeated into as many as five hundred
+    /// rewrite prompts in a single batch.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One exercise the model chokes on must not fail the other fifty-nine.</b> The attempt is
+    /// already recorded on the row before the call, so a crash loop cannot re-buy the same call
+    /// forever.
+    /// </para>
+    /// </summary>
     private async Task<int> RunItemsAsync(
         ClaimedContentAdaptationJob claim,
         CancellationToken cancellationToken)
@@ -159,12 +177,6 @@ internal sealed class ContentAdaptationStepRunner(
             return 0;
         }
 
-        // Read once per tick, not once per item: it is one row and it does not change between two
-        // calls a few seconds apart. An empty profile is passed as nothing at all rather than as an
-        // object of nulls — the same rule 40.27 follows.
-        // Normalized for the same reason as the generation runner: the profile columns carry no
-        // length limit of their own, and this value is repeated into as many as five hundred rewrite
-        // prompts in one batch. Review, 40.34.
         var profile = ContentStructureDocumentSerializer.Normalize(
             ContentStructureDto.FromProfile(
                 await organizationProfileProvider.GetCurrentAsync(cancellationToken)));
@@ -190,8 +202,6 @@ internal sealed class ContentAdaptationStepRunner(
             }
             catch (Exception exception)
             {
-                // One exercise the model chokes on must not fail the other fifty-nine. The attempt is
-                // already on the row, so a crash loop cannot re-buy the same call for ever.
                 logger.LogWarning(
                     exception,
                     "Content adaptation item failed JobId={JobId} ItemId={ItemId}",
@@ -230,6 +240,22 @@ internal sealed class ContentAdaptationStepRunner(
         await WriteRewriteAsync(work, currentContent.RootElement, rewrite, cancellationToken);
     }
 
+    /// <summary>
+    /// Records one proposed rewrite for a person to accept or reject.
+    ///
+    /// <para>
+    /// <b>The proposal is validated here, not only at accept time.</b> A body the renderers cannot play
+    /// must never reach the queue: a person cannot tell a broken body from a good one by reading a
+    /// diff, and an exercise that blanks the screen mid-lesson is a worse outcome than one that still
+    /// sounds generic.
+    /// </para>
+    ///
+    /// <para>
+    /// A rewrite that changed nothing is recorded as "no change", whatever the model said about it. The
+    /// comparison is made over the parsed documents, so re-serialisation and key order cannot
+    /// manufacture a change that is not there.
+    /// </para>
+    /// </summary>
     private async Task WriteRewriteAsync(
         ContentAdaptationItemWork work,
         JsonElement currentContent,
@@ -241,10 +267,6 @@ internal sealed class ContentAdaptationStepRunner(
 
         if (rewrite.Content is { ValueKind: JsonValueKind.Object } proposedContent)
         {
-            // Validated here rather than at accept time only. A proposal the renderers cannot play
-            // must never reach the queue: a person cannot tell a broken body from a good one by
-            // reading a diff, and an exercise that blanks the screen mid-lesson is a worse outcome
-            // than one that still sounds generic.
             var validationErrors = ExerciseContentValidator.Validate(work.ExerciseType, proposedContent);
             if (validationErrors.Count > 0)
             {
@@ -255,9 +277,6 @@ internal sealed class ContentAdaptationStepRunner(
             var changes = ContentFieldChangeSummarizer.Compare(currentContent, proposedContent);
             changeCount = changes.Count;
 
-            // A rewrite that changed nothing is «без изменений», whatever the model said about it.
-            // The comparison is over the parsed documents, so re-serialisation and key order cannot
-            // manufacture a change that is not there.
             if (changeCount > 0)
             {
                 proposedJson = proposedContent.GetRawText();
@@ -294,6 +313,15 @@ internal sealed class ContentAdaptationStepRunner(
         await tenantScope.CommitAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Records the review half's findings for one item.
+    ///
+    /// <para>
+    /// Finding nothing is the expected answer and resolves the item without it ever reaching a person's
+    /// queue. A review that always produces at least one complaint is a review nobody believes by the
+    /// tenth exercise.
+    /// </para>
+    /// </summary>
     private async Task WriteReviewAsync(
         ContentAdaptationItemWork work,
         AiExerciseReview review,
@@ -314,9 +342,6 @@ internal sealed class ContentAdaptationStepRunner(
 
         var now = DateTime.UtcNow;
 
-        // Finding nothing is the expected answer and resolves the item without ever reaching a
-        // person's queue. A review that always produces at least one complaint is a review nobody
-        // believes by the tenth exercise.
         if (findings.Count == 0)
         {
             item.Status = ContentAdaptationItemStatuses.Unchanged;
@@ -359,6 +384,18 @@ internal sealed class ContentAdaptationStepRunner(
     /// Spends the item's attempt and reads the body to send, in one transaction that commits before
     /// the call. Returns null when another tick already took this item — the same conditional-UPDATE
     /// shape as the batch claim, one level down, because the money is spent per item.
+    ///
+    /// <para>
+    /// Two plain reads rather than one projection carrying a correlated subquery. The attempt is
+    /// committed either way, so an exercise deleted between collection and this tick costs an attempt
+    /// and lands the item in <c>failed</c> with a reason, instead of spinning.
+    /// </para>
+    ///
+    /// <para>
+    /// The item's state is re-checked after the claim: somebody could have retried the batch, or the
+    /// row could have moved on while the call was in flight, and writing a proposal over an item a
+    /// person has already answered would resurrect a decision they made.
+    /// </para>
     /// </summary>
     private async Task<ContentAdaptationItemWork?> ReadItemWorkAsync(
         Guid itemId,
@@ -384,9 +421,6 @@ internal sealed class ContentAdaptationStepRunner(
             return null;
         }
 
-        // Two plain reads rather than one projection carrying a correlated subquery. The attempt is
-        // already committed below either way, so a missing exercise costs an attempt and lands the
-        // item in failed with a reason instead of spinning.
         var item = await databaseContext.ContentAdaptationItems
             .AsNoTracking()
             .FirstOrDefaultAsync(candidate => candidate.Id == itemId, cancellationToken);
@@ -406,8 +440,6 @@ internal sealed class ContentAdaptationStepRunner(
 
         if (exercise is null)
         {
-            // The exercise was deleted between collection and this tick. Nothing to propose about it
-            // and nothing to fix.
             throw new InvalidOperationException(
                 $"Exercise {item.ExerciseId} no longer exists; nothing to adapt.");
         }
@@ -426,9 +458,6 @@ internal sealed class ContentAdaptationStepRunner(
         var item = await databaseContext.ContentAdaptationItems
             .FirstOrDefaultAsync(candidate => candidate.Id == itemId, cancellationToken);
 
-        // Somebody could have retried the batch or the row could have moved on while the call was in
-        // flight. Writing a proposal over an item a person has already answered would resurrect a
-        // decision they made.
         return item is { Status: ContentAdaptationItemStatuses.Pending } ? item : null;
     }
 
@@ -536,6 +565,14 @@ internal sealed class ContentAdaptationStepRunner(
     /// Releases the lease at the end of the tick so the next one can pick the batch up immediately
     /// rather than waiting out ten minutes. A tick that dies before reaching this leaves the lease
     /// standing, which is exactly what the lease is for.
+    ///
+    /// <para>
+    /// <b>The release is conditional on still owning the lease</b>, via the <c>ClaimedAt</c> predicate.
+    /// Every other claim operation in this file is conditional; this one was not, and the consequence
+    /// found in the 40.34 review was that a worker whose lease had already expired — a tick that ran
+    /// long — cleared the lease of whichever worker had legitimately taken the batch over, handing the
+    /// same batch to two workers at once.
+    /// </para>
     /// </summary>
     private async Task ReleaseClaimAsync(ClaimedContentAdaptationJob claim, CancellationToken cancellationToken)
     {
@@ -546,11 +583,6 @@ internal sealed class ContentAdaptationStepRunner(
             await using var tenantScope =
                 await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
-            // The ClaimedAt predicate makes the release conditional on still owning the lease. Every
-            // other claim operation in this file is conditional; this one was not, so a worker whose
-            // lease had already expired — a tick that ran long — cleared the lease of whichever
-            // worker had legitimately taken the job over, handing the same batch to two workers.
-            // Review, 40.34.
             await databaseContext.ContentAdaptationJobs
                 .Where(job => job.Id == claim.JobId && job.ClaimedAt == claim.ClaimedAt)
                 .ExecuteUpdateAsync(

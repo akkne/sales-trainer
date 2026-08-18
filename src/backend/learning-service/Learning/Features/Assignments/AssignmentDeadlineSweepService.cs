@@ -43,7 +43,7 @@ internal sealed class AssignmentDeadlineSweepService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var interval = TimeSpan.FromMinutes(Math.Clamp(options.Value.SweepIntervalMinutes, 1, 24 * 60));
+        var interval = options.Value.EffectiveSweepInterval;
         using var timer = new PeriodicTimer(interval);
 
         do
@@ -64,6 +64,21 @@ internal sealed class AssignmentDeadlineSweepService(
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// One pass over the estate. Returns how many notices were published.
+    ///
+    /// <para>
+    /// <b>One scope per organization, never one reused.</b> <c>TenantContext</c> refuses to be
+    /// re-pointed at a second organization, which turns "the loop forgot to reset the tenant" from a
+    /// silent cross-tenant publish into an exception.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One organization's failure is logged and stepped over</b> rather than allowed to silence every
+    /// other organization's notices for the rest of the tick — that is the whole reason the loop exists.
+    /// Cancellation is the one exception that still propagates.
+    /// </para>
+    /// </summary>
     internal async Task<int> SweepAsync(CancellationToken cancellationToken)
     {
         var organizationIds = await EnumerateOrganizationsWithApproachingDeadlinesAsync(cancellationToken);
@@ -76,9 +91,6 @@ internal sealed class AssignmentDeadlineSweepService(
 
         foreach (var organizationId in organizationIds)
         {
-            // One scope per organization, never one reused: TenantContext refuses to be re-pointed
-            // at a second organization, which turns "the loop forgot to reset the tenant" from a
-            // silent cross-tenant publish into an exception.
             using var scope = scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
 
@@ -94,8 +106,6 @@ internal sealed class AssignmentDeadlineSweepService(
             }
             catch (Exception exception)
             {
-                // One organization's failure must not silence every other organization's notices
-                // for the rest of the tick — that is the whole reason the loop exists.
                 logger.LogError(
                     exception,
                     "Assignment deadline sweep failed for organization {OrganizationId}; other organizations continue",
@@ -115,7 +125,7 @@ internal sealed class AssignmentDeadlineSweepService(
         CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-        var horizon = now.AddHours(Math.Clamp(options.Value.DeadlineNoticeLeadHours, 1, 24 * 30));
+        var horizon = now.AddHours(options.Value.EffectiveDeadlineNoticeLeadHours);
 
         using var scope = scopeFactory.CreateScope();
         scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();

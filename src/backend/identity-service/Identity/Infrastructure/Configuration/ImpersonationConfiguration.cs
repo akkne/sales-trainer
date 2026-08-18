@@ -1,5 +1,8 @@
 namespace Sellevate.Identity.Infrastructure.Configuration;
 
+/// <summary>
+/// How long a platform superadministrator's impersonation session lasts.
+/// </summary>
 public sealed class ImpersonationConfiguration
 {
     public const string SectionName = "Impersonation";

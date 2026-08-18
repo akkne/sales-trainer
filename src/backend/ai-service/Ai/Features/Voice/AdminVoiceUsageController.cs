@@ -6,7 +6,11 @@ using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.Voice;
 
-// Phase 40.6 audit: platform-wide voice usage/cost view across all users — Sellevate-staff-only.
+/// <summary>
+/// Phase 40.6 audit: the voice usage and cost view across every user, Sellevate-staff-only.
+/// Scoped to the caller's organization by the repository since 40.11 — a platform superadmin reaches
+/// another customer's numbers by impersonating into it.
+/// </summary>
 [ApiController]
 [Route("admin/voice")]
 [Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]

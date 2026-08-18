@@ -54,10 +54,37 @@ internal sealed class AssignmentDeadlineNoticeService(
     /// </summary>
     private const int MaximumNamesInDigest = 5;
 
+    /// <summary>
+    /// Warns everybody who still owes work on a deadline inside the lead window, sends the РОП digest
+    /// for the same date, and stamps the assignment as announced. Returns how many notices were
+    /// published.
+    ///
+    /// <para>
+    /// <b>A deadline that has already passed is not "approaching"</b> and is left out of the query:
+    /// warning about it would be the product telling somebody they are about to be late when they
+    /// already are. What happens <i>at</i> the deadline is roadmap 40.26, which deliberately did not
+    /// add it.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A <see langword="null"/> administrator list skips the whole organization for this tick, and is
+    /// not the same thing as an empty one.</b> Null means a rolling deploy in which identity-service is
+    /// still older than 40.26. Sending the manager notices alone and stamping anyway is what keeps one
+    /// timestamp honest — the stamp would mark this deadline as announced and the digest, the half of
+    /// the feature this block exists for, would be lost with nothing left to notice it. An empty list,
+    /// by contrast, is the truth about an organization with no administrators, and the pass proceeds.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The assignment is stamped even when nobody was warned.</b> An assignment everybody finished
+    /// has nothing to announce, and leaving it unmarked would make the sweep re-examine it every half
+    /// hour until its deadline passed.
+    /// </para>
+    /// </summary>
     public async Task<int> PublishDueNoticesAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var horizon = now.AddHours(Math.Clamp(options.Value.DeadlineNoticeLeadHours, 1, 24 * 30));
+        var horizon = now.AddHours(options.Value.EffectiveDeadlineNoticeLeadHours);
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
@@ -65,10 +92,6 @@ internal sealed class AssignmentDeadlineNoticeService(
             .Where(assignment => assignment.Status == AssignmentStatuses.Active
                                  && assignment.Deadline != null
                                  && assignment.Deadline <= horizon
-                                 // A deadline that has already passed is not "approaching", and
-                                 // warning about it would be the product telling somebody they are
-                                 // about to be late when they already are. What happens at the
-                                 // deadline itself is roadmap 40.26.
                                  && assignment.Deadline > now
                                  && assignment.DeadlineNoticeSentAt == null)
             .ToListAsync(cancellationToken);
@@ -94,10 +117,6 @@ internal sealed class AssignmentDeadlineNoticeService(
 
         if (roster.AdministratorIds is null)
         {
-            // A rolling deploy in which identity-service is still older than 40.26. Skipping the
-            // whole organization rather than sending the manager notices alone keeps one timestamp
-            // honest: stamping now would mark this deadline as announced and the digest — the half
-            // of the feature this block exists for — would be lost with nothing left to notice it.
             logger.LogWarning(
                 "Deadline notices were skipped this tick: identity-service did not report the "
                 + "organization's administrators, so the РОП digest could not be addressed.");
@@ -151,9 +170,6 @@ internal sealed class AssignmentDeadlineNoticeService(
                 displayNamesByUserId,
                 cancellationToken);
 
-            // Marked even when nobody was warned. An assignment everybody finished has nothing to
-            // announce, and leaving it unmarked would make the sweep re-examine it every half hour
-            // until its deadline passed.
             assignment.DeadlineNoticeSentAt = now;
         }
 
@@ -188,6 +204,12 @@ internal sealed class AssignmentDeadlineNoticeService(
     /// 40.25's dashboard and they are deliberately not on this list. The roadmap asks for «список
     /// тех, кто не начал» and means it.
     /// </para>
+    ///
+    /// <para>
+    /// Names are ordered ordinally rather than culture-aware, like the dashboard next door: the
+    /// container's culture data is not something this service controls, and which five names a digest
+    /// spells out must not depend on it.
+    /// </para>
     /// </summary>
     private async Task<int> PublishDigestAsync(
         Assignment assignment,
@@ -205,9 +227,6 @@ internal sealed class AssignmentDeadlineNoticeService(
             .Select(userId => displayNamesByUserId.GetValueOrDefault(userId))
             .Where(displayName => !string.IsNullOrWhiteSpace(displayName))
             .Select(displayName => displayName!)
-            // Ordinal rather than culture-aware, like the dashboard next door: the container's
-            // culture data is not something this service controls, and which five names a digest
-            // spells out must not depend on it.
             .OrderBy(displayName => displayName, StringComparer.OrdinalIgnoreCase)
             .Take(MaximumNamesInDigest)
             .ToList();

@@ -16,6 +16,13 @@ namespace Sellevate.Gamification.Features.Admin;
 /// belong to one organization, so a request without the gateway-validated organization header is
 /// refused by the tenant middleware with a 403 instead of reaching a query filter that would match
 /// nothing and answer with a plausible-looking empty result.
+///
+/// <para>
+/// Every action that touches <c>Leagues</c>, <c>LeagueMemberships</c>, <c>LeagueSettings</c> or the
+/// experience-point ledger opens exactly one <see cref="TenantTransactionScope"/> as its first
+/// statement: those tables carry RLS policies, and a bare <c>SELECT</c> outside a transaction reads
+/// zero rows rather than erroring.
+/// </para>
 /// </summary>
 [ApiController]
 [Route(RouteConstants.AdminLeagues)]
@@ -26,6 +33,12 @@ public sealed class AdminLeaguesController(
     ILeagueService leagueService,
     ILogger<AdminLeaguesController> logger) : ControllerBase
 {
+    /// <summary>
+    /// Sort key for a league whose tier is no longer in the catalogue. Below every real tier, so a
+    /// deleted tier's historical leagues sink to the bottom of the list instead of jumping to the top.
+    /// </summary>
+    private const int UnknownTierOrder = -1;
+
     private Task<List<string>> LoadTierKeysAsync(CancellationToken cancellationToken) =>
         databaseContext.LeagueTiers.OrderBy(tier => tier.Order).Select(tier => tier.Key).ToListAsync(cancellationToken);
 
@@ -35,16 +48,12 @@ public sealed class AdminLeaguesController(
         [FromQuery] string? tier,
         CancellationToken cancellationToken = default)
     {
-        // Phase 40.13. Every admin action that touches Leagues, LeagueMemberships, LeagueSettings
-        // or the XP ledger opens exactly one scope as its first statement — those tables carry RLS
-        // policies now, and a bare SELECT outside a transaction reads zero rows rather than
-        // erroring (see TenantTransactionScope).
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         var tierKeys = await LoadTierKeysAsync(cancellationToken);
         if (tier is not null && !tierKeys.Contains(tier))
         {
-            return BadRequest(new { message = $"Unknown tier: {tier}" });
+            return BadRequest(new { message = ErrorMessages.UnknownTier(tier) });
         }
 
         var query = databaseContext.Leagues.AsQueryable();
@@ -58,9 +67,7 @@ public sealed class AdminLeaguesController(
             query = query.Where(league => league.Tier == tier);
         }
 
-        // GA6(b): single group-join instead of a correlated subquery per row (N+1).
-        // Precompute a tier-order lookup with a stable fallback for unknown tiers.
-        var tierOrderMap = tierKeys
+        var tierOrderByKey = tierKeys
             .Select((key, index) => (key, index))
             .ToDictionary(pair => pair.key, pair => pair.index);
 
@@ -69,9 +76,8 @@ public sealed class AdminLeaguesController(
             .Select(league => new { league.Id, league.Tier, league.WeekStartDate, league.WeekEndDate })
             .ToListAsync(cancellationToken);
 
-        var leagueIds = leagueList.Select(l => l.Id).ToList();
+        var leagueIds = leagueList.Select(league => league.Id).ToList();
 
-        // Load member counts in one query using GroupBy.
         var memberCountByLeagueId = await databaseContext.LeagueMemberships
             .Where(membership => leagueIds.Contains(membership.LeagueId)
                 && databaseContext.UserReplicas.Any(user => user.UserId == membership.UserId))
@@ -87,7 +93,7 @@ public sealed class AdminLeaguesController(
 
         var ordered = leagues
             .OrderByDescending(league => league.WeekStartDate)
-            .ThenByDescending(league => tierOrderMap.GetValueOrDefault(league.Tier, -1))
+            .ThenByDescending(league => tierOrderByKey.GetValueOrDefault(league.Tier, UnknownTierOrder))
             .ToList();
 
         return Ok(ordered);
@@ -158,7 +164,7 @@ public sealed class AdminLeaguesController(
         var tierKeys = await LoadTierKeysAsync(cancellationToken);
         if (!tierKeys.Contains(request.Tier))
         {
-            return BadRequest(new { message = $"Unknown tier: {request.Tier}" });
+            return BadRequest(new { message = ErrorMessages.UnknownTier(request.Tier) });
         }
 
         var membership = await databaseContext.LeagueMemberships
@@ -223,7 +229,7 @@ public sealed class AdminLeaguesController(
 
         if (request.Delta == 0)
         {
-            return BadRequest(new { message = "Delta must be non-zero" });
+            return BadRequest(new { message = ErrorMessages.DeltaMustBeNonZero });
         }
 
         var membership = await databaseContext.LeagueMemberships
@@ -291,6 +297,14 @@ public sealed class AdminLeaguesController(
         return Ok(ToSettingsDto(settings));
     }
 
+    /// <summary>
+    /// Phase 40.13. <c>LeagueSettings</c> became per-organization, so an organization that has never
+    /// saved its settings has no row and <c>GetSettingsAsync</c> hands back an unsaved default —
+    /// which is why a detached instance is explicitly added to the change tracker here. Without that,
+    /// the edit would be accepted, logged, echoed back to the admin, and silently dropped by
+    /// <c>SaveChanges</c>. The tenancy interceptor stamps the organization on insert; nothing here
+    /// assigns it.
+    /// </summary>
     [HttpPut("settings")]
     public async Task<ActionResult<LeagueSettingsDto>> UpdateSettings(
         [FromBody] UpdateLeagueSettingsRequestDto request,
@@ -302,26 +316,21 @@ public sealed class AdminLeaguesController(
             request.PromotionZoneSize <= 0 ||
             request.DemotionZoneSize <= 0)
         {
-            return BadRequest(new { message = "All settings values must be positive" });
+            return BadRequest(new { message = ErrorMessages.LeagueSettingsMustBePositive });
         }
 
         if (request.PromotionZoneSize + request.DemotionZoneSize > request.MaximumLeagueParticipantCount)
         {
-            return BadRequest(new { message = "Promotion + demotion zones cannot exceed maximum participant count" });
+            return BadRequest(new { message = ErrorMessages.PromotionAndDemotionZonesTooLarge });
         }
 
         if (request.PeriodLengthDays is <= 0)
         {
-            return BadRequest(new { message = "Period length must be positive" });
+            return BadRequest(new { message = ErrorMessages.PeriodLengthMustBePositive });
         }
 
         var settings = await leagueService.GetSettingsAsync(cancellationToken);
 
-        // Phase 40.13. LeagueSettings became per-organization, so an organization that has never
-        // saved its settings has no row and GetSettingsAsync hands back an unsaved default. Without
-        // this the edit would be accepted, logged, echoed back to the admin — and silently dropped
-        // by SaveChanges, because EF is not tracking the object. The interceptor stamps the
-        // organization on insert; nothing here assigns it.
         if (databaseContext.Entry(settings).State == EntityState.Detached)
         {
             databaseContext.LeagueSettings.Add(settings);
@@ -383,7 +392,7 @@ public sealed class AdminLeaguesController(
         CancellationToken cancellationToken = default)
     {
         var key = (request.Key ?? string.Empty).Trim().ToLowerInvariant();
-        var validationMessage = ValidateTierFields(key, request.Name, request.Color);
+        var validationMessage = ValidateTierKey(key) ?? ValidateTierPresentation(request.Name, request.Color);
         if (validationMessage is not null)
         {
             return BadRequest(new { message = validationMessage });
@@ -391,7 +400,7 @@ public sealed class AdminLeaguesController(
 
         if (await databaseContext.LeagueTiers.AnyAsync(tier => tier.Key == key, cancellationToken))
         {
-            return BadRequest(new { message = $"Tier with key '{key}' already exists" });
+            return BadRequest(new { message = ErrorMessages.TierKeyAlreadyExists(key) });
         }
 
         var leagueTier = new LeagueTier
@@ -416,7 +425,7 @@ public sealed class AdminLeaguesController(
         [FromBody] UpdateLeagueTierRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        var validationMessage = ValidateTierFields(key: "x", request.Name, request.Color);
+        var validationMessage = ValidateTierPresentation(request.Name, request.Color);
         if (validationMessage is not null)
         {
             return BadRequest(new { message = validationMessage });
@@ -451,12 +460,12 @@ public sealed class AdminLeaguesController(
 
         if (await databaseContext.LeagueTiers.CountAsync(cancellationToken) <= 1)
         {
-            return BadRequest(new { message = "At least one tier must remain" });
+            return BadRequest(new { message = ErrorMessages.LastTierCannotBeDeleted });
         }
 
         if (await databaseContext.Leagues.AnyAsync(league => league.Tier == leagueTier.Key, cancellationToken))
         {
-            return BadRequest(new { message = "Cannot delete a tier that has existing leagues; reassign members first" });
+            return BadRequest(new { message = ErrorMessages.TierInUseCannotBeDeleted });
         }
 
         databaseContext.LeagueTiers.Remove(leagueTier);
@@ -468,25 +477,29 @@ public sealed class AdminLeaguesController(
         return NoContent();
     }
 
-    private static string? ValidateTierFields(string key, string? name, string? color)
+    /// <summary>
+    /// The message for the first missing field, or null when all are present. Split from
+    /// <see cref="ValidateTierKey"/> because a tier's key is immutable once created: an update has no
+    /// key to validate, and passing a placeholder one just to reach the name and colour checks made
+    /// the call site read as if it did.
+    /// </summary>
+    private static string? ValidateTierPresentation(string? name, string? color)
     {
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return "Key is required";
-        }
-
         if (string.IsNullOrWhiteSpace(name))
         {
-            return "Name is required";
+            return ErrorMessages.TierNameRequired;
         }
 
         if (string.IsNullOrWhiteSpace(color))
         {
-            return "Color is required";
+            return ErrorMessages.TierColorRequired;
         }
 
         return null;
     }
+
+    private static string? ValidateTierKey(string key) =>
+        string.IsNullOrWhiteSpace(key) ? ErrorMessages.TierKeyRequired : null;
 
     private async Task<AdminLeagueDetailDto?> BuildDetailAsync(Guid leagueId, CancellationToken cancellationToken)
     {

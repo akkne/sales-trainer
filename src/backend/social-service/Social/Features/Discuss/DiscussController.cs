@@ -1,34 +1,64 @@
-using System.Security.Claims;
+using System.Net.Mime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Social.Common.Constants;
+using Sellevate.Social.Common.Extensions;
 using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
 
 namespace Sellevate.Social.Features.Discuss;
 
+/// <summary>
+/// The member-facing discussion feed. Phase 40.13: threads, replies, votes and photos are tenant
+/// data, so <c>[TenantScoped]</c> makes the middleware refuse a request the gateway sent without an
+/// organization rather than let it run unscoped — see <c>FriendController</c> for the same reasoning.
+///
+/// <para>
+/// Only the photo-content route is anonymous, because an image tag cannot carry a bearer token; it
+/// is guarded by the unguessability of the photo id instead, and hardened with the response headers
+/// <see cref="GetPhotoContent"/> sets.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("discuss")]
-// Phase 40.13. Threads, replies, votes and photos are tenant data — see FriendController.
 [TenantScoped]
 [Authorize]
 public sealed class DiscussController : ControllerBase
 {
+    private const string NoSniffContentTypeOptions = "nosniff";
+    private const string DenyEverythingContentSecurityPolicy = "default-src 'none'";
+    private const string DenyFrameOptions = "DENY";
+
+    /// <summary>
+    /// The content types the anonymous photo endpoint will echo back to a browser. Held as a static
+    /// set so it is allocated once rather than per request, and compared case-insensitively because it
+    /// is matched against a value stored at upload time.
+    /// </summary>
+    private static readonly HashSet<string> SafePhotoContentTypes =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            DiscussPhotoConstants.PngContentType,
+            DiscussPhotoConstants.JpegContentType,
+            DiscussPhotoConstants.WebpContentType
+        };
+
     private readonly IDiscussService _discussService;
 
     public DiscussController(IDiscussService discussService) => _discussService = discussService;
 
     [HttpGet("threads")]
     public async Task<IActionResult> ListThreads(
-        [FromQuery] string sort = "hot",
+        [FromQuery] string sort = DiscussSortOptions.Hot,
         [FromQuery] string? search = null,
         [FromQuery] string? tag = null,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] int pageSize = DiscussFeedConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var viewerId = GetUserId();
+        var viewerId = User.ResolveUserIdOrNull();
         if (viewerId == null) return Unauthorized();
 
         var query = new DiscussThreadQuery(sort, search, tag, page, pageSize, IncludeAll: false);
@@ -39,22 +69,22 @@ public sealed class DiscussController : ControllerBase
     [HttpGet("threads/{threadId:guid}")]
     public async Task<IActionResult> GetThread(Guid threadId, CancellationToken cancellationToken = default)
     {
-        var viewerId = GetUserId();
+        var viewerId = User.ResolveUserIdOrNull();
         if (viewerId == null) return Unauthorized();
 
         var thread = await _discussService.GetThreadAsync(threadId, viewerId.Value, incrementView: true, cancellationToken);
-        if (thread == null) return NotFound(new { message = "Thread not found" });
+        if (thread == null) return NotFound(new { message = ErrorMessages.ThreadNotFound });
         return Ok(thread);
     }
 
     [HttpPost("threads")]
     public async Task<IActionResult> CreateThread([FromBody] CreateThreadRequestDto request, CancellationToken cancellationToken = default)
     {
-        var authorId = GetUserId();
+        var authorId = User.ResolveUserIdOrNull();
         if (authorId == null) return Unauthorized();
 
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
-            return BadRequest(new { message = "Title and body are required" });
+            return BadRequest(new { message = ErrorMessages.ThreadTitleAndBodyRequired });
 
         var thread = await _discussService.CreateThreadAsync(
             authorId.Value, request.Title, request.Body, request.Tags, cancellationToken);
@@ -64,15 +94,15 @@ public sealed class DiscussController : ControllerBase
     [HttpPost("threads/{threadId:guid}/replies")]
     public async Task<IActionResult> AddReply(Guid threadId, [FromBody] CreateReplyRequestDto request, CancellationToken cancellationToken = default)
     {
-        var authorId = GetUserId();
+        var authorId = User.ResolveUserIdOrNull();
         if (authorId == null) return Unauthorized();
 
         if (string.IsNullOrWhiteSpace(request.Body))
-            return BadRequest(new { message = "Body is required" });
+            return BadRequest(new { message = ErrorMessages.ReplyBodyRequired });
 
         var reply = await _discussService.AddReplyAsync(threadId, authorId.Value, request.Body, cancellationToken);
-        if (reply == null) return NotFound(new { message = "Thread not found" });
-        return StatusCode(201, reply);
+        if (reply == null) return NotFound(new { message = ErrorMessages.ThreadNotFound });
+        return StatusCode(StatusCodes.Status201Created, reply);
     }
 
     [HttpPost("threads/{threadId:guid}/upvote")]
@@ -94,7 +124,7 @@ public sealed class DiscussController : ControllerBase
     [HttpPost("threads/{threadId:guid}/accepted-reply")]
     public async Task<IActionResult> SetAcceptedReply(Guid threadId, [FromBody] SetAcceptedReplyRequestDto request, CancellationToken cancellationToken = default)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
 
         var (status, thread) = await _discussService.SetAcceptedReplyAsync(
@@ -105,7 +135,7 @@ public sealed class DiscussController : ControllerBase
     [HttpDelete("threads/{threadId:guid}/accepted-reply")]
     public async Task<IActionResult> ClearAcceptedReply(Guid threadId, CancellationToken cancellationToken = default)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
 
         var (status, thread) = await _discussService.SetAcceptedReplyAsync(
@@ -128,7 +158,7 @@ public sealed class DiscussController : ControllerBase
     [HttpDelete("photos/{photoId:guid}")]
     public async Task<IActionResult> DeletePhoto(Guid photoId, CancellationToken cancellationToken = default)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
 
         var status = await _discussService.DeletePhotoAsync(photoId, userId.Value, cancellationToken);
@@ -136,10 +166,21 @@ public sealed class DiscussController : ControllerBase
         {
             DiscussOperationStatus.Success => NoContent(),
             DiscussOperationStatus.Forbidden => Forbid(),
-            _ => NotFound(new { message = "Photo not found" })
+            _ => NotFound(new { message = ErrorMessages.PhotoNotFound })
         };
     }
 
+    /// <summary>
+    /// Serves a photo's bytes to anyone holding the id, which is the only route here without a token.
+    ///
+    /// <para>
+    /// A stored content type outside <see cref="SafePhotoContentTypes"/> is served as opaque binary
+    /// rather than trusted, and the response carries the headers that stop a browser from sniffing a
+    /// type of its own, framing the image, or executing anything it might contain. Both halves matter
+    /// together: the allow-list decides what a browser is told, the headers decide what it may do if
+    /// it disbelieves.
+    /// </para>
+    /// </summary>
     [HttpGet("photos/{photoId:guid}/content")]
     [AllowAnonymous]
     public async Task<IActionResult> GetPhotoContent(Guid photoId, CancellationToken cancellationToken = default)
@@ -147,22 +188,15 @@ public sealed class DiscussController : ControllerBase
         var content = await _discussService.GetPhotoContentAsync(photoId, cancellationToken);
         if (content == null) return NotFound();
 
-        // Ensure we only serve with a known-safe image content-type.
-        // Anything not in the allow-list is served as opaque binary to prevent MIME sniffing exploitation.
-        var safeContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "image/png", "image/jpeg", "image/webp"
-        };
-        var servedContentType = safeContentTypes.Contains(content.Value.ContentType)
+        var servedContentType = SafePhotoContentTypes.Contains(content.Value.ContentType)
             ? content.Value.ContentType
-            : "application/octet-stream";
+            : MediaTypeNames.Application.Octet;
 
-        // Defense-in-depth headers for this anonymous, public endpoint.
-        Response.Headers["Cache-Control"] = "public, max-age=60";
-        Response.Headers["X-Content-Type-Options"] = "nosniff";
-        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
-        Response.Headers["X-Frame-Options"] = "DENY";
-        Response.Headers["Content-Disposition"] = $"inline; filename=\"photo-{photoId}.bin\"";
+        Response.Headers[HeaderNames.CacheControl] = DiscussPhotoConstants.ContentCacheControl;
+        Response.Headers[HeaderNames.XContentTypeOptions] = NoSniffContentTypeOptions;
+        Response.Headers[HeaderNames.ContentSecurityPolicy] = DenyEverythingContentSecurityPolicy;
+        Response.Headers[HeaderNames.XFrameOptions] = DenyFrameOptions;
+        Response.Headers[HeaderNames.ContentDisposition] = $"inline; filename=\"photo-{photoId}.bin\"";
 
         return File(content.Value.Content, servedContentType);
     }
@@ -172,7 +206,9 @@ public sealed class DiscussController : ControllerBase
         => Ok(await _discussService.GetTagsAsync(curatedOnly, cancellationToken));
 
     [HttpGet("tags/popular")]
-    public async Task<IActionResult> GetPopularTags([FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetPopularTags(
+        [FromQuery] int limit = DiscussFeedConstants.DefaultPopularTagLimit,
+        CancellationToken cancellationToken = default)
         => Ok(await _discussService.GetPopularTagsAsync(limit, cancellationToken));
 
     [HttpGet("stats")]
@@ -181,11 +217,11 @@ public sealed class DiscussController : ControllerBase
 
     private async Task<IActionResult> UploadPhotos(DiscussPhotoOwner ownerType, Guid ownerId, IFormFileCollection files, CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
 
         if (files == null || files.Count == 0)
-            return BadRequest(new { message = "No files were provided" });
+            return BadRequest(new { message = ErrorMessages.PhotoFilesRequired });
 
         var uploadFiles = files
             .Select(file => new DiscussPhotoUploadFile(file.OpenReadStream(), file.FileName, file.Length))
@@ -195,44 +231,41 @@ public sealed class DiscussController : ControllerBase
         return status switch
         {
             DiscussPhotoUploadStatus.Success => Ok(new DiscussPhotoListDto(photos)),
-            DiscussPhotoUploadStatus.OwnerNotFound => NotFound(new { message = "Owner not found" }),
+            DiscussPhotoUploadStatus.OwnerNotFound => NotFound(new { message = ErrorMessages.PhotoOwnerNotFound }),
             DiscussPhotoUploadStatus.Forbidden => Forbid(),
-            _ => BadRequest(new { message = "One or more photos failed validation" })
+            _ => BadRequest(new { message = ErrorMessages.PhotoValidationFailed })
         };
     }
 
     private async Task<IActionResult> SetThreadVote(Guid threadId, bool upvote, CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
         var result = await _discussService.SetThreadVoteAsync(threadId, userId.Value, upvote, cancellationToken);
-        return result == null ? NotFound(new { message = "Thread not found" }) : Ok(result);
+        return result == null ? NotFound(new { message = ErrorMessages.ThreadNotFound }) : Ok(result);
     }
 
     private async Task<IActionResult> SetReplyVote(Guid replyId, bool upvote, CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
+        var userId = User.ResolveUserIdOrNull();
         if (userId == null) return Unauthorized();
         var result = await _discussService.SetReplyVoteAsync(replyId, userId.Value, upvote, cancellationToken);
-        return result == null ? NotFound(new { message = "Reply not found" }) : Ok(result);
+        return result == null ? NotFound(new { message = ErrorMessages.ReplyNotFound }) : Ok(result);
     }
 
     private IActionResult MapAcceptedReplyResult(DiscussOperationStatus status, DiscussThreadDetailDto? thread) =>
         status switch
         {
             DiscussOperationStatus.Success => Ok(thread),
-            DiscussOperationStatus.Forbidden => StatusCode(403, new { message = "Only the thread author or an admin can do this" }),
-            _ => NotFound(new { message = "Thread or reply not found" })
+            DiscussOperationStatus.Forbidden => StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = ErrorMessages.AcceptedReplyForbidden }),
+            _ => NotFound(new { message = ErrorMessages.ThreadOrReplyNotFound })
         };
 
-    // Phase 40.6 audit: "can moderate any thread/reply" — the global `Admin` role is gone,
-    // so this collapses to the one remaining platform role.
-    private bool IsAdmin() => User.IsInRole("SuperAdmin");
-
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(claim, out var identifier) ? identifier : null;
-    }
+    /// <summary>
+    /// Phase 40.6 audit: "can moderate any thread or reply" collapsed to the single remaining
+    /// platform role when the global <c>Admin</c> role was removed.
+    /// </summary>
+    private bool IsAdmin() => User.IsInRole(AuthorizationPolicies.SuperAdministratorRole);
 }

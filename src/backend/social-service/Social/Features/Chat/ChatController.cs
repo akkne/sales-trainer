@@ -1,17 +1,26 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Social.Common.Extensions;
+using Sellevate.Social.Features.Chat.Constants;
 using Sellevate.Social.Features.Chat.Models;
 using Sellevate.Social.Features.Chat.Services.Abstract;
 
 namespace Sellevate.Social.Features.Chat;
 
+/// <summary>
+/// One-to-one chat between accepted friends. Translates the service's exceptions into status codes
+/// and nothing else — no rule about who may read a conversation lives here, because the repository
+/// filter that decides it is the tenant boundary.
+///
+/// <para>
+/// Phase 40.13. <c>[TenantScoped]</c> makes the middleware answer 403 when the gateway supplied no
+/// <c>X-Organization-Id</c>, instead of letting the request run with no tenant — where the Mongo
+/// repository would throw a 500 and the Postgres reads would silently see nothing.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("chat")]
-// Phase 40.13. [TenantScoped] makes the middleware answer 403 when the gateway did not supply
-// X-Organization-Id, instead of letting the request run with no tenant — where the Mongo repository
-// would throw a 500 and the Postgres reads would silently see nothing.
 [TenantScoped]
 [Authorize]
 public sealed class ChatController(IChatService chatService) : ControllerBase
@@ -19,7 +28,7 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
     [HttpGet("conversations")]
     public async Task<ActionResult<List<ChatConversationSummaryDto>>> GetConversations(CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var conversations = await chatService.GetConversationListAsync(userId, cancellationToken);
@@ -31,7 +40,7 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
         [FromBody] CreateConversationRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -48,11 +57,11 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
     [HttpGet("conversations/{conversationId}/messages")]
     public async Task<ActionResult<List<ChatMessageDto>>> GetMessages(
         string conversationId,
-        [FromQuery] int limit = 50,
+        [FromQuery] int limit = ChatConstants.DefaultMessagePageSize,
         [FromQuery] string? before = null,
         CancellationToken cancellationToken = default)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -76,7 +85,7 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
         [FromBody] SendChatMessageRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -99,7 +108,7 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
         string conversationId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -115,13 +124,5 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
         {
             return BadRequest(new { message = exception.Message });
         }
-    }
-
-    private bool TryGetCurrentUserId(out Guid userId)
-    {
-        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        return Guid.TryParse(rawUserId, out userId);
     }
 }

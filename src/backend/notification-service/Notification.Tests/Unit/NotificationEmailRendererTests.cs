@@ -87,10 +87,10 @@ public class NotificationEmailRendererTests
         content.HtmlBody.Should().Contain($"{FrontendBaseUrl}/");
     }
 
+    /// <summary>AchievementUnlocked deliberately has no dedicated email template.</summary>
     [Test]
     public void Render_UnmappedType_FallsBackToGenericTemplateUsingTitle()
     {
-        // AchievementUnlocked has no dedicated email template.
         var content = CreateRenderer().Render(Context(NotificationType.AchievementUnlocked));
 
         content.Subject.Should().Be("Some title");

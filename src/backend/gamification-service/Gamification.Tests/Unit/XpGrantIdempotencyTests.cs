@@ -98,11 +98,9 @@ public sealed class XpGrantIdempotencyTests
         var userId = Guid.NewGuid();
         var sourceEventId = Guid.NewGuid();
 
-        // First invocation — normal processing
         await _eventHandler.HandleExerciseCompletedAsync(
             userId, "choose_option", isCorrect: true, sourceEventId: sourceEventId);
 
-        // Second invocation — simulated redelivery with the same event id
         await _eventHandler.HandleExerciseCompletedAsync(
             userId, "choose_option", isCorrect: true, sourceEventId: sourceEventId);
 
@@ -113,13 +111,18 @@ public sealed class XpGrantIdempotencyTests
         exerciseXp.Should().Be(10, "redelivery with the same sourceEventId must not double-grant exercise XP");
     }
 
+    /// <summary>
+    /// The streak is seeded at day six so the first invocation crosses the seven-day milestone. On the
+    /// redelivery the idempotency guard fires before the streak logic runs — and the streak would not
+    /// have advanced anyway, because its last activity is already today, so the bonus cannot be paid
+    /// twice by either route.
+    /// </summary>
     [Test]
     public async Task HandleExerciseCompletedAsync_SameSourceEventId_DoesNotDoubleGrantStreakBonus()
     {
         var userId = Guid.NewGuid();
         var sourceEventId = Guid.NewGuid();
 
-        // Seed a streak at day 6 so hitting day 7 awards the milestone bonus.
         _databaseContext.UserStreaks.Add(new UserStreak
         {
             Id = Guid.NewGuid(),
@@ -131,7 +134,6 @@ public sealed class XpGrantIdempotencyTests
         _databaseContext.StreakMilestones.Add(new StreakMilestone { DayCount = 7, XpReward = 100 });
         await _databaseContext.SaveChangesAsync();
 
-        // First invocation — streak advances to 7, milestone bonus granted
         await _eventHandler.HandleExerciseCompletedAsync(
             userId, "choose_option", isCorrect: true, sourceEventId: sourceEventId);
 
@@ -141,8 +143,6 @@ public sealed class XpGrantIdempotencyTests
 
         bonusAfterFirst.Should().Be(100);
 
-        // Second invocation — same event id; XP guard fires before streak logic runs,
-        // but the streak itself won't change because LastActivityDate == today.
         await _eventHandler.HandleExerciseCompletedAsync(
             userId, "choose_option", isCorrect: true, sourceEventId: sourceEventId);
 

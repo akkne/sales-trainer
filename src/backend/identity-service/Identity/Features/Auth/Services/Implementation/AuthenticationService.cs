@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Auth.Constants;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
@@ -16,6 +17,18 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 
+/// <summary>
+/// Mints and revokes the platform's tokens. Every entry route — password login, Google sign-in,
+/// invite acceptance, email verification, refresh — converges on this class, which is what makes it
+/// the one place organization suspension can be enforced without leaving whichever route is added
+/// next unguarded.
+///
+/// <para>
+/// Email confirmation is currently disabled on the password login path: an unverified account is
+/// <em>not</em> blocked from signing in. That is a temporary product decision, not an oversight — the
+/// verification machinery is still live for the routes that use it.
+/// </para>
+/// </summary>
 internal sealed class AuthenticationService(
     IdentityDbContext databaseContext,
     IEmailVerificationService emailVerificationService,
@@ -136,8 +149,6 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException(LoginRejectedMessage);
         }
 
-        // TEMP: email confirmation disabled — do not block unverified accounts on login.
-
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);
 
@@ -145,6 +156,30 @@ internal sealed class AuthenticationService(
         return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
     }
 
+    /// <summary>
+    /// Google sign-in is a login method, never a registration channel (Phase 40.7). With
+    /// <c>POST /auth/register</c> deleted, an implicit "create the account on first Google login"
+    /// branch would be the last remaining self-service way into the product — the exact hole
+    /// docs/TENANCY/TENANCY.md §4.1 closes. An account arrives only through an invite, so an unknown
+    /// Google identity is rejected rather than provisioned.
+    ///
+    /// <para>
+    /// Matching is by <c>GoogleId</c> first and only falls back to an email match when the local
+    /// account is itself email-verified, so an unverified local row cannot be claimed by whoever owns
+    /// the same address at Google.
+    /// </para>
+    ///
+    /// <para>
+    /// Having an account is not enough: without an active membership an ordinary user belongs to no
+    /// organization and there is nothing to sign in to. Platform staff are the exception, and
+    /// deliberately so — <c>Admin</c> and <c>SuperAdmin</c> are Sellevate's own roles and are not
+    /// bounded by tenancy (docs/DECISIONS.md, 2026-08-16); they normally hold no membership anywhere
+    /// and their whole job lives on the platform admin routes. Without that carve-out the password
+    /// path would admit them while the Google path locked them out of their own product. They still
+    /// receive no <c>org_id</c>/<c>org_role</c> claim — absent membership stays absent, it is never
+    /// implied.
+    /// </para>
+    /// </summary>
     public async Task<IssuedTokenPair> LoginWithGoogleAsync(
         string googleIdToken,
         CancellationToken cancellationToken = default)
@@ -159,7 +194,6 @@ internal sealed class AuthenticationService(
 
         logger.LogInformation("Google login attempt {Email}", googlePayload.Email);
 
-        // First try to find by GoogleId; only fall back to email match when the local account is also email-verified.
         var existingUser = await databaseContext.Users
             .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject, cancellationToken);
 
@@ -174,11 +208,6 @@ internal sealed class AuthenticationService(
             }
         }
 
-        // Phase 40.7: Google sign-in is a login method, never a registration channel. With
-        // `POST /auth/register` deleted, an implicit "create the account on first Google login"
-        // branch would have been the last remaining self-service way into the product — the exact
-        // hole docs/TENANCY/TENANCY.md §4.1 closes. An account arrives only through an invite, so
-        // an unknown Google identity is rejected instead of provisioned.
         if (existingUser is null)
         {
             logger.LogWarning(
@@ -186,15 +215,6 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
         }
 
-        // Having an account is not enough: without an active membership an ordinary user belongs
-        // to no organization and there is nothing to sign in to.
-        //
-        // Platform staff are the exception, and deliberately so. `Admin` and `SuperAdmin` are
-        // Sellevate's own roles and are not bounded by tenancy (docs/DECISIONS.md, 2026-08-16);
-        // they normally hold no membership anywhere, and their whole job lives on the platform
-        // admin routes. Without this carve-out the password path would admit them and the Google
-        // path would lock them out of their own product. They still receive no `org_id`/`org_role`
-        // claim — absent membership stays absent, it is never implied.
         var isPlatformStaff = existingUser.Role is UserRole.Admin or UserRole.SuperAdmin;
         var hasActiveMembership = await databaseContext.Memberships
             .AnyAsync(
@@ -227,13 +247,23 @@ internal sealed class AuthenticationService(
         return await IssueTokensForUserAsync(existingUser, isOnboardingCompleted, cancellationToken);
     }
 
+    /// <summary>
+    /// Rotates a refresh token, and treats reuse of an already-rotated one as a compromise.
+    ///
+    /// <para>
+    /// The stored row is loaded regardless of <c>IsRevoked</c> so that reuse can be detected at all,
+    /// and revocation is then a single conditional <c>UPDATE ... WHERE NOT IsRevoked</c>: whichever
+    /// concurrent caller updates zero rows is the one holding a token that was already spent. That
+    /// caller revokes the whole family, on the assumption that a replayed token means someone else
+    /// has a copy.
+    /// </para>
+    /// </summary>
     public async Task<IssuedTokenPair> RefreshAccessTokenAsync(
         string rawRefreshToken,
         CancellationToken cancellationToken = default)
     {
         var tokenHash = ComputeTokenHash(rawRefreshToken);
 
-        // Load the token regardless of IsRevoked so we can detect reuse.
         var storedToken = await databaseContext.RefreshTokens
             .Include(token => token.User)
             .FirstOrDefaultAsync(token => token.Token == tokenHash, cancellationToken);
@@ -244,16 +274,14 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
         }
 
-        // Atomic conditional revocation: only succeeds if the row is still NOT revoked.
-        var affected = await databaseContext.RefreshTokens
+        var revokedRowCount = await databaseContext.RefreshTokens
             .Where(token => token.Id == storedToken.Id && !token.IsRevoked)
             .ExecuteUpdateAsync(
                 update => update.SetProperty(token => token.IsRevoked, true),
                 cancellationToken);
 
-        if (affected == 0)
+        if (revokedRowCount == 0)
         {
-            // Reuse detected — revoke the whole family.
             logger.LogWarning(
                 "Refresh-token reuse detected for UserId={UserId}; revoking all active refresh tokens",
                 storedToken.UserId);
@@ -301,26 +329,34 @@ internal sealed class AuthenticationService(
         return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
     }
 
+    /// <summary>
+    /// The single funnel every issued token passes through.
+    ///
+    /// <para>
+    /// Phase 40.6: at most one active membership is expected while the UI only allows a single
+    /// organization per user; ordering by <c>JoinedAt</c> keeps the choice deterministic if that ever
+    /// stops being true before multi-org support lands. A user with no membership gets no
+    /// <c>org_id</c>/<c>org_role</c> claim — absent membership is never implicit organization access.
+    /// </para>
+    ///
+    /// <para>
+    /// Phase 40.9: suspension is enforced here, at the one point password login, Google, invite
+    /// acceptance and refresh all converge on. Doing it per-controller would leave whichever route is
+    /// added next unguarded, and doing it only at login would leave already-issued refresh tokens
+    /// working indefinitely.
+    /// </para>
+    /// </summary>
     private async Task<IssuedTokenPair> IssueTokensForUserAsync(
         User user,
         bool isOnboardingCompleted,
         CancellationToken cancellationToken = default)
     {
-        // Phase 40.6: at most one active membership is expected while the UI only allows
-        // a single organization per user; ordering by JoinedAt keeps the choice deterministic
-        // if that ever stops being true before multi-org support lands. A user with no
-        // membership gets no org_id/org_role claim — absent membership is never implicit
-        // organization access.
         var membership = await databaseContext.Memberships
             .AsNoTracking()
             .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
             .OrderBy(candidate => candidate.JoinedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        // Phase 40.9: suspension is enforced here, at the one point every entry route converges on
-        // — password login, Google, invite acceptance and refresh all end up in this method. Doing
-        // it per-controller would leave whichever route is added next unguarded, and doing it only
-        // at login would leave already-issued refresh tokens working indefinitely.
         if (membership is not null)
         {
             await RejectIfOrganizationIsSuspendedAsync(membership.OrganizationId, cancellationToken);
@@ -389,14 +425,15 @@ internal sealed class AuthenticationService(
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
-            new("displayName", user.DisplayName),
+            new(ClaimTypeNames.DisplayName, user.DisplayName),
             new(ClaimTypes.Role, user.Role.ToString())
         };
 
         if (membership is not null)
         {
-            claims.Add(new Claim("org_id", membership.OrganizationId.ToString()));
-            claims.Add(new Claim("org_role", membership.Role.ToString()));
+            claims.Add(new Claim(ClaimTypeNames.OrganizationId, membership.OrganizationId.ToString()));
+            claims.Add(new Claim(
+                AuthorizationPolicies.OrganizationRoleClaimType, membership.Role.ToString()));
         }
 
         var tokenDescriptor = new SecurityTokenDescriptor

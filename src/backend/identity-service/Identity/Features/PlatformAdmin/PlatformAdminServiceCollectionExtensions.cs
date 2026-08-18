@@ -4,6 +4,9 @@ using Sellevate.Identity.Infrastructure.Configuration;
 
 namespace Sellevate.Identity.Features.PlatformAdmin;
 
+/// <summary>
+/// Registers the platform-superadmin feature and its impersonation settings.
+/// </summary>
 public static class PlatformAdminServiceCollectionExtensions
 {
     public static IServiceCollection AddPlatformAdminFeatureServices(

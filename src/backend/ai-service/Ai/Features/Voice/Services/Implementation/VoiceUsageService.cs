@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
+using Sellevate.Ai.Features.Voice.Constants;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -12,10 +13,36 @@ using StackExchange.Redis;
 
 namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 
+/// <summary>
+/// The voice reservation gate: a fast Redis counter that admits or refuses a turn, and the durable
+/// Mongo record of what was actually spent.
+///
+/// <para>
+/// <b>Two stores, on purpose.</b> Redis holds the live counters because a limit check has to be
+/// atomic and cheap enough to sit in front of every turn; Mongo holds the truth, per session,
+/// because Redis keys expire. Redis is therefore allowed to drift low — a lost key means a learner
+/// gets extra headroom for one window — but never high, which is why every failure path returns its
+/// reservation.
+/// </para>
+///
+/// <para>
+/// <b>Three gates in a fixed order, and rollback is manual.</b> The caller's day window, then their
+/// month, then the organization's shared quota. Redis has no transaction spanning the Lua calls, so
+/// each later refusal explicitly decrements what the earlier ones already took. Callers must not
+/// reorder or add Redis round-trips here: the ordering is what makes a partial failure recoverable.
+/// </para>
+///
+/// <para>
+/// The per-user limits are not made redundant by the organization limit. They stop one person
+/// burning a whole customer's day, which an organization-wide cap cannot express (Phase 40.33).
+/// </para>
+/// </summary>
 internal sealed class VoiceUsageService : IVoiceUsageService
 {
+    private const int SecondsPerMinute = 60;
+
     private readonly IDialogSessionRepository _sessionRepository;
-    private readonly AiDbContext _dbContext;
+    private readonly AiDbContext _databaseContext;
     private readonly ITenantContext _tenantContext;
     private readonly IDatabase _redis;
     private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
@@ -23,27 +50,31 @@ internal sealed class VoiceUsageService : IVoiceUsageService
     private readonly IAiQuotaService _quotaService;
     private readonly ILogger<VoiceUsageService> _logger;
 
-    // AI1: Lua script for atomic check-and-increment.
-    // Returns the new counter value on success, or -1 if the limit would be exceeded.
+    /// <summary>
+    /// Check-and-increment in one round-trip, because a read followed by a write would let two
+    /// concurrent turns both see headroom that only one of them can have. Returns the new counter
+    /// value, or <c>-1</c> when the increment would cross the limit — in which case nothing was
+    /// written. A limit of 0 disables the window rather than closing it.
+    /// </summary>
     private const string ReserveLuaScript = @"
-local key   = KEYS[1]
-local limit = tonumber(ARGV[1])
-local delta = tonumber(ARGV[2])
-local ttl   = tonumber(ARGV[3])
-local cur   = redis.call('GET', key)
-local val   = cur and tonumber(cur) or 0
-if limit > 0 and val + delta > limit then
+local key            = KEYS[1]
+local limit          = tonumber(ARGV[1])
+local delta          = tonumber(ARGV[2])
+local expiresAt      = tonumber(ARGV[3])
+local storedReserved = redis.call('GET', key)
+local reserved       = storedReserved and tonumber(storedReserved) or 0
+if limit > 0 and reserved + delta > limit then
     return -1
 end
-local newval = redis.call('INCRBY', key, delta)
-if ttl > 0 then
-    redis.call('EXPIREAT', key, ttl)
+local newReserved = redis.call('INCRBY', key, delta)
+if expiresAt > 0 then
+    redis.call('EXPIREAT', key, expiresAt)
 end
-return newval";
+return newReserved";
 
     public VoiceUsageService(
         IDialogSessionRepository sessionRepository,
-        AiDbContext dbContext,
+        AiDbContext databaseContext,
         ITenantContext tenantContext,
         IConnectionMultiplexer connectionMultiplexer,
         IOptions<VoiceFeatureConfiguration> voiceFeatureOptions,
@@ -52,7 +83,7 @@ return newval";
         ILogger<VoiceUsageService> logger)
     {
         _sessionRepository = sessionRepository;
-        _dbContext = dbContext;
+        _databaseContext = databaseContext;
         _tenantContext = tenantContext;
         _redis = connectionMultiplexer.GetDatabase();
         _voiceFeatureOptions = voiceFeatureOptions;
@@ -64,8 +95,8 @@ return newval";
     public async Task<VoiceUsageDto> GetUsageAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var dayStart = StartOfDay(now);
+        var monthStart = StartOfMonth(now);
 
         var dailyUsedSeconds = await _sessionRepository.SumVoiceSecondsForUserAsync(userId, dayStart, cancellationToken);
         var monthlyUsedSeconds = await _sessionRepository.SumVoiceSecondsForUserAsync(userId, monthStart, cancellationToken);
@@ -75,79 +106,65 @@ return newval";
         return new VoiceUsageDto
         {
             DailyUsedSeconds = dailyUsedSeconds,
-            DailyLimitSeconds = limits.DailyLimitMinutes * 60,
+            DailyLimitSeconds = ToSeconds(limits.DailyLimitMinutes),
             MonthlyUsedSeconds = monthlyUsedSeconds,
-            MonthlyLimitSeconds = limits.MonthlyLimitMinutes * 60,
+            MonthlyLimitSeconds = ToSeconds(limits.MonthlyLimitMinutes),
         };
     }
 
     /// <inheritdoc/>
     public async Task<int> ReserveSecondsAsync(Guid userId, int maxSeconds, CancellationToken cancellationToken = default)
     {
-        var config = _voiceFeatureOptions.Value;
-        var dailyLimit = config.DailyLimitMinutes * 60;
-        var monthlyLimit = config.MonthlyLimitMinutes * 60;
+        var configuration = _voiceFeatureOptions.Value;
+        var dailyLimit = ToSeconds(configuration.DailyLimitMinutes);
+        var monthlyLimit = ToSeconds(configuration.MonthlyLimitMinutes);
 
         var now = DateTime.UtcNow;
 
-        // Day window key expires at next UTC midnight.
-        var dayEnd = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddDays(1);
-        var dayKey = RedisKey(userId, "day", now.Year, now.Month, now.Day);
-        var dayTtlUnix = (long)(dayEnd - DateTime.UnixEpoch).TotalSeconds;
+        var dayKey = RedisKey(userId, VoiceUsageKeys.DayWindow, now.Year, now.Month, now.Day);
+        var dayExpiresAtUnixSeconds = ToUnixSeconds(StartOfDay(now).AddDays(1));
 
-        // Month window key expires at start of next month.
-        var monthEnd = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
-        var monthKey = RedisKey(userId, "month", now.Year, now.Month);
-        var monthTtlUnix = (long)(monthEnd - DateTime.UnixEpoch).TotalSeconds;
+        var monthKey = RedisKey(userId, VoiceUsageKeys.MonthWindow, now.Year, now.Month);
+        var monthExpiresAtUnixSeconds = ToUnixSeconds(StartOfMonth(now).AddMonths(1));
 
-        // Atomic daily reservation via Lua.
         var dayResult = (long)await _redis.ScriptEvaluateAsync(
             ReserveLuaScript,
             new RedisKey[] { dayKey },
-            new RedisValue[] { dailyLimit, maxSeconds, dayTtlUnix });
+            new RedisValue[] { dailyLimit, maxSeconds, dayExpiresAtUnixSeconds });
 
         if (dayResult < 0)
         {
             var rawDay = await _redis.StringGetAsync(dayKey);
             var usedDaily = rawDay.HasValue ? (int)rawDay : 0;
             _logger.LogInformation("Voice daily limit exceeded for user {UserId}: ~{Used}s / {Limit}s", userId, usedDaily, dailyLimit);
-            throw new VoiceUsageLimitException("daily", usedDaily, dailyLimit);
+            throw new VoiceUsageLimitException(VoiceUsagePeriods.Daily, usedDaily, dailyLimit);
         }
 
-        // Atomic monthly reservation via Lua.
         var monthResult = (long)await _redis.ScriptEvaluateAsync(
             ReserveLuaScript,
             new RedisKey[] { monthKey },
-            new RedisValue[] { monthlyLimit, maxSeconds, monthTtlUnix });
+            new RedisValue[] { monthlyLimit, maxSeconds, monthExpiresAtUnixSeconds });
 
         if (monthResult < 0)
         {
-            // Roll back the daily reservation already made.
             await _redis.StringDecrementAsync(dayKey, maxSeconds);
             var rawMonth = await _redis.StringGetAsync(monthKey);
             var usedMonthly = rawMonth.HasValue ? (int)rawMonth : 0;
             _logger.LogInformation("Voice monthly limit exceeded for user {UserId}: ~{Used}s / {Limit}s", userId, usedMonthly, monthlyLimit);
-            throw new VoiceUsageLimitException("monthly", usedMonthly, monthlyLimit);
+            throw new VoiceUsageLimitException(VoiceUsagePeriods.Monthly, usedMonthly, monthlyLimit);
         }
 
-        // Phase 40.33. The organization-wide gate, layered under the per-user one above. Until this
-        // block a customer's total voice spend was however many users they had times the per-user
-        // allowance — which is precisely the roadmap's «один клиент, гоняющий голос сутками». The
-        // per-user limits stay: they stop one person burning the whole organization's day, which the
-        // organization limit alone cannot.
         try
         {
             await _spendMeter.ReserveVoiceSecondsAsync(maxSeconds, cancellationToken);
         }
         catch (AiQuotaExceededException exception)
         {
-            // Roll back both per-user reservations; the caller sees the same 429 shape it always has,
-            // with the period naming the organization window rather than the user's.
             await _redis.StringDecrementAsync(dayKey, maxSeconds);
             await _redis.StringDecrementAsync(monthKey, maxSeconds);
 
             throw new VoiceUsageLimitException(
-                $"organization {exception.Period}", (int)exception.Used, (int)exception.Limit);
+                $"{VoiceUsagePeriods.OrganizationPrefix} {exception.Period}", (int)exception.Used, (int)exception.Limit);
         }
 
         _logger.LogDebug("Reserved {Seconds}s for user {UserId} — day={Day}, month={Month}",
@@ -164,30 +181,27 @@ return newval";
         int actualSeconds,
         CancellationToken cancellationToken = default)
     {
-        // Clamp actual to reserved (can't exceed what was reserved).
-        var billable = Math.Min(actualSeconds, reservedSeconds);
-        var refund = reservedSeconds - billable;
+        var billableSeconds = Math.Min(actualSeconds, reservedSeconds);
+        var refundSeconds = reservedSeconds - billableSeconds;
 
         var now = DateTime.UtcNow;
-        if (refund > 0)
+        if (refundSeconds > 0)
         {
-            // Return unused portion to Redis so concurrent streams have accurate headroom.
-            var dayKey = RedisKey(userId, "day", now.Year, now.Month, now.Day);
-            var monthKey = RedisKey(userId, "month", now.Year, now.Month);
+            var dayKey = RedisKey(userId, VoiceUsageKeys.DayWindow, now.Year, now.Month, now.Day);
+            var monthKey = RedisKey(userId, VoiceUsageKeys.MonthWindow, now.Year, now.Month);
 
             await Task.WhenAll(
-                _redis.StringDecrementAsync(dayKey, refund),
-                _redis.StringDecrementAsync(monthKey, refund));
+                _redis.StringDecrementAsync(dayKey, refundSeconds),
+                _redis.StringDecrementAsync(monthKey, refundSeconds));
 
-            await _spendMeter.RefundVoiceSecondsAsync(refund, cancellationToken);
+            await _spendMeter.RefundVoiceSecondsAsync(refundSeconds, cancellationToken);
 
             _logger.LogDebug("Refunded {Refund}s for user {UserId} (reserved={Reserved}, actual={Actual})",
-                refund, userId, reservedSeconds, actualSeconds);
+                refundSeconds, userId, reservedSeconds, actualSeconds);
         }
 
-        // Durable Mongo accounting for what was actually used.
-        if (billable > 0)
-            await RecordSessionSecondsAsync(sessionId, userId, billable, cancellationToken);
+        if (billableSeconds > 0)
+            await RecordSessionSecondsAsync(sessionId, userId, billableSeconds, cancellationToken);
     }
 
     public async Task RecordSessionSecondsAsync(string sessionId, Guid userId, int seconds, CancellationToken cancellationToken = default)
@@ -202,17 +216,17 @@ return newval";
         }
     }
 
+    /// <summary>
+    /// Every user's voice spend, scoped to the caller's organization by the repository (Phase 40.11).
+    /// This screen once aggregated the whole installation; a cross-tenant total is the leak that block
+    /// closed. Platform staff reach another customer's numbers by impersonating into it (40.9).
+    /// </summary>
     public async Task<AdminVoiceUsageDto> GetAllUsersUsageAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var dayStart = StartOfDay(now);
+        var monthStart = StartOfMonth(now);
 
-        // Phase 40.11: scoped to the caller's organization by the repository. This screen is
-        // SuperAdmin-only and used to aggregate the whole installation; it now aggregates one
-        // organization, because a cross-tenant total is exactly the leak this block closes. A
-        // platform superadmin reaches another organization's numbers by impersonating into it
-        // (40.9), and the org-scoped admin surface is 40.20.
         var usage = await _sessionRepository.AggregateVoiceUsageAsync(dayStart, monthStart, cancellationToken);
 
         var usageEntries = usage
@@ -228,7 +242,7 @@ return newval";
             .ToList();
 
         var userIdentifiers = usageEntries.Select(entry => entry.UserId).ToList();
-        var userProfiles = await _dbContext.UserReplicas
+        var userProfiles = await _databaseContext.UserReplicas
             .Where(user => userIdentifiers.Contains(user.UserId))
             .Select(user => new { user.UserId, user.Email, user.DisplayName })
             .ToDictionaryAsync(user => user.UserId, cancellationToken);
@@ -248,15 +262,26 @@ return newval";
 
         return new AdminVoiceUsageDto
         {
-            DailyLimitSeconds = limits.DailyLimitMinutes * 60,
-            MonthlyLimitSeconds = limits.MonthlyLimitMinutes * 60,
-            OrganizationDailyLimitSeconds = organizationQuota.VoiceDailyLimitMinutes * 60,
-            OrganizationMonthlyLimitSeconds = organizationQuota.VoiceMonthlyLimitMinutes * 60,
+            DailyLimitSeconds = ToSeconds(limits.DailyLimitMinutes),
+            MonthlyLimitSeconds = ToSeconds(limits.MonthlyLimitMinutes),
+            OrganizationDailyLimitSeconds = ToSeconds(organizationQuota.VoiceDailyLimitMinutes),
+            OrganizationMonthlyLimitSeconds = ToSeconds(organizationQuota.VoiceMonthlyLimitMinutes),
             OrganizationUsedSecondsToday = organizationDaySeconds,
             OrganizationUsedSecondsThisMonth = organizationMonthSeconds,
             Users = usageEntries,
         };
     }
+
+    private static int ToSeconds(int minutes) => minutes * SecondsPerMinute;
+
+    private static DateTime StartOfDay(DateTime moment)
+        => new(moment.Year, moment.Month, moment.Day, 0, 0, 0, DateTimeKind.Utc);
+
+    private static DateTime StartOfMonth(DateTime moment)
+        => new(moment.Year, moment.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static long ToUnixSeconds(DateTime utcMoment)
+        => (long)(utcMoment - DateTime.UnixEpoch).TotalSeconds;
 
     /// <summary>
     /// Phase 40.11. Every ai-service Redis key is namespaced by organization. A voice quota is
@@ -271,6 +296,13 @@ return newval";
         var organizationId = _tenantContext.OrganizationId
             ?? throw new InvalidOperationException("Organization context is not set.");
 
-        return $"org:{organizationId}:voice:{userId}:{window}:{string.Join(":", parts)}";
+        var separator = VoiceUsageKeys.Separator;
+        return string.Join(separator,
+            VoiceUsageKeys.OrganizationPrefix,
+            organizationId,
+            VoiceUsageKeys.VoiceUsagePrefix,
+            userId,
+            window,
+            string.Join(separator, parts));
     }
 }

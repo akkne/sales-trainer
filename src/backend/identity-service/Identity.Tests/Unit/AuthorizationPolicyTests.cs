@@ -37,6 +37,10 @@ public sealed class AuthorizationPolicyTests
         return authorizationResult.Succeeded;
     }
 
+    /// <summary>
+    /// The role claim type is spelled out on the identity because that is what the JWT handler's
+    /// inbound mapping produces, and <c>RequireRole</c>/<c>IsInRole</c> answer against it.
+    /// </summary>
     private static ClaimsPrincipal BuildPrincipal(string? platformRole, string? organizationRole)
     {
         var claims = new List<Claim>();
@@ -50,8 +54,6 @@ public sealed class AuthorizationPolicyTests
             claims.Add(new Claim(AuthorizationPolicies.OrganizationRoleClaimType, organizationRole));
         }
 
-        // The role claim type is spelled out because that is what the JWT handler's inbound
-        // mapping produces, and `RequireRole`/`IsInRole` answer against it.
         return new ClaimsPrincipal(
             new ClaimsIdentity(claims, "TestAuthentication", ClaimTypes.Name, ClaimTypes.Role));
     }

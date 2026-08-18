@@ -26,12 +26,24 @@ namespace Sellevate.Gamification.Features.League;
 /// earned enough to be placed in a league. Reading from <c>Leagues</c> would skip exactly those
 /// quiet weeks and leave the period frozen.
 /// </para>
+///
+/// <para>
+/// One organization's rollover failing is logged and swallowed on purpose: it must not freeze every
+/// other organization's league week until the next tick.
+/// </para>
 /// </summary>
-[DisableConcurrentExecution(timeoutInSeconds: 300)]
+[DisableConcurrentExecution(timeoutInSeconds: ConcurrencyLockTimeoutSeconds)]
 public sealed class WeeklyLeagueClosureJob(
     IServiceScopeFactory scopeFactory,
     ILogger<WeeklyLeagueClosureJob> logger)
 {
+    /// <summary>
+    /// How long a second invocation waits for the running one's lock before giving up. Five minutes
+    /// is comfortably longer than a full pass over every organization, so a slow run is queued rather
+    /// than dropped.
+    /// </summary>
+    private const int ConcurrencyLockTimeoutSeconds = 300;
+
     public async Task ExecuteAsync()
     {
         var organizationIds = await TenantJobScope.EnumerateOrganizationsAsync(
@@ -58,8 +70,6 @@ public sealed class WeeklyLeagueClosureJob(
             }
             catch (Exception exception)
             {
-                // One organization's rollover failing must not freeze every other organization's
-                // league week until next Monday.
                 logger.LogError(
                     exception,
                     "WeeklyLeagueClosureJob failed for organization {OrganizationId}; other organizations continue",

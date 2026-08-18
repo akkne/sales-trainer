@@ -5,6 +5,19 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Eventing;
 
+/// <summary>
+/// Serializes an event envelope into an outbox row on the caller's <c>DbContext</c>.
+///
+/// <para>
+/// Adds to the change tracker and nothing more — it never calls <c>SaveChangesAsync</c>, which is the
+/// entire point: the row commits with the business data that produced it or not at all.
+/// </para>
+///
+/// <para>
+/// The organization is copied from the ambient <c>ITenantContext</c> onto the row, so the system-mode
+/// relay can republish the event under the tenant it belongs to without having to open the payload.
+/// </para>
+/// </summary>
 internal sealed class GamificationOutboxWriter : IOutboxWriter
 {
     private readonly GamificationDbContext _databaseContext;

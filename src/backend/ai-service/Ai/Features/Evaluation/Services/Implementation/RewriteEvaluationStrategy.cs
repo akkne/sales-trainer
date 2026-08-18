@@ -7,6 +7,9 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Grades a rewrite exercise: whether the learner's version fixes what the original got wrong.
+/// </summary>
 internal sealed class RewriteEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,

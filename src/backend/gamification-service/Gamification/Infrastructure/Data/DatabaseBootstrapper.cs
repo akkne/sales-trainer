@@ -1,7 +1,18 @@
 using Npgsql;
+using Sellevate.Gamification.Common.Constants;
 
 namespace Sellevate.Gamification.Infrastructure.Data;
 
+/// <summary>
+/// Creates gamification-db on first start so a fresh environment needs no manual step before
+/// migrations can run.
+///
+/// <para>
+/// Idempotent and safe to run concurrently: it checks <c>pg_database</c> first and treats a
+/// duplicate-database error from a racing instance as success. It connects to the maintenance
+/// database to do so, because it cannot connect to the database it is about to create.
+/// </para>
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)
@@ -11,10 +22,13 @@ public static class DatabaseBootstrapper
 
         if (string.IsNullOrWhiteSpace(targetDatabase))
         {
-            throw new InvalidOperationException("ConnectionStrings:Postgres must specify a Database.");
+            throw new InvalidOperationException(ErrorMessages.PostgresConnectionStringMustNameDatabase);
         }
 
-        var administratorConnectionString = new NpgsqlConnectionStringBuilder(connectionString) { Database = "postgres" }.ConnectionString;
+        var administratorConnectionString = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            Database = ConfigurationKeys.MaintenanceDatabaseName,
+        }.ConnectionString;
 
         await using var connection = new NpgsqlConnection(administratorConnectionString);
         await connection.OpenAsync(cancellationToken);

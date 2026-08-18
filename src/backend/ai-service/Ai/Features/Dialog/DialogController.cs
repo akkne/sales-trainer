@@ -2,12 +2,36 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+/// <summary>
+/// The learner-facing dialog surface: browse bundles and modes, start a conversation, exchange turns,
+/// complete it for feedback.
+///
+/// <para>
+/// <b>Every provider failure is answered with a status code, never an unhandled exception.</b> Before
+/// that mapping existed a provider 400 escaped as a 500 and was logged as a defect in this service.
+/// The mapping lives in one place — see <see cref="ExecuteWithProviderFailureHandlingAsync"/> — because
+/// it was previously repeated per action and had already begun to disagree with itself.
+/// </para>
+///
+/// <para>
+/// <b>An unconfigured provider is a shape, not an error.</b> The list endpoints answer empty and the
+/// write endpoints answer 503, so a deployment with no key renders a working page with nothing to
+/// practise rather than a broken one.
+/// </para>
+///
+/// <para>
+/// The caller's identity comes from the token and never from the route or body, so no action can be
+/// aimed at another learner's session.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("dialog")]
 [Authorize]
@@ -54,7 +78,7 @@ public sealed class DialogController : ControllerBase
         var bundle = await _dialogService.GetBundleByIdAsync(bundleId, cancellationToken);
         if (bundle == null)
         {
-            return NotFound(new { message = "Bundle not found" });
+            return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
         var modes = await _dialogService.GetActiveModesForBundleAsync(bundleId, cancellationToken);
@@ -68,7 +92,7 @@ public sealed class DialogController : ControllerBase
         var mode = await _dialogService.GetCompanyCallModeAsync(cancellationToken);
         if (mode == null)
         {
-            return NotFound(new { message = "Company-call mode is not seeded yet." });
+            return NotFound(new { message = DialogMessages.CompanyCallModeNotSeeded });
         }
 
         return Ok(new CompanyCallModeIdentifierDto
@@ -84,7 +108,7 @@ public sealed class DialogController : ControllerBase
         var mode = await _dialogService.GetCustomScenarioModeAsync(cancellationToken);
         if (mode == null)
         {
-            return NotFound(new { message = "Custom-scenario mode is not seeded yet." });
+            return NotFound(new { message = DialogMessages.CustomScenarioModeNotSeeded });
         }
 
         return Ok(new DialogModeIdentifierDto
@@ -106,7 +130,7 @@ public sealed class DialogController : ControllerBase
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
-            return StatusCode(503, new { message = "AI service is not configured" });
+            return ServiceNotConfigured();
         }
 
         if (GetUserIdFromClaims() == null)
@@ -125,8 +149,7 @@ public sealed class DialogController : ControllerBase
         }
         catch (ScenarioValidationUnavailableException unavailableException)
         {
-            _logger.LogWarning(unavailableException, "Scenario relevance check is unavailable");
-            return StatusCode(503, new { message = "Не удалось проверить сценарий. Попробуйте ещё раз через минуту." });
+            return ScenarioCheckUnavailable(unavailableException);
         }
     }
 
@@ -170,7 +193,7 @@ public sealed class DialogController : ControllerBase
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
-            return StatusCode(503, new { message = "AI service is not configured" });
+            return ServiceNotConfigured();
         }
 
         var userId = GetUserIdFromClaims();
@@ -179,7 +202,7 @@ public sealed class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        try
+        return await ExecuteWithProviderFailureHandlingAsync(async () =>
         {
             CompanyCallContext? companyCallContext = null;
             if (request.CompanyContext != null)
@@ -203,45 +226,13 @@ public sealed class DialogController : ControllerBase
             var session = await _dialogService.StartSessionAsync(
                 userId.Value, request.BundleId, request.ModeId, companyCallContext, customScenarioContext, cancellationToken);
             return Ok(DialogSessionDto.FromEntity(session));
-        }
-        catch (ScenarioRejectedException scenarioRejectedException)
+        },
+        additionalHandler: exception => exception switch
         {
-            return UnprocessableEntity(new { message = scenarioRejectedException.Message });
-        }
-        catch (ScenarioValidationUnavailableException unavailableException)
-        {
-            _logger.LogWarning(unavailableException, "Scenario relevance check is unavailable");
-            return StatusCode(503, new { message = "Не удалось проверить сценарий. Попробуйте ещё раз через минуту." });
-        }
-        catch (OpenAiPaymentRequiredException)
-        {
-            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
-        }
-        catch (OpenAiRateLimitException)
-        {
-            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
-        }
-        catch (OpenAiAuthenticationException)
-        {
-            return StatusCode(503, new { message = "AI service authentication failed." });
-        }
-        catch (OpenAiRequestException openAiRequestException)
-        {
-            // The provider rejected the request or answered with something unusable — an upstream
-            // problem, not a defect here, so it must not surface as an unhandled 500.
-            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
-            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (HttpRequestException httpRequestException)
-        {
-            // Transport failure / retries exhausted / circuit open.
-            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
-            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (InvalidOperationException invalidOperationException)
-        {
-            return BadRequest(new { message = invalidOperationException.Message });
-        }
+            ScenarioRejectedException rejected => UnprocessableEntity(new { message = rejected.Message }),
+            ScenarioValidationUnavailableException unavailable => ScenarioCheckUnavailable(unavailable),
+            _ => null,
+        });
     }
 
     [HttpGet("sessions/{sessionId}")]
@@ -256,7 +247,7 @@ public sealed class DialogController : ControllerBase
         var session = await _dialogService.GetSessionForUserAsync(sessionId, userId.Value, cancellationToken);
         if (session == null)
         {
-            return NotFound(new { message = "Session not found" });
+            return NotFound(new { message = DialogMessages.SessionNotFound });
         }
 
         return Ok(DialogSessionDto.FromEntity(session));
@@ -270,7 +261,7 @@ public sealed class DialogController : ControllerBase
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
-            return StatusCode(503, new { message = "AI service is not configured" });
+            return ServiceNotConfigured();
         }
 
         var userId = GetUserIdFromClaims();
@@ -279,40 +270,11 @@ public sealed class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        try
+        return await ExecuteWithProviderFailureHandlingAsync(async () =>
         {
             var aiMessage = await _dialogService.SendMessageAsync(sessionId, userId.Value, request.Content, cancellationToken);
             return Ok(DialogMessageDto.FromEntity(aiMessage));
-        }
-        catch (OpenAiPaymentRequiredException)
-        {
-            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
-        }
-        catch (OpenAiRateLimitException)
-        {
-            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
-        }
-        catch (OpenAiAuthenticationException)
-        {
-            return StatusCode(503, new { message = "AI service authentication failed." });
-        }
-        catch (OpenAiRequestException openAiRequestException)
-        {
-            // The provider rejected the request or answered with something unusable — an upstream
-            // problem, not a defect here, so it must not surface as an unhandled 500.
-            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
-            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (HttpRequestException httpRequestException)
-        {
-            // Transport failure / retries exhausted / circuit open.
-            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
-            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (InvalidOperationException invalidOperationException)
-        {
-            return BadRequest(new { message = invalidOperationException.Message });
-        }
+        });
     }
 
     [HttpPost("sessions/{sessionId}/complete")]
@@ -320,7 +282,7 @@ public sealed class DialogController : ControllerBase
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
-            return StatusCode(503, new { message = "AI service is not configured" });
+            return ServiceNotConfigured();
         }
 
         var userId = GetUserIdFromClaims();
@@ -329,13 +291,12 @@ public sealed class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        try
+        return await ExecuteWithProviderFailureHandlingAsync(async () =>
         {
             var result = await _dialogService.CompleteSessionAsync(sessionId, userId.Value, cancellationToken);
 
             if (result == null)
             {
-                // Empty call — session abandoned, no feedback to show, no XP.
                 return NoContent();
             }
 
@@ -347,36 +308,7 @@ public sealed class DialogController : ControllerBase
                 generatedAt = result.Feedback.GeneratedAt,
                 xpEarned = result.XpEarned
             });
-        }
-        catch (OpenAiPaymentRequiredException)
-        {
-            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
-        }
-        catch (OpenAiRateLimitException)
-        {
-            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
-        }
-        catch (OpenAiAuthenticationException)
-        {
-            return StatusCode(503, new { message = "AI service authentication failed." });
-        }
-        catch (OpenAiRequestException openAiRequestException)
-        {
-            // The provider rejected the request or answered with something unusable — an upstream
-            // problem, not a defect here, so it must not surface as an unhandled 500.
-            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
-            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (HttpRequestException httpRequestException)
-        {
-            // Transport failure / retries exhausted / circuit open.
-            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
-            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
-        }
-        catch (InvalidOperationException invalidOperationException)
-        {
-            return BadRequest(new { message = invalidOperationException.Message });
-        }
+        });
     }
 
     [HttpDelete("sessions/{sessionId}")]
@@ -391,10 +323,96 @@ public sealed class DialogController : ControllerBase
         var deleted = await _dialogService.DeleteSessionAsync(sessionId, userId.Value, cancellationToken);
         if (!deleted)
         {
-            return NotFound(new { message = "Session not found" });
+            return NotFound(new { message = DialogMessages.SessionNotFound });
         }
 
         return NoContent();
+    }
+
+    private ObjectResult ServiceNotConfigured()
+        => StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new { message = AiProviderFailureMessages.NotConfigured });
+
+    private ObjectResult ScenarioCheckUnavailable(Exception unavailableException)
+    {
+        _logger.LogWarning(unavailableException, "Scenario relevance check is unavailable");
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new { message = DialogMessages.ScenarioCheckUnavailable });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> and maps a provider failure onto the status code that failure
+    /// means, per docs/LLM_FAILURE_HANDLING.md. The mapping is here rather than repeated per action
+    /// because the copies had already started to differ, and an inconsistent status code for one
+    /// upstream failure is a client that retries the wrong things.
+    ///
+    /// <para>
+    /// <paramref name="additionalHandler"/> is consulted first, for failures only one action can raise.
+    /// Returning <see langword="null"/> from it falls through to the shared mapping.
+    /// </para>
+    ///
+    /// <para>
+    /// <see cref="InvalidOperationException"/> is mapped to 400 deliberately: the service raises it for
+    /// caller mistakes — an unknown mode, a finished session, a context sent with the wrong mode.
+    /// </para>
+    /// </summary>
+    private async Task<IActionResult> ExecuteWithProviderFailureHandlingAsync(
+        Func<Task<IActionResult>> action,
+        Func<Exception, IActionResult?>? additionalHandler = null)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (Exception exception)
+        {
+            var handled = additionalHandler?.Invoke(exception);
+            if (handled is not null)
+            {
+                return handled;
+            }
+
+            switch (exception)
+            {
+                case OpenAiPaymentRequiredException:
+                    return StatusCode(
+                        StatusCodes.Status402PaymentRequired,
+                        new { message = AiProviderFailureMessages.PaymentRequired });
+
+                case OpenAiRateLimitException:
+                    return StatusCode(
+                        StatusCodes.Status429TooManyRequests,
+                        new { message = AiProviderFailureMessages.RateLimited });
+
+                case OpenAiAuthenticationException:
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new { message = AiProviderFailureMessages.AuthenticationFailed });
+
+                case OpenAiRequestException openAiRequestException:
+                    _logger.LogWarning(
+                        openAiRequestException,
+                        "AI provider request failed (upstream status {UpstreamStatus})",
+                        openAiRequestException.StatusCode);
+                    return StatusCode(
+                        StatusCodes.Status502BadGateway,
+                        new { message = AiProviderFailureMessages.TemporarilyUnavailable });
+
+                case HttpRequestException httpRequestException:
+                    _logger.LogWarning(httpRequestException, "AI provider is unreachable");
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new { message = AiProviderFailureMessages.TemporarilyUnavailable });
+
+                case InvalidOperationException invalidOperationException:
+                    return BadRequest(new { message = invalidOperationException.Message });
+
+                default:
+                    throw;
+            }
+        }
     }
 
     private Guid? GetUserIdFromClaims()

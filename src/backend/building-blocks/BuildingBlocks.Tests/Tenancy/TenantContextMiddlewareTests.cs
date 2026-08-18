@@ -178,12 +178,14 @@ public class TenantContextMiddlewareTests
     }
 
     [Test]
+    /// <summary>
+    /// The <see cref="ClaimsIdentity"/> is built with no authentication type, which is exactly what an
+    /// unauthenticated request looks like — and what a forged role header would have to masquerade as.
+    /// </summary>
     public async Task InvokeAsync_ignores_platform_roles_on_an_unauthenticated_principal()
     {
         var httpContext = new DefaultHttpContext
         {
-            // No authentication type: exactly what an unauthenticated request looks like, and what
-            // a forged header would have to masquerade as.
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "SuperAdmin")])),
         };
         var tenantContext = new TenantContext();

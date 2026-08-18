@@ -92,9 +92,11 @@ public class AdminUsersTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // 2026-08-16 role split: reading the roster is ordinary platform administration, so a
-    // platform `Admin` gets in. Every mutation below is add/remove-a-user and stays
-    // SuperAdmin-only (see docs/DECISIONS.md).
+    /// <summary>
+    /// 2026-08-16 role split: reading the roster is ordinary platform administration, so a platform
+    /// <c>Admin</c> gets in. Every mutation is add-or-remove-a-user and stays <c>SuperAdmin</c>-only
+    /// (docs/DECISIONS.md).
+    /// </summary>
     [Test]
     public async Task List_AllowedForPlatformAdmin()
     {
@@ -183,8 +185,10 @@ public class AdminUsersTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // "Admin" was a valid platform role until Phase 40.6 removed it, and the owner reinstated it
-    // on 2026-08-16 at its original numeric value. This locks it back in as assignable.
+    /// <summary>
+    /// <c>Admin</c> was a valid platform role until Phase 40.6 removed it, and the owner reinstated it
+    /// on 2026-08-16 at its original numeric value. This locks it back in as assignable.
+    /// </summary>
     [Test]
     public async Task ChangeRole_AcceptsTheReinstatedAdminRole()
     {
@@ -198,8 +202,10 @@ public class AdminUsersTests
         body!.Role.Should().Be("Admin");
     }
 
-    // `Enum.TryParse` happily turns an out-of-range number into an undefined enum value, which
-    // would persist a role nothing in the system can interpret.
+    /// <summary>
+    /// <c>Enum.TryParse</c> happily turns an out-of-range number into an undefined enum value, which
+    /// would persist a role nothing in the system can interpret.
+    /// </summary>
     [Test]
     public async Task ChangeRole_RejectsANumericRoleValue()
     {

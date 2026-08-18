@@ -1,7 +1,9 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Analytics.Features.Presence.Services.Implementation;
+using Sellevate.Analytics.Infrastructure.Configuration;
 using StackExchange.Redis;
 
 namespace Sellevate.Analytics.Tests.Unit;
@@ -26,7 +28,9 @@ public class PresenceTrackerTests
         _database = Substitute.For<IDatabase>();
         _redisConnection = Substitute.For<IConnectionMultiplexer>();
         _redisConnection.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(_database);
-        _presenceTracker = new PresenceTracker(_redisConnection);
+        _presenceTracker = new PresenceTracker(
+            _redisConnection,
+            Options.Create(new PresenceConfiguration()));
     }
 
     [Test]
@@ -160,13 +164,15 @@ public class PresenceTrackerTests
         total.Should().Be(7);
     }
 
+    /// <summary>
+    /// The emptiness check reads the whole set (min = -infinity); returning a non-zero length keeps
+    /// the organization in the registry so this test asserts pruning alone.
+    /// </summary>
     [Test]
     public async Task PruneAsync_RemovesStaleMembersFromEachRegisteredOrganization()
     {
         _database.SetMembersAsync(PresenceTracker.OrganizationRegistryKey, Arg.Any<CommandFlags>())
             .Returns([OrganizationA.ToString("N")]);
-        // The emptiness check reads the whole set (min = -infinity); returning a non-zero length
-        // keeps the organization in the registry so this test asserts pruning alone.
         _database.SortedSetLengthAsync(
                 OnlineKeyFor(OrganizationA), Arg.Is<double>(minimum => double.IsNegativeInfinity(minimum)), Arg.Any<double>(),
                 Arg.Any<Exclude>(), Arg.Any<CommandFlags>())
@@ -185,14 +191,16 @@ public class PresenceTrackerTests
             Arg.Any<CommandFlags>());
     }
 
+    /// <summary>
+    /// No <c>SortedSetLengthAsync</c> setup: the substitute returns 0, which is exactly the
+    /// "everybody went offline" case this test is about.
+    /// </summary>
     [Test]
     public async Task PruneAsync_ForgetsAnOrganizationOnceItsSetIsEmpty()
     {
         _database.SetMembersAsync(PresenceTracker.OrganizationRegistryKey, Arg.Any<CommandFlags>())
             .Returns([OrganizationA.ToString("N")]);
 
-        // No SortedSetLengthAsync setup: the substitute returns 0, which is exactly the "everybody
-        // went offline" case this test is about.
         await _presenceTracker.PruneAsync();
 
         await _database.Received(1).SetRemoveAsync(

@@ -8,9 +8,11 @@ using Sellevate.Identity.Tests.Helpers;
 
 namespace Sellevate.Identity.Tests.Integration;
 
-// Phase 40.6: the JWT must carry `org_id`/`org_role` for a user with an active membership,
-// and must carry neither for a user without one — absent membership is never implicit
-// organization access.
+/// <summary>
+/// Phase 40.6: the JWT must carry <c>org_id</c>/<c>org_role</c> for a user with an active membership,
+/// and must carry neither for a user without one — absent membership is never implicit organization
+/// access.
+/// </summary>
 [TestFixture]
 [Category("Integration")]
 public class MembershipClaimsTests

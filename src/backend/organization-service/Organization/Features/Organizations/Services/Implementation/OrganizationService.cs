@@ -11,6 +11,26 @@ using OrganizationEntity = Sellevate.Organization.Features.Organizations.Models.
 
 namespace Sellevate.Organization.Features.Organizations.Services.Implementation;
 
+/// <summary>
+/// Writes the tenant registry itself. Every organization that exists on the platform exists because
+/// this class inserted it, and every consumer of <c>organization.created</c> keys its own tenant rows
+/// off that event — so a registry row that is saved without its event being published is an
+/// organization no other service knows about.
+///
+/// <para>
+/// <b>Slug uniqueness is checked, not assumed.</b> A collision is refused with
+/// <c>OrganizationSlugConflictException</c> rather than resolved by appending a suffix: the slug is how
+/// a customer identifies itself in URLs, and quietly handing out <c>acme-2</c> is worse than telling
+/// the administrator that <c>acme</c> is taken. The unique index behind it is the real guard; this
+/// check exists to produce a 409 instead of a 500.
+/// </para>
+///
+/// <para>
+/// Unlike <see cref="OrganizationProfileService"/> nothing here is tenant-filtered, by design — the
+/// registry table is not <c>ITenantScoped</c> (docs/TENANCY/TENANCY.md §1.2, §1.9). The gate that makes
+/// that safe is the platform-staff policy on <c>OrganizationController</c>, not a query filter.
+/// </para>
+/// </summary>
 internal sealed class OrganizationService(OrganizationDbContext databaseContext, IEventPublisher eventPublisher)
     : IOrganizationService
 {

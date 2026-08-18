@@ -16,7 +16,11 @@ namespace Sellevate.Ai.Tests.Unit;
 [TestFixture]
 public class PersonaRequestWireContractTests
 {
-    // Mirrors the converter registered in Program.cs's AddControllers().AddJsonOptions(...).
+    /// <summary>
+    /// Mirrors the converter registered by <c>Program.cs</c>'s
+    /// <c>AddControllers().AddJsonOptions(...)</c>. If the two drift apart this fixture stops testing
+    /// the shape the service actually accepts.
+    /// </summary>
     private static readonly JsonSerializerOptions AppJsonOptions =
         new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -25,7 +29,6 @@ public class PersonaRequestWireContractTests
     [TestCase("Hard", PersonaDifficulty.Hard)]
     public void GeneratePersonaRequestDto_DeserializesStringDifficulty(string wireValue, PersonaDifficulty expected)
     {
-        // Exactly the shape company-service posts (Difficulty serialized via enum.ToString()).
         var json = $$"""
             {"companyDescription":"Описание","contactName":"Иван","contactPosition":"Закупщик","difficulty":"{{wireValue}}"}
             """;

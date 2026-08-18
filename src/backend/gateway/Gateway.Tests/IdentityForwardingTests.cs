@@ -1,4 +1,3 @@
-using System.Net.Http;
 using System.Security.Claims;
 using FluentAssertions;
 using NUnit.Framework;
@@ -7,6 +6,11 @@ using Sellevate.Gateway;
 
 namespace Sellevate.Gateway.Tests;
 
+/// <summary>
+/// Pins the anti-spoofing contract of <see cref="IdentityForwarding"/>: whatever identity
+/// headers a client sends are always dropped, and only headers derived from the validated
+/// principal reach a downstream service.
+/// </summary>
 [TestFixture]
 public class IdentityForwardingTests
 {
@@ -49,7 +53,6 @@ public class IdentityForwardingTests
 
         IdentityForwarding.Apply(request.Headers, user);
 
-        // The spoofed values must be gone; only the validated identity remains.
         request.Headers.GetValues(IdentityHeaders.UserId).Should().ContainSingle().Which.Should().Be("real-user");
         request.Headers.Contains(IdentityHeaders.UserRole).Should().BeFalse();
         request.Headers.GetValues(IdentityHeaders.OrganizationId).Should().ContainSingle().Which.Should().Be("real-organization");

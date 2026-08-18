@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[ConfigurationKeys.LokiUrl] ?? ConfigurationKeys.DefaultLokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
@@ -32,9 +32,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Notification");
 });
 
-// NO4c: Validate the Redis connection string explicitly so the startup error is
-// descriptive rather than a NullReferenceException from the ! operator.
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+var redisConnectionString = builder.Configuration.GetConnectionString(ConfigurationKeys.RedisConnectionName);
 if (string.IsNullOrWhiteSpace(redisConnectionString))
 {
     throw new InvalidOperationException(
@@ -53,7 +51,7 @@ builder.Services.AddSellevateHealthChecks()
     .AddKafka();
 
 const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[ConfigurationKeys.JwtSigningKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
     throw new InvalidOperationException(
@@ -66,9 +64,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[ConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[ConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
@@ -77,7 +75,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[ConfigurationKeys.FrontendUrl] ?? ConfigurationKeys.DefaultFrontendUrl)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -90,13 +88,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// NO4b: Global structured error responses using RFC 7807 ProblemDetails.
 builder.Services.AddProblemDetails();
 
 var application = builder.Build();
 
 application.UseSerilogRequestLogging();
-application.UseExceptionHandler(); // NO4b: converts unhandled exceptions to ProblemDetails responses
+application.UseExceptionHandler();
 application.UseCors();
 
 if (application.Environment.IsDevelopment())
@@ -108,9 +105,6 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-// Phase 40.13. Populates the scoped ITenantContext from the gateway-validated X-Organization-Id
-// header, so every notification key is built for one organization. After UseAuthorization so the
-// endpoint — and therefore its [TenantScoped] metadata — is already resolved.
 application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();

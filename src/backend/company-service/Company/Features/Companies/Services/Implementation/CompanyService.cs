@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
+using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
@@ -30,28 +32,41 @@ namespace Sellevate.Company.Features.Companies.Services.Implementation;
 ///
 /// An id that exists but fails either half is indistinguishable from an id that does not exist —
 /// both are <c>404</c>, never <c>403</c>, which is the pre-existing rule extended to the new half.
+///
+/// <para>
+/// <b>Two caches live on the company row rather than in a cache store,</b> both for the readiness
+/// score. The positive one is <c>ReadinessJson</c>; the negative one, <c>ReadinessNoFeedbackUntil</c>,
+/// records that a fan-out already came back with nothing usable, so repeated reads inside its TTL do
+/// not re-run up to <see cref="MaxSessionIdsForReadiness"/> sequential Mongo reads in ai-service. Its
+/// TTL (<see cref="CompanyServiceOptions.ReadinessNoFeedbackCacheMinutes"/>) is short because
+/// feedback can land at any moment, and <see cref="CreatePracticeCallAsync"/>
+/// clears both eagerly, since a new practice call is this codebase's practice-completion signal
+/// (39.16). A cache value that fails to deserialize — hand-edited, or a literal <c>null</c> — counts
+/// as a miss and is regenerated rather than thrown.
+/// </para>
+///
+/// <para>
+/// <b>Follow-up edits only re-arm a reminder when the due date itself changes.</b> Editing the note,
+/// or re-submitting the same date, must leave <c>FollowUpNotifiedAt</c> alone: republishing
+/// <c>company.followup.due</c> for an already-notified date produces a duplicate notification the
+/// consumer cannot dedupe once its original entry has scrolled out of the inbox (it dedupes on
+/// companyId + dueDate). Clearing the follow-up clears the note and the marker with it — there is
+/// nothing left to remind about.
+/// </para>
 /// </summary>
 internal sealed class CompanyService(
     CompanyDbContext databaseContext,
     IBriefingAiClient briefingAiClient,
     IParseLogAiClient parseLogAiClient,
     IPersonaAiClient personaAiClient,
-    IReadinessAiClient readinessAiClient) : ICompanyService
+    IReadinessAiClient readinessAiClient,
+    IOptions<CompanyServiceOptions> options) : ICompanyService
 {
-    private const int DescriptionExcerptLength = 160;
-    private const int RecentGoalCount = 5;
-    private const int RecentCallLogCountForBriefing = 5;
-
-    // Mirrors ai-service's ReadinessController.MaxSessionIds guard — no point sending more
-    // session ids than ai-service will accept.
+    /// <summary>
+    /// Mirrors ai-service's <c>ReadinessController.MaxSessionIds</c> guard: sending more session ids
+    /// than it accepts would be rejected wholesale rather than truncated.
+    /// </summary>
     private const int MaxSessionIdsForReadiness = 50;
-
-    // How long to negative-cache a "no usable feedback yet" readiness result (ai-service fanned
-    // out to Mongo across the company's practice sessions and found no feedback text). Without
-    // this, every GET re-runs the fan-out (up to MaxSessionIdsForReadiness sequential Mongo
-    // reads) until feedback lands. Short TTL because feedback can land at any time (practice
-    // call creation already invalidates this eagerly — see CreatePracticeCallAsync).
-    private static readonly TimeSpan ReadinessNoFeedbackCacheTtl = TimeSpan.FromMinutes(2);
 
     private static readonly JsonSerializerOptions ReadinessCacheSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -72,6 +87,8 @@ internal sealed class CompanyService(
             var normalizedSearch = search.Trim().ToLower();
             query = query.Where(company => company.Name.ToLower().Contains(normalizedSearch));
         }
+
+        var descriptionExcerptLength = options.Value.DescriptionExcerptLength;
 
         var companies = await query
             .OrderByDescending(company => company.UpdatedAt)
@@ -94,8 +111,8 @@ internal sealed class CompanyService(
             .Select(company => new CompanySummaryDto(
                 company.Id,
                 company.Name,
-                company.Description.Length > DescriptionExcerptLength
-                    ? company.Description[..DescriptionExcerptLength]
+                company.Description.Length > descriptionExcerptLength
+                    ? company.Description[..descriptionExcerptLength]
                     : company.Description,
                 company.Status,
                 company.CallLogCount,
@@ -142,7 +159,7 @@ internal sealed class CompanyService(
         await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         if (request.Status is not { } status)
-            throw new ArgumentException("Status is required.", nameof(request));
+            throw new ArgumentException(CompanyErrorMessages.CompanyStatusRequired, nameof(request));
 
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
@@ -187,13 +204,6 @@ internal sealed class CompanyService(
         {
             var normalizedNextActionAt = nextActionAt.ToUniversalTime();
 
-            // Only reset FollowUpNotifiedAt when the due date actually changes, so the reminder
-            // background service notifies again for a genuinely new due date. Editing only the
-            // note (or re-submitting the same date) must NOT re-arm an already-fired reminder —
-            // otherwise the next poll would republish company.followup.due for a date that was
-            // already notified, producing a spurious duplicate notification once the original
-            // scrolls out of the recipient's inbox (the consumer dedupes on companyId+dueDate,
-            // which can no longer catch a same-date replay once that entry has expired/scrolled).
             if (company.NextActionAt != normalizedNextActionAt)
             {
                 company.FollowUpNotifiedAt = null;
@@ -204,8 +214,6 @@ internal sealed class CompanyService(
         }
         else
         {
-            // Clearing the follow-up clears the note and the notified-at marker with it —
-            // there is nothing left to remind about.
             company.NextActionAt = null;
             company.NextActionNote = null;
             company.FollowUpNotifiedAt = null;
@@ -388,12 +396,6 @@ internal sealed class CompanyService(
         catch (DbUpdateException dbUpdateException) when (
             request.ContactId is { } raceContactId && IsContactIdForeignKeyViolation(dbUpdateException))
         {
-            // The ownership check above and this SaveChangesAsync aren't atomic — the contact can
-            // be deleted concurrently in between, in which case Postgres rejects the insert with a
-            // ContactId FK violation. Surface that as the same typed 400 the ownership check itself
-            // throws, rather than letting a raw DbUpdateException bubble up as a 500. Any other
-            // DbUpdateException (unrelated unique-constraint violation, deadlock, connection drop,
-            // etc.) is NOT this filter's business and keeps propagating as a real 500.
             throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
         }
 
@@ -441,9 +443,6 @@ internal sealed class CompanyService(
         catch (DbUpdateException dbUpdateException) when (
             request.ContactId is { } raceContactId && IsContactIdForeignKeyViolation(dbUpdateException))
         {
-            // Same concurrent-delete race as CreateCallLogEntryAsync: the contact can be removed
-            // between the ownership check and this SaveChangesAsync, tripping the ContactId FK.
-            // Any other DbUpdateException keeps propagating as a real 500.
             throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
         }
 
@@ -506,10 +505,6 @@ internal sealed class CompanyService(
 
         databaseContext.PracticeCalls.Add(practiceCall);
 
-        // A new practice call is this codebase's practice-completion signal (see 39.16 design) —
-        // invalidate the cached readiness score so the next GET regenerates it from fresh feedback.
-        // Also clear the negative "no usable feedback yet" cache — this practice call may be the
-        // one that finally has usable feedback.
         company.ReadinessJson = null;
         company.ReadinessGeneratedAt = null;
         company.ReadinessNoFeedbackUntil = null;
@@ -559,7 +554,7 @@ internal sealed class CompanyService(
             .GroupBy(practiceCall => practiceCall.Goal)
             .Select(group => new { Goal = group.Key, LastCreatedAt = group.Max(practiceCall => practiceCall.CreatedAt) })
             .OrderByDescending(goalEntry => goalEntry.LastCreatedAt)
-            .Take(RecentGoalCount)
+            .Take(options.Value.RecentGoalCount)
             .Select(goalEntry => goalEntry.Goal)
             .ToListAsync(cancellationToken);
     }
@@ -694,8 +689,6 @@ internal sealed class CompanyService(
         if (company is null)
             return null;
 
-        // Most recent non-empty practice-call goal, if any — same "latest goal" notion as the
-        // recent-goals feature, but only the single newest one (not the last-5-distinct list).
         var latestGoal = await databaseContext.PracticeCalls
             .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.Goal != string.Empty)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
@@ -705,13 +698,10 @@ internal sealed class CompanyService(
         var recentCalls = await databaseContext.CallLogEntries
             .Where(entry => entry.CompanyId == companyId && entry.UserId == userId)
             .OrderByDescending(entry => entry.OccurredAt)
-            .Take(RecentCallLogCountForBriefing)
+            .Take(options.Value.RecentCallLogCountForBriefing)
             .Select(entry => new BriefingCallLogItem(entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt))
             .ToListAsync(cancellationToken);
 
-        // Practice-session feedback text lives in ai-service's Mongo store, not here — company-service
-        // has no cross-service read for it (out of scope for 39.12), so the feedback-summaries list is
-        // always empty; ai-service's briefing prompt degrades gracefully when it's empty.
         var aiRequest = new BriefingAiRequest(company.Description, latestGoal, recentCalls, []);
         var aiResult = await briefingAiClient.GenerateBriefingAsync(aiRequest, cancellationToken);
 
@@ -760,20 +750,13 @@ internal sealed class CompanyService(
         if (company.ReadinessJson is not null)
         {
             var cached = JsonSerializer.Deserialize<ReadinessCachePayload>(company.ReadinessJson, ReadinessCacheSerializerOptions);
-            // A corrupted/hand-edited cache value (e.g. literal "null") is treated as a
-            // cache miss and regenerated below, rather than throwing a raw 500.
             if (cached is not null)
                 return new CompanyReadinessDto(cached.Score, cached.Strengths, cached.Gaps, cached.Recommendation, company.ReadinessGeneratedAt);
         }
 
-        // Negative cache: if a recent fan-out already came back with no usable feedback and the
-        // TTL hasn't expired yet, skip straight to the empty result instead of re-running the
-        // (up to MaxSessionIdsForReadiness) sequential Mongo reads on every request.
         if (company.ReadinessNoFeedbackUntil is { } noFeedbackUntil && noFeedbackUntil > DateTime.UtcNow)
             return new CompanyReadinessDto(null, null, null, null, null);
 
-        // Most recent practice-call session ids first (capped to what ai-service accepts), plus
-        // the single latest non-empty goal — same "latest goal" notion used by the briefing feature.
         var sessionIds = await databaseContext.PracticeCalls
             .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.DialogSessionId != string.Empty)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
@@ -795,10 +778,8 @@ internal sealed class CompanyService(
 
         if (aiResult is null)
         {
-            // No usable feedback found across the fanned-out sessions — negative-cache the result
-            // so repeated requests within the TTL don't re-fan-out. CreatePracticeCallAsync still
-            // clears this eagerly when a new practice call completes.
-            company.ReadinessNoFeedbackUntil = DateTime.UtcNow.Add(ReadinessNoFeedbackCacheTtl);
+            company.ReadinessNoFeedbackUntil =
+                DateTime.UtcNow.AddMinutes(options.Value.ReadinessNoFeedbackCacheMinutes);
             company.UpdatedAt = DateTime.UtcNow;
 
             await databaseContext.SaveChangesAsync(cancellationToken);
@@ -957,14 +938,21 @@ internal sealed class CompanyService(
             throw new ContactNotFoundInCompanyException(contactId, companyId);
     }
 
-    // The FK for CallLogEntries.ContactId -> CompanyContacts.Id (see FK_CallLogEntries_
-    // CompanyContacts_ContactId in the AddCompanyContacts migration). Only a Postgres foreign-key
-    // violation (SqlState 23503) against exactly this constraint should be treated as the
-    // ContactId concurrent-delete race — any other DbUpdateException (unrelated unique-constraint
-    // violation, deadlock, connection drop, etc.) must keep propagating as a real 500 instead of
-    // being silently mis-mapped to "contact not found".
     private const string ContactIdForeignKeyConstraintName = "FK_CallLogEntries_CompanyContacts_ContactId";
 
+    /// <summary>
+    /// True only for a Postgres foreign-key violation (<c>23503</c>) against exactly the
+    /// <c>CallLogEntries.ContactId -> CompanyContacts.Id</c> constraint, which is how the concurrent
+    /// contact-delete race surfaces: the ownership check and <c>SaveChangesAsync</c> are not atomic,
+    /// so a contact can vanish between them.
+    ///
+    /// <para>
+    /// The constraint name is matched, not just the SQL state, because every other
+    /// <c>DbUpdateException</c> — an unrelated unique violation, a deadlock, a dropped connection —
+    /// must keep propagating as a 500. Mis-mapping one of those to "contact not found" would hide a
+    /// real database failure behind a 400 that looks like the user's fault.
+    /// </para>
+    /// </summary>
     private static bool IsContactIdForeignKeyViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation } postgresException &&
         string.Equals(postgresException.ConstraintName, ContactIdForeignKeyConstraintName, StringComparison.Ordinal);

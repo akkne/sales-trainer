@@ -46,6 +46,16 @@ internal sealed class TeamSkillMapService(
     private const int DefaultWindowDays = 90;
     private const int MaximumWindowDays = 365;
 
+    /// <summary>
+    /// The whole matrix for one organization over the requested window (or
+    /// <see cref="DefaultWindowDays"/> when none is asked for).
+    ///
+    /// <para>
+    /// A stage key on a skill with no row in <c>SkillStages</c> is shown under its own key rather than
+    /// dropped: dropping it would silently remove a column of the funnel from a screen whose whole claim
+    /// is that it shows where the team sags.
+    /// </para>
+    /// </summary>
     public async Task<TeamSkillMapDto> GetSkillMapAsync(
         int windowDays,
         CancellationToken cancellationToken = default)
@@ -147,9 +157,6 @@ internal sealed class TeamSkillMapService(
 
                 return new TeamSkillMapStageDto(
                     grouped.Key,
-                    // A stage key on a skill with no row in SkillStages is shown under its own key
-                    // rather than dropped: dropping it would silently remove a column of the funnel
-                    // from a screen whose whole claim is that it shows where the team sags.
                     descriptor?.Label ?? grouped.Key,
                     descriptor?.Accent ?? string.Empty,
                     descriptor?.Order ?? int.MaxValue,
@@ -186,6 +193,15 @@ internal sealed class TeamSkillMapService(
             roster is not null);
     }
 
+    /// <summary>
+    /// One row of the matrix: this person's per-skill and per-stage cells, their weakest of each, and
+    /// their dialog totals.
+    ///
+    /// <para>
+    /// The stage cells are ordered by the team-level stage list's order, so the screen can lay rows over
+    /// columns without re-sorting and without a missing stage shifting a row sideways.
+    /// </para>
+    /// </summary>
     private static TeamSkillMapMemberDto BuildMember(
         Guid userId,
         string? displayName,
@@ -215,8 +231,6 @@ internal sealed class TeamSkillMapService(
                     attempts,
                     Accuracy(attempts, grouped.Sum(cell => cell.CorrectCount)));
             })
-            // Same column order as the team-level stage list, so the screen can lay rows over
-            // columns without re-sorting and without a missing stage shifting a row sideways.
             .OrderBy(cell => stages.FirstOrDefault(stage => stage.Key == cell.Key)?.Order ?? int.MaxValue)
             .ThenBy(cell => cell.Key, StringComparer.Ordinal)
             .ToList();

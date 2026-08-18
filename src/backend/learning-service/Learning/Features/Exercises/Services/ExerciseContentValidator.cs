@@ -1,11 +1,59 @@
 using System.Text.Json;
 
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Exercises.Constants;
 
 namespace Sellevate.Learning.Features.Exercises.Services;
 
+/// <summary>
+/// Decides whether an exercise body is playable, per-type, against the schemas in
+/// docs/NEW_EXERCISE_TYPES.md.
+///
+/// <para>
+/// <b>A false accept is a blank screen mid-lesson, so every rule here is a rejection rule.</b> The
+/// player has no fallback for a body that parses as JSON but lacks the fields it renders: the learner
+/// simply sees nothing. That makes silent coercion the one thing this class must never do — an
+/// unrecognized field is left alone, but a missing or wrong-typed required field is always an error,
+/// never a defaulted value. Every caller (the admin editors, the seeder, generated content, and
+/// adaptation proposals) gates on the returned list being empty.
+/// </para>
+///
+/// <para>
+/// <b>It reports every problem it finds, not the first.</b> An author fixing an imported lesson needs
+/// the whole list in one pass; a walk that returned on first failure would turn one bad import into a
+/// dozen round trips. Where a container is missing or the wrong kind, the walk into its children is
+/// skipped — those would be noise about a structure that does not exist — but sibling checks continue.
+/// </para>
+///
+/// <para>
+/// <b>Type keys come from <see cref="ExerciseTypes"/> and are persisted and compared in SQL.</b> An
+/// unknown type is rejected with the valid set spelled out, so adding a type means adding it there,
+/// adding a <c>Validate…</c> branch here, and giving it an evaluation strategy — a type accepted here
+/// with no strategy behind it is the same blank screen by another route.
+/// </para>
+/// </summary>
 public static class ExerciseContentValidator
 {
+    private const string TheoryCardLayoutText = "text";
+    private const string TheoryCardLayoutDialogue = "dialogue";
+    private const string TheoryCardLayoutBullets = "bullets";
+    private const string TheoryCardLayoutQuote = "quote";
+
+    private const string DialogueSideMe = "me";
+    private const string DialogueSideThem = "them";
+
+    private static readonly string[] TheoryCardLayouts =
+    [
+        TheoryCardLayoutText,
+        TheoryCardLayoutDialogue,
+        TheoryCardLayoutBullets,
+        TheoryCardLayoutQuote,
+    ];
+
+    /// <summary>
+    /// Every reason <paramref name="content"/> cannot be played as an exercise of
+    /// <paramref name="type"/>. An empty list means accepted; the list is never <see langword="null"/>.
+    /// </summary>
     public static IReadOnlyList<string> Validate(string type, JsonElement content)
     {
         var errors = new List<string>();
@@ -61,8 +109,8 @@ public static class ExerciseContentValidator
 
     private static void ValidateChooseOption(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "situation", errors);
-        var options = RequireArray(root, "options", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Situation, errors);
+        var options = RequireArray(root, ExerciseContentFields.Options, errors);
         if (options is not null)
         {
             if (options.Value.GetArrayLength() < 2)
@@ -73,9 +121,9 @@ public static class ExerciseContentValidator
 
     private static void ValidateFillBlank(JsonElement root, List<string> errors)
     {
-        RequireString(root, "before", errors);
-        RequireString(root, "after", errors);
-        var options = RequireArray(root, "options", errors);
+        RequireString(root, ExerciseContentFields.Before, errors);
+        RequireString(root, ExerciseContentFields.After, errors);
+        var options = RequireArray(root, ExerciseContentFields.Options, errors);
         if (options is not null)
         {
             if (options.Value.GetArrayLength() < 2)
@@ -86,8 +134,8 @@ public static class ExerciseContentValidator
 
     private static void ValidateReorder(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "instruction", errors);
-        var items = RequireArray(root, "items", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Instruction, errors);
+        var items = RequireArray(root, ExerciseContentFields.Items, errors);
         if (items is null) return;
 
         if (items.Value.GetArrayLength() < 2)
@@ -106,12 +154,12 @@ public static class ExerciseContentValidator
                 index++;
                 continue;
             }
-            if (!item.TryGetProperty("text", out var textProp) || textProp.ValueKind != JsonValueKind.String)
+            if (!item.TryGetProperty(ExerciseContentFields.Text, out var textValue) || textValue.ValueKind != JsonValueKind.String)
                 errors.Add($"items[{index}].text must be a string.");
-            if (!item.TryGetProperty("correct_position", out var posProp) || posProp.ValueKind != JsonValueKind.Number)
+            if (!item.TryGetProperty(ExerciseContentFields.CorrectPosition, out var positionValue) || positionValue.ValueKind != JsonValueKind.Number)
                 errors.Add($"items[{index}].correct_position must be an integer.");
             else
-                positions.Add(posProp.GetInt32());
+                positions.Add(positionValue.GetInt32());
             index++;
         }
 
@@ -121,8 +169,8 @@ public static class ExerciseContentValidator
 
     private static void ValidateMatchPairs(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "instruction", errors);
-        var pairs = RequireArray(root, "pairs", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Instruction, errors);
+        var pairs = RequireArray(root, ExerciseContentFields.Pairs, errors);
         if (pairs is null) return;
 
         if (pairs.Value.GetArrayLength() < 2)
@@ -140,9 +188,9 @@ public static class ExerciseContentValidator
                 index++;
                 continue;
             }
-            if (!pair.TryGetProperty("left", out var left) || left.ValueKind != JsonValueKind.String)
+            if (!pair.TryGetProperty(ExerciseContentFields.Left, out var left) || left.ValueKind != JsonValueKind.String)
                 errors.Add($"pairs[{index}].left must be a string.");
-            if (!pair.TryGetProperty("right", out var right) || right.ValueKind != JsonValueKind.String)
+            if (!pair.TryGetProperty(ExerciseContentFields.Right, out var right) || right.ValueKind != JsonValueKind.String)
                 errors.Add($"pairs[{index}].right must be a string.");
             index++;
         }
@@ -150,37 +198,37 @@ public static class ExerciseContentValidator
 
     private static void ValidateCategorize(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "instruction", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Instruction, errors);
 
-        var categoriesEl = RequireArray(root, "categories", errors);
+        var categoriesElement = RequireArray(root, ExerciseContentFields.Categories, errors);
         var categories = new HashSet<string>(StringComparer.Ordinal);
-        if (categoriesEl is not null)
+        if (categoriesElement is not null)
         {
-            if (categoriesEl.Value.GetArrayLength() < 2)
+            if (categoriesElement.Value.GetArrayLength() < 2)
                 errors.Add("categories must contain at least 2 items.");
 
-            var catIndex = 0;
-            foreach (var cat in categoriesEl.Value.EnumerateArray())
+            var categoryIndex = 0;
+            foreach (var category in categoriesElement.Value.EnumerateArray())
             {
-                if (cat.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(cat.GetString()))
-                    errors.Add($"categories[{catIndex}] must be a non-empty string.");
+                if (category.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(category.GetString()))
+                    errors.Add($"categories[{categoryIndex}] must be a non-empty string.");
                 else
-                    categories.Add(cat.GetString()!);
-                catIndex++;
+                    categories.Add(category.GetString()!);
+                categoryIndex++;
             }
         }
 
-        var itemsEl = RequireArray(root, "items", errors);
-        if (itemsEl is null) return;
+        var itemsElement = RequireArray(root, ExerciseContentFields.Items, errors);
+        if (itemsElement is null) return;
 
-        if (itemsEl.Value.GetArrayLength() < 1)
+        if (itemsElement.Value.GetArrayLength() < 1)
         {
             errors.Add("items must contain at least 1 item.");
             return;
         }
 
         var index = 0;
-        foreach (var item in itemsEl.Value.EnumerateArray())
+        foreach (var item in itemsElement.Value.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
@@ -188,19 +236,19 @@ public static class ExerciseContentValidator
                 index++;
                 continue;
             }
-            if (!item.TryGetProperty("text", out var textProp) || textProp.ValueKind != JsonValueKind.String)
+            if (!item.TryGetProperty(ExerciseContentFields.Text, out var textValue) || textValue.ValueKind != JsonValueKind.String)
                 errors.Add($"items[{index}].text must be a string.");
-            if (!item.TryGetProperty("category", out var catProp) || catProp.ValueKind != JsonValueKind.String)
+            if (!item.TryGetProperty(ExerciseContentFields.Category, out var categoryValue) || categoryValue.ValueKind != JsonValueKind.String)
                 errors.Add($"items[{index}].category must be a string.");
-            else if (categories.Count > 0 && !categories.Contains(catProp.GetString()!))
-                errors.Add($"items[{index}].category '{catProp.GetString()}' is not one of the declared categories.");
+            else if (categories.Count > 0 && !categories.Contains(categoryValue.GetString()!))
+                errors.Add($"items[{index}].category '{categoryValue.GetString()}' is not one of the declared categories.");
             index++;
         }
     }
 
     private static void ValidateSpotMistake(JsonElement root, List<string> errors)
     {
-        var dialogue = RequireArray(root, "dialogue", errors);
+        var dialogue = RequireArray(root, ExerciseContentFields.Dialogue, errors);
         if (dialogue is null) return;
 
         if (dialogue.Value.GetArrayLength() < 2)
@@ -219,11 +267,11 @@ public static class ExerciseContentValidator
                 index++;
                 continue;
             }
-            if (!line.TryGetProperty("speaker", out var speaker) || speaker.ValueKind != JsonValueKind.String)
+            if (!line.TryGetProperty(ExerciseContentFields.Speaker, out var speaker) || speaker.ValueKind != JsonValueKind.String)
                 errors.Add($"dialogue[{index}].speaker must be a string.");
-            if (!line.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String)
+            if (!line.TryGetProperty(ExerciseContentFields.Text, out var text) || text.ValueKind != JsonValueKind.String)
                 errors.Add($"dialogue[{index}].text must be a string.");
-            if (!line.TryGetProperty("is_mistake", out var isMistake) || isMistake.ValueKind != JsonValueKind.True && isMistake.ValueKind != JsonValueKind.False)
+            if (!line.TryGetProperty(ExerciseContentFields.IsMistake, out var isMistake) || isMistake.ValueKind != JsonValueKind.True && isMistake.ValueKind != JsonValueKind.False)
                 errors.Add($"dialogue[{index}].is_mistake must be a boolean.");
             else if (isMistake.GetBoolean())
                 mistakeCount++;
@@ -238,16 +286,16 @@ public static class ExerciseContentValidator
 
     private static void ValidateRewrite(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "instruction", errors);
-        RequireNonEmptyString(root, "original", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Instruction, errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Original, errors);
     }
 
     private static void ValidateAiDialogue(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "persona", errors);
-        RequireNonEmptyString(root, "scenario", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Persona, errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Scenario, errors);
 
-        if (root.TryGetProperty("max_turns", out var maxTurns))
+        if (root.TryGetProperty(ExerciseContentFields.MaximumTurns, out var maxTurns))
         {
             if (maxTurns.ValueKind != JsonValueKind.Number)
                 errors.Add("max_turns must be an integer.");
@@ -258,7 +306,7 @@ public static class ExerciseContentValidator
 
     private static void ValidateEvaluateCall(JsonElement root, List<string> errors)
     {
-        var transcript = RequireArray(root, "transcript", errors);
+        var transcript = RequireArray(root, ExerciseContentFields.Transcript, errors);
         if (transcript is not null)
         {
             if (transcript.Value.GetArrayLength() < 1)
@@ -274,16 +322,16 @@ public static class ExerciseContentValidator
                         index++;
                         continue;
                     }
-                    if (!line.TryGetProperty("speaker", out var speaker) || speaker.ValueKind != JsonValueKind.String)
+                    if (!line.TryGetProperty(ExerciseContentFields.Speaker, out var speaker) || speaker.ValueKind != JsonValueKind.String)
                         errors.Add($"transcript[{index}].speaker must be a string.");
-                    if (!line.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String)
+                    if (!line.TryGetProperty(ExerciseContentFields.Text, out var text) || text.ValueKind != JsonValueKind.String)
                         errors.Add($"transcript[{index}].text must be a string.");
                     index++;
                 }
             }
         }
 
-        var axes = RequireArray(root, "evaluation_axes", errors);
+        var axes = RequireArray(root, ExerciseContentFields.EvaluationAxes, errors);
         if (axes is not null)
         {
             if (axes.Value.GetArrayLength() < 1)
@@ -299,9 +347,9 @@ public static class ExerciseContentValidator
                         index++;
                         continue;
                     }
-                    if (!axis.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String)
+                    if (!axis.TryGetProperty(ExerciseContentFields.Name, out var name) || name.ValueKind != JsonValueKind.String)
                         errors.Add($"evaluation_axes[{index}].name must be a string.");
-                    if (!axis.TryGetProperty("description", out var desc) || desc.ValueKind != JsonValueKind.String)
+                    if (!axis.TryGetProperty(ExerciseContentFields.Description, out var descriptionValue) || descriptionValue.ValueKind != JsonValueKind.String)
                         errors.Add($"evaluation_axes[{index}].description must be a string.");
                     index++;
                 }
@@ -311,29 +359,33 @@ public static class ExerciseContentValidator
 
     private static void ValidateFreeText(JsonElement root, List<string> errors)
     {
-        RequireNonEmptyString(root, "instruction", errors);
+        RequireNonEmptyString(root, ExerciseContentFields.Instruction, errors);
     }
 
-    private static readonly string[] TheoryCardLayouts = ["text", "dialogue", "bullets", "quote"];
-
+    /// <summary>
+    /// Theory cards are not graded, so the only thing that can be wrong with one is that it cannot be
+    /// rendered. <c>layout</c> is the discriminator: each value demands a different set of fields, and
+    /// the fields of the other layouts are irrelevant rather than forbidden, so a card that carries
+    /// leftovers from an earlier layout still validates.
+    /// </summary>
     private static void ValidateTheoryCard(JsonElement root, List<string> errors)
     {
-        if (!root.TryGetProperty("layout", out var layoutEl) || layoutEl.ValueKind != JsonValueKind.String)
+        if (!root.TryGetProperty(ExerciseContentFields.Layout, out var layoutElement) || layoutElement.ValueKind != JsonValueKind.String)
         {
             errors.Add($"'layout' is required and must be one of: {string.Join(", ", TheoryCardLayouts)}.");
             return;
         }
 
-        var layout = layoutEl.GetString();
+        var layout = layoutElement.GetString();
         switch (layout)
         {
-            case "text":
-                RequireNonEmptyString(root, "body", errors);
+            case TheoryCardLayoutText:
+                RequireNonEmptyString(root, ExerciseContentFields.Body, errors);
                 break;
 
-            case "dialogue":
+            case TheoryCardLayoutDialogue:
             {
-                var turns = RequireArray(root, "turns", errors);
+                var turns = RequireArray(root, ExerciseContentFields.Turns, errors);
                 if (turns is null) break;
                 if (turns.Value.GetArrayLength() < 1)
                 {
@@ -349,10 +401,10 @@ public static class ExerciseContentValidator
                         index++;
                         continue;
                     }
-                    if (!turn.TryGetProperty("side", out var side) || side.ValueKind != JsonValueKind.String
-                        || (side.GetString() != "me" && side.GetString() != "them"))
-                        errors.Add($"turns[{index}].side must be \"me\" or \"them\".");
-                    if (!turn.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String
+                    if (!turn.TryGetProperty(ExerciseContentFields.Side, out var side) || side.ValueKind != JsonValueKind.String
+                        || (side.GetString() != DialogueSideMe && side.GetString() != DialogueSideThem))
+                        errors.Add($"turns[{index}].side must be \"{DialogueSideMe}\" or \"{DialogueSideThem}\".");
+                    if (!turn.TryGetProperty(ExerciseContentFields.Text, out var text) || text.ValueKind != JsonValueKind.String
                         || string.IsNullOrWhiteSpace(text.GetString()))
                         errors.Add($"turns[{index}].text must be a non-empty string.");
                     index++;
@@ -360,9 +412,9 @@ public static class ExerciseContentValidator
                 break;
             }
 
-            case "bullets":
+            case TheoryCardLayoutBullets:
             {
-                var items = RequireArray(root, "items", errors);
+                var items = RequireArray(root, ExerciseContentFields.Items, errors);
                 if (items is null) break;
                 if (items.Value.GetArrayLength() < 1)
                 {
@@ -379,8 +431,8 @@ public static class ExerciseContentValidator
                 break;
             }
 
-            case "quote":
-                RequireNonEmptyString(root, "text", errors);
+            case TheoryCardLayoutQuote:
+                RequireNonEmptyString(root, ExerciseContentFields.Text, errors);
                 break;
 
             default:
@@ -390,11 +442,11 @@ public static class ExerciseContentValidator
     }
 
 
-    private static void ValidateOptionsArray(JsonElement optionsEl, List<string> errors)
+    private static void ValidateOptionsArray(JsonElement optionsElement, List<string> errors)
     {
         var correctCount = 0;
         var index = 0;
-        foreach (var option in optionsEl.EnumerateArray())
+        foreach (var option in optionsElement.EnumerateArray())
         {
             if (option.ValueKind != JsonValueKind.Object)
             {
@@ -402,9 +454,9 @@ public static class ExerciseContentValidator
                 index++;
                 continue;
             }
-            if (!option.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String)
+            if (!option.TryGetProperty(ExerciseContentFields.Text, out var text) || text.ValueKind != JsonValueKind.String)
                 errors.Add($"options[{index}].text must be a string.");
-            if (!option.TryGetProperty("is_correct", out var isCorrect) || isCorrect.ValueKind != JsonValueKind.True && isCorrect.ValueKind != JsonValueKind.False)
+            if (!option.TryGetProperty(ExerciseContentFields.IsCorrect, out var isCorrect) || isCorrect.ValueKind != JsonValueKind.True && isCorrect.ValueKind != JsonValueKind.False)
                 errors.Add($"options[{index}].is_correct must be a boolean.");
             else if (isCorrect.GetBoolean())
                 correctCount++;
@@ -419,23 +471,33 @@ public static class ExerciseContentValidator
 
     private static void RequireNonEmptyString(JsonElement root, string propertyName, List<string> errors)
     {
-        if (!root.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(prop.GetString()))
+        if (!root.TryGetProperty(propertyName, out var propertyValue) || propertyValue.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(propertyValue.GetString()))
             errors.Add($"'{propertyName}' is required and must be a non-empty string.");
     }
 
+    /// <summary>
+    /// Unlike <see cref="RequireNonEmptyString"/> this accepts <c>""</c>. Used for the text either side
+    /// of a fill-in-the-blank, where an empty side is legitimate — the blank can start or end the
+    /// sentence.
+    /// </summary>
     private static void RequireString(JsonElement root, string propertyName, List<string> errors)
     {
-        if (!root.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.String)
+        if (!root.TryGetProperty(propertyName, out var propertyValue) || propertyValue.ValueKind != JsonValueKind.String)
             errors.Add($"'{propertyName}' is required and must be a string.");
     }
 
+    /// <summary>
+    /// Returns <see langword="null"/> — having already recorded the error — when the property is
+    /// missing or not an array, which is the caller's signal to skip walking into its items rather
+    /// than pile on errors about a structure that is not there.
+    /// </summary>
     private static JsonElement? RequireArray(JsonElement root, string propertyName, List<string> errors)
     {
-        if (!root.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty(propertyName, out var propertyValue) || propertyValue.ValueKind != JsonValueKind.Array)
         {
             errors.Add($"'{propertyName}' is required and must be an array.");
             return null;
         }
-        return prop;
+        return propertyValue;
     }
 }

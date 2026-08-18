@@ -22,15 +22,23 @@ namespace Sellevate.Company.Features.Companies.FollowUpReminders;
 /// RLS policy exactly like a request would be. The service itself refuses to run without a
 /// concrete organization: an unset tenant raises, it never means "everything".
 /// </para>
+///
+/// <para>
+/// The poll interval is floored at <see cref="MinimumPollIntervalMinutes"/> so a misconfigured zero
+/// cannot turn the timer into a busy loop against the database.
+/// </para>
 /// </summary>
 internal sealed class FollowUpReminderBackgroundService(
     IServiceScopeFactory scopeFactory,
     IOptions<FollowUpReminderOptions> options,
     ILogger<FollowUpReminderBackgroundService> logger) : BackgroundService
 {
+    private const int MinimumPollIntervalMinutes = 1;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var interval = TimeSpan.FromMinutes(Math.Max(1, options.Value.PollIntervalMinutes));
+        var interval = TimeSpan.FromMinutes(
+            Math.Max(MinimumPollIntervalMinutes, options.Value.PollIntervalMinutes));
         using var timer = new PeriodicTimer(interval);
 
         do
@@ -51,6 +59,13 @@ internal sealed class FollowUpReminderBackgroundService(
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// One tick: enumerate the organizations with something due, then process each in its own scope.
+    /// A scope is never reused across organizations — <c>TenantContext</c> refuses to be re-pointed
+    /// at a second one, which is the guard that turns "the loop forgot to reset the tenant" from a
+    /// silent cross-tenant publish into an exception. One organization's failure is logged and the
+    /// loop continues, since isolating failures per organization is the whole reason the loop exists.
+    /// </summary>
     internal async Task<int> ProcessDueFollowUpsAsync(CancellationToken cancellationToken)
     {
         var organizationIds = await EnumerateOrganizationsWithDueFollowUpsAsync(cancellationToken);
@@ -62,9 +77,6 @@ internal sealed class FollowUpReminderBackgroundService(
         var publishedCount = 0;
         foreach (var organizationId in organizationIds)
         {
-            // One scope per organization, never one scope reused across them: TenantContext refuses
-            // to be re-pointed at a second organization, which is the guard that turns "the loop
-            // forgot to reset the tenant" from a silent cross-tenant publish into an exception.
             using var scope = scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
 
@@ -80,8 +92,6 @@ internal sealed class FollowUpReminderBackgroundService(
             }
             catch (Exception exception)
             {
-                // One organization's failure must not silence every other organization's reminders
-                // for the rest of the tick — that is the whole reason the loop exists.
                 logger.LogError(
                     exception,
                     "Follow-up reminder poll failed for organization {OrganizationId}; other organizations continue",

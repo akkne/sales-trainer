@@ -7,6 +7,11 @@ using Sellevate.Identity.Infrastructure.Storage.Implementation;
 
 namespace Sellevate.Identity.Features.Avatars;
 
+/// <summary>
+/// Registers avatar storage. <see cref="IObjectStorage"/> is a singleton built from a configuration
+/// snapshot: the S3 client is thread-safe and pools connections, so a per-request instance would only
+/// churn sockets. It follows that changing <c>Storage:S3</c> needs a restart.
+/// </summary>
 public static class AvatarsServiceCollectionExtensions
 {
     public static IServiceCollection AddAvatarStorage(
@@ -16,10 +21,10 @@ public static class AvatarsServiceCollectionExtensions
         services.Configure<S3Configuration>(
             configuration.GetSection(S3Configuration.SectionName));
 
-        services.AddSingleton<IObjectStorage>(sp =>
+        services.AddSingleton<IObjectStorage>(serviceProvider =>
         {
-            var config = sp.GetRequiredService<IOptions<S3Configuration>>().Value;
-            return new S3ObjectStorage(config);
+            var s3Configuration = serviceProvider.GetRequiredService<IOptions<S3Configuration>>().Value;
+            return new S3ObjectStorage(s3Configuration);
         });
 
         services.AddScoped<IAvatarService, AvatarService>();

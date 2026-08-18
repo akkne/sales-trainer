@@ -6,6 +6,22 @@ using Sellevate.Learning.Infrastructure.Configuration;
 
 namespace Sellevate.Learning.Infrastructure.Ai;
 
+/// <summary>
+/// Grades one exercise answer by asking ai-service, which owns the provider key and the meter.
+///
+/// <para>
+/// A non-2xx or an unreadable body is an <see cref="InvalidOperationException"/> and never a
+/// half-filled result: the caller writes an attempt row from what comes back, so "the grade could not
+/// be obtained" must not arrive looking like a score of zero. The provider's own response body is
+/// logged and never put into the exception message.
+/// </para>
+///
+/// <para>
+/// Phase 40.33. A learner is waiting on their grade, so the call declares itself
+/// <see cref="AiCallHeaders.InteractiveWorkload"/> and runs to the organization's full allowance
+/// rather than stopping at the batch reserve.
+/// </para>
+/// </summary>
 internal sealed class AiEvaluationClient : IAiEvaluationClient
 {
     public const string HttpClientName = "AiService";
@@ -42,8 +58,6 @@ internal sealed class AiEvaluationClient : IAiEvaluationClient
             Content = JsonContent.Create(request, options: SerializerOptions),
         };
 
-        // Phase 40.33. A learner is waiting on their grade, so this is interactive work and runs to
-        // the organization's full allowance rather than stopping at the batch reserve.
         AiCallHeaders.Apply(httpRequest, _tenantContext, AiCallHeaders.InteractiveWorkload);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);

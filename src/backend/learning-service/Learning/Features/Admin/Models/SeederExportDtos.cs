@@ -13,8 +13,11 @@ public sealed record ExerciseSeedDto(
     JsonNode? Content,
     string? CustomAiPrompt);
 
-// ── Flat exports (one per /admin/seeder/{skills,topics,lessons} import) ──────────
-
+/// <summary>
+/// One of the three flat export shapes, each re-importable through its own
+/// <c>POST /admin/seeder/{skills,topics,lessons}</c> route. Parents are referenced by iconic name
+/// rather than by id, because ids differ between environments and the file has to survive the trip.
+/// </summary>
 public sealed record SkillExportDto(
     string IconicName,
     string Title,
@@ -34,8 +37,10 @@ public sealed record LessonExportDto(
     int OrderInTopic,
     IReadOnlyList<ExerciseSeedDto> Exercises);
 
-// ── Nested bundle export (round-trips through /admin/seeder/bundle) ──────────────
-
+/// <summary>
+/// The nested export, which round-trips through <c>POST /admin/seeder/bundle</c>. Same content as the
+/// three flat shapes above, carried as one tree so a whole curriculum moves in a single file.
+/// </summary>
 public sealed record BundleExportDto(IReadOnlyList<BundleSkillDto> Skills);
 
 public sealed record BundleSkillDto(

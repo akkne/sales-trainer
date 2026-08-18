@@ -223,6 +223,13 @@ public static class ContentSnapshotSerializer
     /// a string. Postgres re-normalizes jsonb on write, so the text that comes back has whatever key
     /// order the server chose; hashing it verbatim would make the same document fingerprint
     /// differently on two servers and mark every override stale for no reason.
+    ///
+    /// <para>
+    /// Unparseable text is written as itself rather than allowed to throw. Through the database this
+    /// branch is unreachable — the column is <c>jsonb</c>, so Postgres has already rejected anything
+    /// that is not valid JSON — but the in-memory provider the unit tests use enforces no such thing,
+    /// and a fingerprint that throws is worse than one that treats the text as a value.
+    /// </para>
     /// </summary>
     private static void WriteJsonOrNull(Utf8JsonWriter writer, string propertyName, string? json)
     {
@@ -241,9 +248,6 @@ public static class ContentSnapshotSerializer
         }
         catch (JsonException)
         {
-            // The column is jsonb, so this is unreachable through the database — but the in-memory
-            // provider the unit tests use enforces no such thing, and a fingerprint that throws is
-            // worse than one that treats unparseable text as itself.
             writer.WriteStringValue(json);
         }
     }

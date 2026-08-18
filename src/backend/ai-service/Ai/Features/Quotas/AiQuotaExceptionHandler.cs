@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Sellevate.Ai.Features.Quotas.Constants;
 using Sellevate.Ai.Features.Quotas.Models;
 
 namespace Sellevate.Ai.Features.Quotas;
@@ -41,7 +42,7 @@ internal sealed class AiQuotaExceptionHandler(ILogger<AiQuotaExceptionHandler> l
                 await httpContext.Response.WriteAsJsonAsync(
                     new
                     {
-                        error = "Organization AI quota reached",
+                        error = AiQuotaFailureMessages.QuotaReached,
                         resource = quotaExceeded.Resource,
                         period = quotaExceeded.Period,
                         used = quotaExceeded.Used,
@@ -54,7 +55,7 @@ internal sealed class AiQuotaExceptionHandler(ILogger<AiQuotaExceptionHandler> l
                 logger.LogWarning(unattributed, "Rejected an unattributed metered call to {Path}", httpContext.Request.Path);
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await httpContext.Response.WriteAsJsonAsync(
-                    new { error = "An organization is required for metered AI calls." },
+                    new { error = AiQuotaFailureMessages.OrganizationRequired },
                     cancellationToken);
                 return true;
 

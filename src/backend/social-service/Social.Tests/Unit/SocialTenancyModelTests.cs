@@ -81,11 +81,20 @@ public class SocialTenancyModelTests
         filtersMissingThePlatformBranch.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Every row here is somebody saying something to their colleagues, so there is no global
+    /// friendship, thread, reply, vote or photo — each implements <see cref="ITenantScoped"/> and gets
+    /// the strict flavour of tenancy.
+    ///
+    /// <para>
+    /// A tag is the exception: it is a word, and <c>NULL</c> is meaningful there — the curated
+    /// vocabulary every organization shares — so it cannot implement an interface whose
+    /// <c>OrganizationId</c> is non-nullable.
+    /// </para>
+    /// </summary>
     [Test]
     public void Social_rows_are_tenant_data_and_tags_are_content()
     {
-        // Somebody saying something to their colleagues. There is no global friendship, thread,
-        // reply, vote or photo.
         typeof(Friendship).Should().BeAssignableTo<ITenantScoped>();
         typeof(DiscussThread).Should().BeAssignableTo<ITenantScoped>();
         typeof(DiscussReply).Should().BeAssignableTo<ITenantScoped>();
@@ -93,8 +102,6 @@ public class SocialTenancyModelTests
         typeof(DiscussThreadTag).Should().BeAssignableTo<ITenantScoped>();
         typeof(DiscussPhoto).Should().BeAssignableTo<ITenantScoped>();
 
-        // A tag is a word. NULL is meaningful — it is the curated vocabulary every organization
-        // shares — so it cannot implement an interface whose OrganizationId is non-nullable.
         typeof(DiscussTag).Should().NotBeAssignableTo<ITenantScoped>();
     }
 
@@ -103,6 +110,11 @@ public class SocialTenancyModelTests
     /// This is the half that lives in Postgres — one organization's friendship row is not visible to
     /// another, so it can never be accepted from the other side and never becomes a friendship at
     /// all.
+    ///
+    /// <para>
+    /// The second assertion, taken with the query filters ignored, is what distinguishes "the filter
+    /// works" from "the test seeded nothing": the row exists, it is simply not this organization's.
+    /// </para>
     /// </summary>
     [Test]
     public async Task A_friendship_created_in_one_organization_is_invisible_in_another()
@@ -132,8 +144,6 @@ public class SocialTenancyModelTests
 
         visibleToB.Should().BeEmpty();
 
-        // The row exists, it is simply not this organization's. Asserting the second half is what
-        // distinguishes "the filter works" from "the test seeded nothing".
         visibleToBIgnoringFilters.Should().ContainSingle()
             .Which.OrganizationId.Should().Be(OrganizationAId);
     }
@@ -338,8 +348,6 @@ public class SocialTenancyModelTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Organization context is not set.");
     }
-
-    // ── helpers ─────────────────────────────────────────────────────────
 
     private static DiscussTag NewTag(string slug, Guid? organizationId, bool isCurated) => new()
     {

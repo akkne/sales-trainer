@@ -3,6 +3,12 @@ using Sellevate.Identity.Features.Invites.Models;
 
 namespace Sellevate.Identity.Features.Invites.Services.Abstract;
 
+/// <summary>
+/// The invite lifecycle. Creating never fails wholesale on a bad address: each requested email is
+/// either accepted into <c>Created</c> or explained in <c>Rejected</c>, so one typo in a bulk invite
+/// does not discard the rest. Accepting throws <c>InviteNotAcceptableException</c> carrying the reason,
+/// which the endpoint maps onto a status code.
+/// </summary>
 public interface IInviteService
 {
     Task<CreateInvitesResponseDto> CreateAsync(

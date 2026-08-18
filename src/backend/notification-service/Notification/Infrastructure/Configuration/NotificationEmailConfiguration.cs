@@ -17,4 +17,10 @@ public sealed class NotificationEmailConfiguration
 
     /// <summary>Safety TTL on pending/read bookkeeping keys in Redis so they self-clean.</summary>
     public int BookkeepingRetentionHours { get; init; } = 24;
+
+    /// <summary>
+    /// How many due emails one dispatcher tick claims. The claim is destructive, so this is also the
+    /// most emails a single crashed tick can lose; raise it only together with the poll interval.
+    /// </summary>
+    public int MaximumFlushBatchSize { get; init; } = 100;
 }

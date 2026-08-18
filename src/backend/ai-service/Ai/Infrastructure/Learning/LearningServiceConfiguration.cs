@@ -1,5 +1,8 @@
 namespace Sellevate.Ai.Infrastructure.Learning;
 
+/// <summary>
+/// Where learning-service lives and how long ai-service is willing to wait for it.
+/// </summary>
 public sealed class LearningServiceConfiguration
 {
     public const string SectionName = "LearningService";

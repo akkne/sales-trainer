@@ -9,6 +9,7 @@ using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Eventing;
+using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Features.Companies.FollowUpReminders;
 using Sellevate.Company.Features.Companies.Services.Implementation;
 using Sellevate.Company.Infrastructure.Ai;
@@ -47,6 +48,19 @@ namespace Sellevate.Company.Tests.Integration;
 /// every test then skips in seconds via <c>Assert.Ignore</c>. See docs/TESTING/TENANCY.md for the
 /// one command that runs it and what to look for.
 /// </para>
+///
+/// <para>
+/// <b>NOBYPASSRLS on the login role is the whole point of the fixture.</b> <c>FORCE ROW LEVEL
+/// SECURITY</c> still lets a superuser — and, without <c>FORCE</c>, the table owner — read
+/// everything, so isolation tested through the admin role would pass no matter what the policies
+/// said. The schema itself is created by running company-service's real migrations as the owner,
+/// exactly how production gets its schema and its policies; nothing here writes DDL of its own.
+/// </para>
+///
+/// <para>
+/// <c>FirstUserId</c> and <c>ColleagueUserId</c> are two colleagues inside organization A — the pair
+/// the user half of the scope is about.
+/// </para>
 /// </summary>
 [TestFixture]
 [Category("Integration")]
@@ -57,7 +71,6 @@ public class CompanyTenantIsolationIntegrationTests
     private static readonly Guid OrganizationAId = new("a0000000-0000-4000-8000-000000000001");
     private static readonly Guid OrganizationBId = new("b0000000-0000-4000-8000-000000000002");
 
-    // Two colleagues inside organization A — the pair the second half of the scope is about.
     private static readonly Guid FirstUserId = new("a0000000-0000-4000-8000-0000000000f1");
     private static readonly Guid ColleagueUserId = new("a0000000-0000-4000-8000-0000000000f2");
     private static readonly Guid OtherOrganizationUserId = new("b0000000-0000-4000-8000-0000000000f3");
@@ -98,9 +111,6 @@ public class CompanyTenantIsolationIntegrationTests
             await ExecuteAsync(maintenanceConnection, $"DROP DATABASE IF EXISTS {LocalCompanyPostgresTestSettings.TestDatabaseName};");
             await ExecuteAsync(maintenanceConnection, $"DROP ROLE IF EXISTS {LocalCompanyPostgresTestSettings.ApplicationRoleName};");
             await ExecuteAsync(maintenanceConnection, $"CREATE DATABASE {LocalCompanyPostgresTestSettings.TestDatabaseName};");
-            // NOBYPASSRLS is the whole point: FORCE ROW LEVEL SECURITY still lets a superuser (and,
-            // without FORCE, the table owner) read everything, so isolation tested as the admin
-            // role would pass no matter what the policies said.
             await ExecuteAsync(maintenanceConnection, $"""
                 CREATE ROLE {LocalCompanyPostgresTestSettings.ApplicationRoleName}
                     WITH LOGIN PASSWORD '{LocalCompanyPostgresTestSettings.ApplicationRolePassword}'
@@ -112,8 +122,6 @@ public class CompanyTenantIsolationIntegrationTests
                 """);
         }
 
-        // The real migrations, run as the owner — exactly how production gets its schema and its
-        // RLS policies. Nothing in this fixture writes DDL of its own.
         await using (var migrationContext = CreateAdminContext())
         {
             await migrationContext.Database.MigrateAsync();
@@ -134,6 +142,10 @@ public class CompanyTenantIsolationIntegrationTests
         await SeedAsync(testDatabaseConnection);
     }
 
+    /// <summary>
+    /// Best-effort cleanup of a throwaway database and role: a teardown failure is swallowed rather
+    /// than failing a run whose tests already passed, and the next run recreates both anyway.
+    /// </summary>
     [OneTimeTearDown]
     public async Task OneTimeTearDownAsync()
     {
@@ -155,13 +167,8 @@ public class CompanyTenantIsolationIntegrationTests
         }
         catch
         {
-            // Best-effort cleanup of a throwaway fixture — never fail the run over teardown.
         }
     }
-
-    // ---------------------------------------------------------------------------------------
-    // Half one: the organization boundary.
-    // ---------------------------------------------------------------------------------------
 
     /// <summary>
     /// The trap docs/TENANCY/TENANCY.md §1.4 calls out by name: query filters are not inherited
@@ -186,7 +193,6 @@ public class CompanyTenantIsolationIntegrationTests
         companies.Select(company => company.Id)
             .Should().BeEquivalentTo(new[] { FirstUserCompanyId, ColleagueCompanyId });
 
-        // Every hop of the chain, not only the entity the query started from.
         companies.SelectMany(company => company.CallLogEntries).Select(entry => entry.Id)
             .Should().NotContain(OtherOrganizationCallLogId);
         companies.SelectMany(company => company.PracticeCalls).Select(practiceCall => practiceCall.Id)
@@ -260,8 +266,6 @@ public class CompanyTenantIsolationIntegrationTests
         {
             await using var transaction = await context.Database.BeginTransactionAsync();
 
-            // IgnoreQueryFilters strips the EF-level guard on purpose: what is under test is what
-            // survives when the convenience layer is gone.
             var updatedRowCount = await context.Companies
                 .IgnoreQueryFilters()
                 .Where(company => company.Id == OtherOrganizationCompanyId)
@@ -350,10 +354,6 @@ public class CompanyTenantIsolationIntegrationTests
             + "this is why every company-service read path opens a TenantTransactionScope");
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Half two: the user boundary, inside one organization.
-    // ---------------------------------------------------------------------------------------
-
     /// <summary>
     /// Both users are in organization A, so the RLS policy and the query filter admit both rows —
     /// deliberately. The only thing standing between a salesperson and a colleague's pipeline is
@@ -393,8 +393,6 @@ public class CompanyTenantIsolationIntegrationTests
         (await companyService.ListPersonasAsync(FirstUserId, ColleagueCompanyId)).Should().BeNull();
         (await companyService.ListPracticeCallsAsync(FirstUserId, ColleagueCompanyId)).Should().BeNull();
 
-        // ...and the colleague still sees their own, so the assertions above are not just "empty
-        // database" in disguise.
         (await companyService.GetCompanyAsync(ColleagueUserId, ColleagueCompanyId)).Should().NotBeNull();
         (await companyService.ListCallLogEntriesAsync(ColleagueUserId, ColleagueCompanyId)).Should().HaveCount(1);
     }
@@ -414,10 +412,6 @@ public class CompanyTenantIsolationIntegrationTests
         (await companyService.GetCompanyAsync(FirstUserId, OtherOrganizationCompanyId)).Should().BeNull();
         (await companyService.GetCompanyAsync(FirstUserId, Guid.NewGuid())).Should().BeNull();
     }
-
-    // ---------------------------------------------------------------------------------------
-    // The background job.
-    // ---------------------------------------------------------------------------------------
 
     /// <summary>
     /// Both organizations have a follow-up due at the same moment. A tick scoped to organization A
@@ -453,7 +447,6 @@ public class CompanyTenantIsolationIntegrationTests
             OrganizationAId,
             Arg.Any<CancellationToken>());
 
-        // Organization B's row is untouched — still unnotified, still waiting for its own tick.
         var otherOrganizationNotifiedAt = await ReadScalarAsAdminAsync<object>(
             """SELECT COALESCE("FollowUpNotifiedAt"::text, 'null') FROM "Companies" WHERE "Id" = @id;""",
             OtherOrganizationCompanyId);
@@ -493,8 +486,6 @@ public class CompanyTenantIsolationIntegrationTests
             .WithMessage("*requires an organization*");
     }
 
-    // ---------------------------------------------------------------------------------------
-
     private void SkipIfPostgresIsNotReachable()
     {
         if (!_isPostgresReachable)
@@ -510,7 +501,8 @@ public class CompanyTenantIsolationIntegrationTests
             Substitute.For<IBriefingAiClient>(),
             Substitute.For<IParseLogAiClient>(),
             Substitute.For<IPersonaAiClient>(),
-            Substitute.For<IReadinessAiClient>());
+            Substitute.For<IReadinessAiClient>(),
+            Options.Create(new CompanyServiceOptions()));
 
     private static CompanyDbContext CreateAdminContext()
     {
@@ -572,13 +564,15 @@ public class CompanyTenantIsolationIntegrationTests
         return (TValue)(await command.ExecuteScalarAsync())!;
     }
 
+    /// <summary>
+    /// Restates the statement <c>TenantConnectionInterceptor</c> issues on <c>TransactionStarted</c>,
+    /// because its builder is internal to BuildingBlocks. The GUC name is not restated: it comes from
+    /// the interceptor's public constant, so a rename there cannot silently desynchronise the two.
+    /// </summary>
     private static async Task SetOrganizationAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, Guid organizationId)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        // Same statement TenantConnectionInterceptor issues on TransactionStarted. Its own builder
-        // is internal to BuildingBlocks, so it is restated here; the GUC name is not, and comes from
-        // the interceptor's public constant so a rename cannot silently desynchronise the two.
         command.CommandText =
             $"SET LOCAL {TenantConnectionInterceptor.OrganizationIdSettingName} = '{organizationId:D}'";
         await command.ExecuteNonQueryAsync();

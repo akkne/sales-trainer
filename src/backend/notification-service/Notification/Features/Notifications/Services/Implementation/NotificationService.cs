@@ -48,23 +48,30 @@ internal sealed class NotificationService : INotificationService
     /// catch, so this service has no system-mode path at all.
     /// </summary>
     private Guid CurrentOrganizationId =>
-        _tenantContext.OrganizationId ?? throw new InvalidOperationException("Organization context is not set.");
+        _tenantContext.OrganizationId ?? throw new InvalidOperationException(ErrorMessages.OrganizationContextNotSet);
 
+    /// <summary>
+    /// Stores the notification and, when the request opts in, mails it.
+    ///
+    /// <para>
+    /// <b>Domain-level idempotency.</b> A notification whose (recipient, type, relatedEntityId)
+    /// is already in the inbox is skipped, which is what makes a Kafka redelivery harmless. It
+    /// applies only where <c>relatedEntityId</c> uniquely identifies the originating domain fact —
+    /// see <see cref="IsDeduplicatable"/> — and a skipped notification is also never emailed.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Untrusted input.</b> Title and body arrive from other services' events and are stripped of
+    /// control characters before storage; the action url is narrowed to a relative app path. Stored
+    /// values are plain text and the frontend MUST render them as text, never as inner HTML.
+    /// </para>
+    /// </summary>
     public async Task CreateAsync(CreateNotificationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Body);
 
-        // NO3: Domain-level idempotency — skip if a notification for the same
-        // recipient + type + relatedEntityId already exists. This prevents duplicate
-        // notifications when a domain event is replayed (e.g. Kafka redelivery).
-        //
-        // Only applied to single-occurrence-per-entity types: the relatedEntityId must
-        // uniquely identify the originating domain fact (friendshipId, achievement,
-        // streak day). Chat messages are deliberately excluded — they share the
-        // conversationId as relatedEntityId, so every message is a distinct notification
-        // and must never be deduped. Requests without a relatedEntityId are not deduped.
         var organizationId = CurrentOrganizationId;
 
         if (IsDeduplicatable(request) && await _notificationStore.ExistsAsync(
@@ -80,11 +87,8 @@ internal sealed class NotificationService : INotificationService
             return;
         }
 
-        // NO2: Strip control characters from untrusted event fields before persisting.
-        // The frontend MUST render Title and Body as plain text (not innerHTML).
         var sanitizedTitle = InputSanitizer.StripControlCharacters(request.Title);
-        var sanitizedBody  = InputSanitizer.StripControlCharacters(request.Body);
-        // ActionUrl is validated to relative app paths only; external URLs are rejected.
+        var sanitizedBody = InputSanitizer.StripControlCharacters(request.Body);
         var sanitizedActionUrl = InputSanitizer.SanitizeActionUrl(request.ActionUrl);
 
         var notification = new NotificationRecord
@@ -113,8 +117,6 @@ internal sealed class NotificationService : INotificationService
             "Stored {NotificationType} notification for recipient {RecipientUserId}",
             request.NotificationType, request.RecipientUserId);
 
-        // Email is an opt-in side channel: only types flagged SendEmail are delivered by email at
-        // creation time (chat keeps this false — its email is handled on the delayed unread path).
         if (request.SendEmail)
         {
             await _emailDispatcher.DispatchAsync(
@@ -127,9 +129,13 @@ internal sealed class NotificationService : INotificationService
         }
     }
 
-    // A notification is deduplicatable only when its relatedEntityId uniquely identifies the
-    // originating domain fact. Chat messages reuse the conversationId across every message, so
-    // they are inherently repeatable and must not be collapsed.
+    /// <summary>
+    /// True only when <c>relatedEntityId</c> uniquely identifies the originating domain fact — a
+    /// friendship, an achievement key, a streak day, a note. Chat messages are excluded on purpose:
+    /// they all carry the conversation id, so every message is genuinely a new notification and
+    /// deduplicating them would silence a whole conversation after its first message. A request with
+    /// no <c>relatedEntityId</c> is likewise never deduplicated, because there is nothing to compare.
+    /// </summary>
     private static bool IsDeduplicatable(CreateNotificationRequest request) =>
         !string.IsNullOrWhiteSpace(request.RelatedEntityId)
         && request.NotificationType != NotificationType.ChatMessageReceived;

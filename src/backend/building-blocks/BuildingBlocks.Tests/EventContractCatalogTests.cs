@@ -139,6 +139,10 @@ public sealed class EventContractCatalogTests
     }
 
     [Test]
+    /// <summary>
+    /// <c>modeKey</c> and <c>qualityScore</c> are the two fields learning-service reads to judge an
+    /// assignment's threshold (Phase 40.22), so they are part of the contract, not incidental payload.
+    /// </summary>
     public void DialogEvaluated_AiProducer_MatchesGamificationConsumer()
     {
         Topics.DialogEvaluated.Should().Be("dialog.evaluated");
@@ -163,7 +167,6 @@ public sealed class EventContractCatalogTests
         root.GetProperty("modeId").GetGuid().Should().Be(modeId);
         root.GetProperty("rawScore").GetInt32().Should().Be(70);
         root.GetProperty("xpEarned").GetInt32().Should().Be(70);
-        // Phase 40.22. The two fields learning-service reads to judge an assignment's threshold.
         root.GetProperty("modeKey").GetString().Should().Be("discovery-call");
         root.GetProperty("qualityScore").GetInt32().Should().Be(80);
     }

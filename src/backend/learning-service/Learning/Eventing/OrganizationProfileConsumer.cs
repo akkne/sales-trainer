@@ -20,9 +20,21 @@ namespace Sellevate.Learning.Eventing;
 /// widening anywhere. A message that somehow arrives without a tenant is dead-lettered rather than
 /// guessed at.
 /// </para>
+///
+/// <para>
+/// <b>The read and the write share one tenant transaction.</b> <c>SET LOCAL app.organization_id</c> is
+/// issued by <c>TenantConnectionInterceptor</c> on <c>TransactionStarted</c>, so a bare
+/// <c>FindAsync</c> outside a transaction runs with no tenant set: once RLS is actually enforced it
+/// would return nothing, the handler would add a row that already exists, and <c>SaveChanges</c> would
+/// fail the primary key — three retries, then the dead-letter queue. Every profile update after the
+/// first would be lost while the neutral fallback wording made it look normal. Review, 40.34.
+/// </para>
 /// </summary>
 internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundService
 {
+    private const string EmptyJsonArray = "[]";
+    private const string EmptyJsonObject = "{}";
+
     public OrganizationProfileConsumer(
         IOptions<KafkaSettings> settings,
         IServiceScopeFactory scopeFactory,
@@ -50,12 +62,6 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
 
         var databaseContext = scopedServices.GetRequiredService<LearningDbContext>();
 
-        // The read and the write share one tenant transaction. `SET LOCAL app.organization_id` is
-        // issued by TenantConnectionInterceptor on TransactionStarted, so a bare FindAsync outside a
-        // transaction runs with no tenant set: once RLS is actually enforced it would return nothing,
-        // the handler would Add a row that already exists, and SaveChanges would fail the primary key
-        // — three retries, then the dead-letter queue. Every profile update after the first would be
-        // lost while the neutral fallback wording made it look normal. Review, 40.34.
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         var existing = await databaseContext.OrganizationProfileReplicas
@@ -70,19 +76,22 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
         existing.Product = payload.Product;
         existing.Icp = payload.Icp;
         existing.Tone = payload.Tone;
-        // The jsonb columns are NOT NULL here as they are at the source, and System.Text.Json will
-        // happily leave a non-nullable record property null when a field is absent from the message.
-        // Coalescing keeps a truncated or older-shaped event from failing the whole projection.
-        existing.ObjectionsJson = Coalesce(payload.ObjectionsJson, "[]");
-        existing.ScriptJson = Coalesce(payload.ScriptJson, "[]");
-        existing.GlossaryJson = Coalesce(payload.GlossaryJson, "{}");
-        existing.BannedClaimsJson = Coalesce(payload.BannedClaimsJson, "[]");
+        existing.ObjectionsJson = CoalesceToDocumentDefault(payload.ObjectionsJson, EmptyJsonArray);
+        existing.ScriptJson = CoalesceToDocumentDefault(payload.ScriptJson, EmptyJsonArray);
+        existing.GlossaryJson = CoalesceToDocumentDefault(payload.GlossaryJson, EmptyJsonObject);
+        existing.BannedClaimsJson = CoalesceToDocumentDefault(payload.BannedClaimsJson, EmptyJsonArray);
         existing.UpdatedAt = payload.UpdatedAt;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
         await tenantScope.CommitAsync(cancellationToken);
     }
 
-    private static string Coalesce(string? value, string fallback)
+    /// <summary>
+    /// The jsonb columns are <c>NOT NULL</c> here as they are at the source, and
+    /// <c>System.Text.Json</c> will happily leave a non-nullable record property null when the field
+    /// is absent from the message. Coalescing to an empty document keeps a truncated or
+    /// older-shaped event from failing the whole projection.
+    /// </summary>
+    private static string CoalesceToDocumentDefault(string? value, string fallback)
         => string.IsNullOrWhiteSpace(value) ? fallback : value;
 }

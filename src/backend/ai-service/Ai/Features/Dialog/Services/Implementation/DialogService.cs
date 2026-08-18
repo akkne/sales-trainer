@@ -13,6 +13,38 @@ using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
+/// <summary>
+/// The dialog roleplay lifecycle: choose a mode, start a session, exchange turns, grade the result.
+///
+/// <para>
+/// <b>Prompt assembly has a fixed order and the order is the contract</b> (Phase 40.19). The mode's own
+/// <c>{{organization.*}}</c> placeholders are resolved first, so a base persona written once serves
+/// every customer instead of being forked per customer. Then the human-authored data blocks — company,
+/// scenario, assignment — are appended, each fenced as data rather than instructions. The banned-claims
+/// compliance rule goes last, after every block that carries text a human wrote, because a rule that
+/// something later can qualify is not a rule. The grader is given the same blocks as the character: a
+/// persona that stays silent while the grader keeps rewarding the forbidden claim teaches it anyway.
+/// </para>
+///
+/// <para>
+/// <b>Context is resolved once and frozen on the session.</b> The assignment persona is asked of
+/// learning-service and never accepted from the request — the learner is the person being graded
+/// against that persona — and it is resolved at start so editing or closing the assignment mid-call
+/// cannot change the character they are already talking to (Phase 40.23).
+/// </para>
+///
+/// <para>
+/// <b>A custom scenario is re-validated here even though the client already validated it.</b> That
+/// earlier call exists to give fast feedback in the compose dialog and proves nothing about what
+/// arrives; re-checking is what enforces the rule, and it is near-free because the text hashes to the
+/// cache key the client's call just populated.
+/// </para>
+///
+/// <para>
+/// <b>A conversation with no learner turn is abandoned, not graded.</b> It yields no feedback and no
+/// award, so an accidental open-and-close cannot enter the record as a failed call.
+/// </para>
+/// </summary>
 internal sealed class DialogService : IDialogService
 {
     private readonly AiDbContext _databaseContext;
@@ -65,14 +97,16 @@ internal sealed class DialogService : IDialogService
             .FirstOrDefaultAsync(bundle => bundle.Id == bundleId, cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.18. Resolved and inside a transaction, both for the same reason: this is the only
+    /// learner-facing list of prompts. Without resolution an organization that overrode one mode would
+    /// see it twice in the same bundle; without the transaction <c>SET LOCAL</c> never runs and its own
+    /// override would not be visible at all.
+    /// </summary>
     public async Task<List<DialogMode>> GetActiveModesForBundleAsync(
         Guid bundleId,
         CancellationToken cancellationToken = default)
     {
-        // Phase 40.18. Resolved and inside a transaction, both for the same reason: this is the
-        // only learner-facing list of prompts. Without resolution an organization that overrode one
-        // mode would see it twice in the same bundle; without the transaction SET LOCAL never runs
-        // and its own override would not be visible at all.
         await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
 
         return await _databaseContext.DialogModes
@@ -141,34 +175,23 @@ internal sealed class DialogService : IDialogService
 
         if (mode.Key == DialogModeKeys.CustomScenario && customScenarioContext == null)
         {
-            // Reachable by hand-editing the URL of a custom-scenario conversation, so the
-            // message is user-facing Russian rather than an API-contract note.
-            throw new InvalidOperationException("Нужно описать сценарий, чтобы начать разговор.");
+            throw new InvalidOperationException(DialogMessages.ScenarioDescriptionRequired);
         }
 
         if (customScenarioContext != null)
         {
-            // The client already validated through POST /dialog/scenario/validate, but that call is
-            // only there to give fast feedback in the dialog — it proves nothing about what arrives
-            // here. Re-checking is what actually enforces the rule, and it is near-free: the text
-            // hashes to the same cache key the client's call just populated.
             var verdict = await _scenarioValidationService.ValidateAsync(
                 customScenarioContext.Scenario, cancellationToken);
 
             if (!verdict.IsValid)
             {
                 throw new ScenarioRejectedException(
-                    verdict.RejectionReason ?? "Недопустимый сценарий: он не связан с продажами.");
+                    verdict.RejectionReason ?? DialogMessages.ScenarioNotAboutSales);
             }
 
             customScenarioContext.Scenario = customScenarioContext.Scenario.Trim();
         }
 
-        // Phase 40.23. Asked for, never accepted from the request. If this conversation is a piece
-        // of work somebody was assigned, learning-service says so and supplies the persona; the
-        // learner's client is not consulted, because the learner is the person being graded against
-        // that persona. Resolved once here and frozen on the session, so editing or closing the
-        // assignment mid-conversation cannot change the character they are already talking to.
         var assignmentPracticeContext =
             await _assignmentPracticeContextClient.GetPracticeContextAsync(userId, mode.Key, cancellationToken);
 
@@ -226,7 +249,7 @@ internal sealed class DialogService : IDialogService
 
         var userMessage = new DialogMessage
         {
-            Role = "user",
+            Role = DialogMessageRoles.User,
             Content = userMessageContent,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = false
@@ -234,21 +257,11 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(userMessage);
 
-        // Phase 40.19. Three steps, and the order is the point.
-        //   1. {{organization.*}} in the mode's own prompt is resolved, so a base persona written
-        //      once («ты закупщик, которому продают {{organization.product}}») serves every customer
-        //      instead of being forked per customer.
-        //   2. The company/scenario blocks are appended as before.
-        //   3. The banned-claims rule goes LAST, after every block that carries text a human wrote,
-        //      because a compliance rule that something later can qualify is not a rule.
         var organizationProfile = await _organizationProfileProvider.GetCurrentAsync(cancellationToken);
         var modeChatPrompt = RenderModePrompt(mode.ChatSystemPrompt, organizationProfile);
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(modeChatPrompt, session.CompanyCallContext);
         chatSystemPrompt = CustomScenarioPromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.CustomScenarioContext);
-        // Phase 40.23. Third in the chain and before the organization blocks, for the reason the
-        // ordering comment above gives: human-authored data blocks come after template substitution
-        // and before the compliance rule, which stays last so nothing can qualify it.
         chatSystemPrompt = AssignmentPracticePromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.AssignmentPracticeContext);
         chatSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
         chatSystemPrompt += OrganizationProfilePromptBuilder.BuildPersonaBannedClaimsBlock(organizationProfile);
@@ -256,7 +269,7 @@ internal sealed class DialogService : IDialogService
 
         var aiMessage = new DialogMessage
         {
-            Role = "assistant",
+            Role = DialogMessageRoles.Assistant,
             Content = chatResult.Content,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = chatResult.IsStopSignal
@@ -288,7 +301,7 @@ internal sealed class DialogService : IDialogService
             throw new InvalidOperationException($"Session {sessionId} is not active");
         }
 
-        if (!session.Messages.Any(message => message.Role == "user" && !string.IsNullOrWhiteSpace(message.Content)))
+        if (!session.Messages.Any(message => message.Role == DialogMessageRoles.User && !string.IsNullOrWhiteSpace(message.Content)))
         {
             await _sessionRepository.AbandonAsync(sessionId, userId, cancellationToken);
 
@@ -309,17 +322,11 @@ internal sealed class DialogService : IDialogService
             scoringWeights.Objection,
             scoringWeights.Goal);
 
-        // Phase 40.19. Same three steps as the chat prompt, with the evaluation wording of the
-        // banned-claims rule: a persona that stays silent while the grader keeps rewarding the rep
-        // for saying the forbidden thing teaches it anyway.
         var organizationProfile = await _organizationProfileProvider.GetCurrentAsync(cancellationToken);
         var modeFeedbackPrompt = RenderModePrompt(mode.FeedbackSystemPrompt, organizationProfile);
 
         var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(modeFeedbackPrompt, session.CompanyCallContext);
         feedbackSystemPrompt = CustomScenarioPromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.CustomScenarioContext);
-        // Phase 40.23. The grader is told the same thing the character was, so a conversation held
-        // against an assignment's persona is judged as that conversation rather than as a generic
-        // one — which is what makes the score the threshold reads a score of the assigned work.
         feedbackSystemPrompt = AssignmentPracticePromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.AssignmentPracticeContext);
         feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
         feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildEvaluationBannedClaimsBlock(organizationProfile);
@@ -346,10 +353,7 @@ internal sealed class DialogService : IDialogService
                 feedbackResult.XpReward,
                 earnedXp,
                 mode.Key,
-                // Phase 40.22. The 0-10 grade the learner sees, normalized to the 0-100 scale every
-                // score in learning-service is already on, so an assignment's threshold ("оценка
-                // >= 70") is comparable without a consumer knowing this service's internal scale.
-                Math.Clamp(feedbackResult.Score, 0, 10) * 10),
+                NormalizeScoreForLearningService(feedbackResult.Score)),
             cancellationToken);
 
         _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {ExperiencePoints}", sessionId, userId, earnedXp);
@@ -374,6 +378,16 @@ internal sealed class DialogService : IDialogService
 
         return deleted;
     }
+
+    /// <summary>
+    /// Phase 40.22. Converts the 0–10 grade the learner sees onto the 0–100 scale every score in
+    /// learning-service is already on, so an assignment's threshold («оценка >= 70») is comparable
+    /// without the consumer knowing this service's internal scale. Clamped first: the grade travels in
+    /// an event, and a model that ignored the stated range must not move a threshold.
+    /// </summary>
+    private static int NormalizeScoreForLearningService(int score)
+        => Math.Clamp(score, DialogScoreScale.Minimum, DialogScoreScale.Maximum)
+           * DialogScoreScale.LearningServiceScaleFactor;
 
     /// <summary>
     /// Phase 40.19. Resolves <c>{{organization.*}}</c> in a stored mode prompt.

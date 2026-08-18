@@ -63,11 +63,13 @@ public sealed class ExerciseServiceEventEmissionTests
         return (skillId, lessonId, exerciseId);
     }
 
+    /// <summary>
+    /// Regression: finishing a topic's last lesson must roll over and unlock the first lesson of the next
+    /// topic, not leave it locked.
+    /// </summary>
     [Test]
     public async Task CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic()
     {
-        // Regression: finishing a topic's last lesson must roll over and unlock the
-        // first lesson of the next topic, not leave it Locked.
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
 
         var skillId = Guid.NewGuid();
@@ -154,11 +156,13 @@ public sealed class ExerciseServiceEventEmissionTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// Lesson completion is <b>attempt-based</b>: attempting the only exercise, even wrongly, means every
+    /// exercise has been attempted, so the lesson can still be passed.
+    /// </summary>
     [Test]
     public async Task SubmitWrongAnswer_SingleExerciseLesson_StillCompletesLesson()
     {
-        // Lesson completion is attempt-based: attempting the only exercise (even wrongly)
-        // means every exercise has been attempted, so the lesson can still be passed.
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
         var (skillId, lessonId, exerciseId) = await SeedSingleLessonSkillAsync(databaseContext);
 

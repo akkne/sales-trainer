@@ -85,10 +85,13 @@ public class OpenAiProviderErrorTests
         (await act.Should().ThrowAsync<Exception>()).Which.Should().BeOfType(expectedException);
     }
 
+    /// <summary>
+    /// A proxy that answers 200 with an HTML error page must not crash the request. This is the shape a
+    /// misconfigured gateway in front of the provider produces, and it arrives as a success status.
+    /// </summary>
     [Test]
     public async Task NonJsonBodyOnSuccess_ThrowsTypedRequestException()
     {
-        // A proxy that answers 200 with an HTML error page must not crash the request.
         var service = CreateService(HttpStatusCode.OK, "<html><body>502 Bad Gateway</body></html>");
 
         var act = async () => await CallAsync(service);
@@ -107,10 +110,14 @@ public class OpenAiProviderErrorTests
         exception.Message.Should().NotContain("surprising_field").And.NotContain("sk-secret");
     }
 
+    /// <summary>
+    /// The controllers catch <c>OpenAiException</c>, so every provider failure must stay reachable
+    /// through that one base type. A new failure mode that does not derive from it bypasses every
+    /// controller's handling and surfaces as an unhandled 500.
+    /// </summary>
     [Test]
     public async Task EveryProviderFailure_IsCatchableAsTheSharedBaseType()
     {
-        // Controllers catch OpenAiException; a new failure mode must never bypass them.
         var service = CreateService(HttpStatusCode.BadGateway, """{"error":"upstream"}""");
 
         var act = async () => await CallAsync(service);

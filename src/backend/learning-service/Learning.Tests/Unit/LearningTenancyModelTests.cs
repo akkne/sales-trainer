@@ -30,6 +30,12 @@ public class LearningTenancyModelTests
     /// though every read path composes Skill -> Topic -> Lesson -> Exercise. Rather than listing
     /// the entities again here (which would just be the same omission twice), this walks the model
     /// and demands a filter from anything that carries an OrganizationId.
+    ///
+    /// <para>
+    /// <c>OutboxMessage</c> is the one deliberate exception: it carries the organization as payload for
+    /// the relay to republish, is read only by the platform-global outbox relay, and has no RLS policy
+    /// (docs/TENANCY/TENANCY.md §1.7).
+    /// </para>
     /// </summary>
     [Test]
     public void Every_entity_with_an_organization_id_has_its_own_query_filter()
@@ -43,9 +49,6 @@ public class LearningTenancyModelTests
             .OrderBy(name => name)
             .ToList();
 
-        // OutboxMessage is the one deliberate exception: it carries the organization as payload for
-        // the relay to republish, is read only by the platform-global outbox relay, and has no RLS
-        // policy (docs/TENANCY/TENANCY.md §1.7).
         entitiesMissingAFilter.Should().BeEquivalentTo(["OutboxMessage"]);
     }
 
@@ -71,6 +74,11 @@ public class LearningTenancyModelTests
         filtersMissingThePlatformBranch.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Content is <b>nullable-owner by design</b> — null is the global library — so a content entity cannot
+    /// implement an interface whose organization id is a non-nullable <see cref="Guid"/>. That asymmetry is
+    /// the invariant this pins: progress implements <c>ITenantScoped</c>, content must not.
+    /// </summary>
     [Test]
     public void Progress_tables_are_tenant_scoped_and_content_tables_are_not()
     {
@@ -79,8 +87,6 @@ public class LearningTenancyModelTests
         typeof(UserExerciseAttempt).Should().BeAssignableTo<ITenantScoped>();
         typeof(UserTechniqueProgress).Should().BeAssignableTo<ITenantScoped>();
 
-        // Content is nullable-owner by design — NULL is the global library, so it cannot implement
-        // an interface whose OrganizationId is a non-nullable Guid.
         typeof(Skill).Should().NotBeAssignableTo<ITenantScoped>();
         typeof(Topic).Should().NotBeAssignableTo<ITenantScoped>();
         typeof(Lesson).Should().NotBeAssignableTo<ITenantScoped>();

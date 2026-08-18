@@ -1,5 +1,10 @@
 namespace Sellevate.Identity.Features.Invites.Constants;
 
+/// <summary>
+/// Wire values of the invite feature. The <c>*Reason</c> constants are machine-readable codes returned
+/// per rejected address in <c>CreateInvitesResponseDto</c> and are read by the frontend, so they are a
+/// contract rather than prose — the <c>*Message</c> constants are the human half.
+/// </summary>
 public static class InviteConstants
 {
     public const string EmailSubject = "Приглашение в Sellevate";

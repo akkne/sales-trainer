@@ -81,13 +81,15 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
         return Ok(materials.Select(material => MapToDto(material, skill.Title)).ToList());
     }
 
+    /// <summary>
+    /// Platform staff only: creating brand-new material is authoring the shared library, not customizing
+    /// it. An organization gets its own copy through the override route; originating content from nothing
+    /// is a different product question (40.19/40.20).
+    /// </summary>
     [HttpPost("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<AdminReferenceMaterialDto>> Create(
         Guid skillId, [FromBody] CreateReferenceMaterialRequestDto requestDto, CancellationToken cancellationToken = default)
     {
-        // Creating brand-new material is authoring the library, not customizing it. An
-        // organization gets its own copy through the override route; originating content from
-        // nothing is a different product question (40.19/40.20).
         if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
 
         var skill = await database.Skills.FindAsync([skillId], cancellationToken);

@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Evaluation;
@@ -90,6 +92,11 @@ public sealed class InternalChatController(
     /// cleanly and the caller gets a short reply — the same rule both voice controllers already
     /// follow.
     /// </para>
+    ///
+    /// <para>
+    /// A cancelled enumeration is swallowed on purpose: the caller went away, which is not a failure, and
+    /// the stream is never closed with a fabricated reply to make it look complete.
+    /// </para>
     /// </summary>
     [HttpPost("stream")]
     public async Task StreamComplete(
@@ -101,9 +108,9 @@ public sealed class InternalChatController(
         var history = ToDialogHistory(request.Messages);
         var systemPrompt = request.SystemPrompt ?? string.Empty;
 
-        Response.ContentType = "application/x-ndjson";
-        Response.Headers["Cache-Control"] = "no-cache";
-        Response.Headers["X-Accel-Buffering"] = "no";
+        Response.ContentType = AiMediaTypes.NewlineDelimitedJson;
+        Response.Headers[HeaderNames.CacheControl] = AiProviderHttpConstants.NoCacheDirective;
+        Response.Headers[AiProviderHttpConstants.AccelBufferingHeaderName] = AiProviderHttpConstants.AccelBufferingDisabled;
 
         try
         {
@@ -116,7 +123,6 @@ public sealed class InternalChatController(
         }
         catch (OperationCanceledException)
         {
-            // The caller went away. Not a failure and never answered with a fabricated reply.
         }
         catch (Exception exception) when (exception is OpenAiException or HttpRequestException)
         {
@@ -158,7 +164,7 @@ public sealed class InternalChatController(
         using var buffer = new MemoryStream();
         await audio.CopyToAsync(buffer, cancellationToken);
 
-        return File(buffer.ToArray(), "audio/wav");
+        return File(buffer.ToArray(), AiMediaTypes.WavAudio);
     }
 
     private static List<DialogMessage> ToDialogHistory(IEnumerable<InternalChatMessage>? messages) =>

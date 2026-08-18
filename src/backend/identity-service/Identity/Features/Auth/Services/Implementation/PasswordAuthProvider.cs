@@ -10,6 +10,12 @@ namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 /// The only <see cref="IAuthProvider"/> that exists. It holds the bcrypt check that used to sit
 /// inline in <c>AuthenticationService.LoginWithEmailAsync</c>; moving it behind the interface is
 /// the entire behavioural change of Phase 40.8's seam.
+///
+/// <para>
+/// A user created through Google sign-in has no <c>PasswordHash</c>, so the null hash and the empty
+/// password are rejected before bcrypt is reached: <c>BCrypt.Verify</c> must never be handed a null
+/// hash.
+/// </para>
 /// </summary>
 internal sealed class PasswordAuthProvider(
     IdentityDbContext databaseContext,
@@ -24,8 +30,6 @@ internal sealed class PasswordAuthProvider(
         var user = await databaseContext.Users
             .FirstOrDefaultAsync(candidate => candidate.Email == request.Email, cancellationToken);
 
-        // A user created through Google sign-in has no PasswordHash; an empty password must never
-        // be handed to BCrypt.Verify against a null hash.
         if (user is null
             || user.PasswordHash is null
             || string.IsNullOrEmpty(request.Password)

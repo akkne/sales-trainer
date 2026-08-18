@@ -10,10 +10,20 @@ namespace Sellevate.Learning.Features.Lessons.Services.Abstract;
 /// </summary>
 public interface ILessonVersionService
 {
+    /// <summary>
+    /// Every version of the lesson, newest number first, without their content bodies. At most one of
+    /// them is a draft. An empty list means the lesson exists and has never been versioned, which is
+    /// a different answer from <see langword="null"/>.
+    /// </summary>
     Task<IReadOnlyList<LessonVersionSummaryDto>?> GetVersionsAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// One version with its frozen snapshot body. The lesson id is part of the lookup, so a version id
+    /// belonging to a different lesson yields <see langword="null"/> rather than that other lesson's
+    /// content.
+    /// </summary>
     Task<LessonVersionDto?> GetVersionAsync(
         Guid lessonId,
         Guid versionId,

@@ -7,12 +7,24 @@ using Sellevate.Identity.Infrastructure.Storage.Abstract;
 
 namespace Sellevate.Identity.Features.Avatars.Services.Implementation;
 
-public sealed class AvatarService(
+/// <summary>
+/// Serves and stores avatar images, keeping the user row and the object store in step and telling the
+/// replica-holding services about every change.
+///
+/// <para>
+/// Content type is resolved from the object key's extension, never from what a client claimed — the
+/// upload endpoint has already checked the file's magic bytes, and an unrecognised extension falls back
+/// to <c>application/octet-stream</c> so nothing is ever served as a type it might not be.
+/// </para>
+/// </summary>
+internal sealed class AvatarService(
     IdentityDbContext database,
     IObjectStorage objectStorage,
     IUserEventPublisher userEventPublisher,
     ILogger<AvatarService> logger) : IAvatarService
 {
+    private const string FallbackContentType = "application/octet-stream";
+
     private static readonly Dictionary<string, string> ContentTypeByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
         [".png"] = "image/png",
@@ -27,7 +39,7 @@ public sealed class AvatarService(
         CancellationToken cancellationToken = default)
     {
         var user = await database.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
 
         if (user is null)
         {
@@ -43,7 +55,7 @@ public sealed class AvatarService(
         else
         {
             var defaultAvatar = await database.DefaultAvatars.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Index == user.DefaultAvatarIndex, cancellationToken);
+                .FirstOrDefaultAsync(candidate => candidate.Index == user.DefaultAvatarIndex, cancellationToken);
 
             if (defaultAvatar is null)
             {
@@ -53,8 +65,7 @@ public sealed class AvatarService(
             objectKey = defaultAvatar.ObjectKey;
         }
 
-        var fileExtension = Path.GetExtension(objectKey).ToLowerInvariant();
-        var contentType = ContentTypeByExtension.GetValueOrDefault(fileExtension, "application/octet-stream");
+        var contentType = ResolveContentType(objectKey);
 
         var etag = await objectStorage.TryGetETagAsync(objectKey, cancellationToken);
 
@@ -79,12 +90,12 @@ public sealed class AvatarService(
         CancellationToken cancellationToken = default)
     {
         var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
-        var contentType = ContentTypeByExtension.GetValueOrDefault(fileExtension, "application/octet-stream");
-        var objectKey = $"users/{userId}/avatar{fileExtension}";
+        var contentType = ResolveContentType(fileName);
+        var objectKey = AvatarObjectKeys.ForUploadedAvatar(userId, fileExtension);
 
         await objectStorage.PutAsync(objectKey, content, contentType, cancellationToken);
 
-        var user = await database.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
+        var user = await database.Users.FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
         user.AvatarType = AvatarKind.Uploaded;
@@ -100,7 +111,7 @@ public sealed class AvatarService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await database.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
+        var user = await database.Users.FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
         if (user.AvatarType == AvatarKind.Default && user.AvatarKey is null)
@@ -126,4 +137,13 @@ public sealed class AvatarService(
             new UserAvatarChangedEvent(userId, null), cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Maps a stored object key or an uploaded file name onto the content type it will be served with.
+    /// An unrecognised extension yields <c>application/octet-stream</c> so nothing is ever labelled as a
+    /// type it might not be.
+    /// </summary>
+    private static string ResolveContentType(string objectKeyOrFileName)
+        => ContentTypeByExtension.GetValueOrDefault(
+            Path.GetExtension(objectKeyOrFileName).ToLowerInvariant(), FallbackContentType);
 }

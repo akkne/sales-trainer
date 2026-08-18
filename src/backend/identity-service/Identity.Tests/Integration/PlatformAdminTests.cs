@@ -22,6 +22,13 @@ namespace Sellevate.Identity.Tests.Integration;
 [Category("Integration")]
 public class PlatformAdminTests
 {
+    /// <summary>
+    /// <c>JwtSecurityTokenHandler</c> writes the short claim name into the token; the long
+    /// <c>ClaimTypes.Role</c> URI only appears after inbound claim mapping on the reading side, so a
+    /// token inspected as written carries this spelling.
+    /// </summary>
+    private const string ShortRoleClaimType = "role";
+
     private TestWebApplicationFactory Factory => IntegrationTestSetup.Factory;
 
     private static string UniqueEmail() => $"platform-{Guid.NewGuid():N}@test.com";
@@ -115,10 +122,8 @@ public class PlatformAdminTests
         parsedToken.Claims.Should().Contain(claim =>
             claim.Type == ImpersonationClaimNames.ActorUserId && claim.Value == actorUserId.ToString());
 
-        // JwtSecurityTokenHandler writes the short claim name into the token; the long
-        // ClaimTypes.Role URI only appears after inbound claim mapping on the reading side.
         parsedToken.Claims.Should().Contain(claim =>
-            claim.Type == "role" && claim.Value == nameof(UserRole.User));
+            claim.Type == ShortRoleClaimType && claim.Value == nameof(UserRole.User));
         parsedToken.Claims.Should().NotContain(claim => claim.Value == nameof(UserRole.SuperAdmin));
 
         parsedToken.ValidTo.Should().BeBefore(DateTime.UtcNow.AddHours(1));

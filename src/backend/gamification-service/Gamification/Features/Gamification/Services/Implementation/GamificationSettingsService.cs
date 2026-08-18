@@ -5,6 +5,23 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Gamification.Services.Implementation;
 
+/// <summary>
+/// Resolves gamification tuning from the installation-wide configuration tables, falling back to
+/// built-in defaults where an administrator has configured nothing.
+///
+/// <para>
+/// <see cref="GetSettingsAsync"/> is the one getter here that may write: it seeds the singleton
+/// settings row if it is missing, so every later read is a plain read. The startup seeder normally
+/// gets there first; this covers a database that predates it.
+/// </para>
+///
+/// <para>
+/// The streak-milestone fallback applies only while the <c>StreakMilestones</c> table is <em>empty</em>.
+/// Once an administrator has defined any milestone, the table is authoritative and a day count absent
+/// from it earns nothing — otherwise deleting the built-in seven-day milestone would silently restore
+/// it from code.
+/// </para>
+/// </summary>
 internal sealed class GamificationSettingsService(GamificationDbContext databaseContext) : IGamificationSettingsService
 {
     private const int DefaultExerciseBaseExperiencePoints = 10;

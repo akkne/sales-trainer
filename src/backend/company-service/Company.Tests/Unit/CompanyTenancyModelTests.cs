@@ -8,6 +8,7 @@ using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Eventing;
+using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Features.Companies.FollowUpReminders;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Implementation;
@@ -126,7 +127,8 @@ public class CompanyTenancyModelTests
     /// <summary>
     /// Second half, and the one a single-tenant mindset misses: inside ONE organization, a
     /// salesperson must not see a colleague's pipeline. The organization filter passes here by
-    /// design; only the explicit user predicate in CompanyService stops the leak.
+    /// design — both rows are in it, as the final count asserts; only the explicit user predicate in
+    /// CompanyService stops the leak.
     /// </summary>
     [Test]
     public async Task A_user_does_not_see_a_colleagues_companies_inside_the_same_organization()
@@ -146,7 +148,6 @@ public class CompanyTenancyModelTests
         firstUsersCompanies.Select(company => company.Name).Should().BeEquivalentTo(["Mine"]);
         secondUsersCompanies.Select(company => company.Name).Should().BeEquivalentTo(["My colleague's"]);
 
-        // Same organization, so the tenant filter alone would have shown both.
         (await databaseContext.Companies.CountAsync()).Should().Be(2);
     }
 
@@ -251,7 +252,8 @@ public class CompanyTenancyModelTests
 
     /// <summary>
     /// One tick, one organization: the poll must not claim or publish another organization's due
-    /// follow-up even when both are due at the same moment.
+    /// follow-up even when both are due at the same moment. Organization B's row must come out
+    /// untouched — still unnotified, still due, waiting for its own tick.
     /// </summary>
     [Test]
     public async Task The_follow_up_reminder_service_never_processes_across_organizations()
@@ -286,7 +288,6 @@ public class CompanyTenancyModelTests
             OrganizationAId,
             Arg.Any<CancellationToken>());
 
-        // And organization B's row is untouched: still unnotified, still due, waiting for its own tick.
         var organizationBRow = await organizationA.Companies
             .IgnoreQueryFilters()
             .SingleAsync(company => company.OrganizationId == OrganizationBId);
@@ -319,7 +320,8 @@ public class CompanyTenancyModelTests
             Substitute.For<IBriefingAiClient>(),
             Substitute.For<IParseLogAiClient>(),
             Substitute.For<IPersonaAiClient>(),
-            Substitute.For<IReadinessAiClient>());
+            Substitute.For<IReadinessAiClient>(),
+            Options.Create(new CompanyServiceOptions()));
 
     private static FollowUpReminderService CreateReminderService(
         Infrastructure.Data.CompanyDbContext databaseContext,

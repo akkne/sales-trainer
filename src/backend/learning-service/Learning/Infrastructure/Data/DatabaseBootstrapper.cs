@@ -2,6 +2,17 @@ using Npgsql;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Creates learning-db if it does not exist yet, so a fresh environment does not need a manual step
+/// before migrations can run.
+///
+/// <para>
+/// It connects to the <c>postgres</c> maintenance database, because <c>CREATE DATABASE</c> cannot run
+/// inside the database it creates. A concurrent creation by another replica starting at the same moment
+/// is treated as success rather than as a failure — several services do this on boot and the race is
+/// expected, not exceptional.
+/// </para>
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)

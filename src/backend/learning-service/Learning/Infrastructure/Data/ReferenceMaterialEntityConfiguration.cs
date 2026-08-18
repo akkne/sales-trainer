@@ -4,16 +4,18 @@ using Sellevate.Learning.Features.Reference.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps reference material attached to a skill. Organization first, per docs/TENANCY/TENANCY.md §3, and a
+/// parent pointer of the same shape and reasoning as <c>Technique.ParentTechniqueId</c> (40.18).
+/// </summary>
 public sealed class ReferenceMaterialEntityConfiguration : IEntityTypeConfiguration<ReferenceMaterial>
 {
     public void Configure(EntityTypeBuilder<ReferenceMaterial> builder)
     {
         builder.Property(material => material.OrganizationId);
 
-        // Phase 40.10: organization first, per docs/TENANCY/TENANCY.md section 3.
         builder.HasIndex(material => new { material.OrganizationId, material.SkillId, material.SortOrder });
 
-        // Phase 40.18, same shape and same reasoning as Technique.ParentTechniqueId.
         builder.HasOne<ReferenceMaterial>()
             .WithMany()
             .HasForeignKey(material => material.ParentMaterialId)

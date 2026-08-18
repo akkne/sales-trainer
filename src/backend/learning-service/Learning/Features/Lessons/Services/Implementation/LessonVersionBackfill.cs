@@ -11,6 +11,23 @@ internal sealed class LessonVersionBackfill(
     ILessonVersionService lessonVersionService,
     ILogger<LessonVersionBackfill> logger) : ILessonVersionBackfill
 {
+    /// <summary>
+    /// Mints the missing version 1 for every visible lesson that has none, and returns how many it
+    /// created.
+    ///
+    /// <para>
+    /// <b>One transaction per lesson, and one failure per lesson.</b> A single lesson whose exercise
+    /// content is not valid JSON must not stop every other lesson from getting its version, and a
+    /// service that refuses to start over one bad content row is a worse outage than a missing
+    /// snapshot. Each failure is logged with its lesson id and leaves that lesson's attempts
+    /// unversioned, which the accuracy series already reports as its own bucket.
+    /// </para>
+    ///
+    /// <para>
+    /// Idempotent: it works off the set of lessons with no published version, so re-running it after a
+    /// partial pass only retries the ones that are still missing.
+    /// </para>
+    /// </summary>
     public async Task<int> BackfillMissingInitialVersionsAsync(CancellationToken cancellationToken = default)
     {
         var lessonIdsWithoutPublishedVersion = await FindLessonIdsWithoutPublishedVersionAsync(cancellationToken);
@@ -29,10 +46,6 @@ internal sealed class LessonVersionBackfill(
         {
             try
             {
-                // One transaction per lesson rather than one for all of them: a single lesson whose
-                // exercise content is not valid JSON must not stop every other lesson from getting
-                // its version, and a service that refuses to start over one bad content row is a
-                // worse outage than a missing snapshot.
                 if (await lessonVersionService.EnsurePublishedVersionIdAsync(lessonId, cancellationToken) is not null)
                 {
                     mintedVersionCount++;

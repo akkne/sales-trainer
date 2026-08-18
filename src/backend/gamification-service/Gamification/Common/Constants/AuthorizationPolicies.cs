@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.Gamification.Common.Constants;
 
@@ -39,11 +40,14 @@ public static class AuthorizationPolicies
     /// removing the organization's users — and nothing else.</summary>
     public const string RequireOrganizationSuperAdministrator = "RequireOrgSuperAdmin";
 
-    /// <summary>Value of the JWT `role` claim for a platform administrator.</summary>
-    public const string AdministratorRole = "Admin";
+    /// <summary>Value of the JWT `role` claim for a platform administrator. Aliases
+    /// <see cref="PlatformRoles.Administrator"/> so the six services and the tenancy middleware
+    /// cannot drift apart on the string that decides who reads across every organization.</summary>
+    public const string AdministratorRole = PlatformRoles.Administrator;
 
-    /// <summary>Value of the JWT `role` claim for a platform superadministrator.</summary>
-    public const string SuperAdministratorRole = "SuperAdmin";
+    /// <summary>Value of the JWT `role` claim for a platform superadministrator. Aliases
+    /// <see cref="PlatformRoles.SuperAdministrator"/>.</summary>
+    public const string SuperAdministratorRole = PlatformRoles.SuperAdministrator;
 
     /// <summary>Value of the JWT `org_role` claim for an organization's administrator.</summary>
     public const string TenancyAdministratorOrganizationRole = "TenancyAdmin";

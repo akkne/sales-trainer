@@ -6,6 +6,10 @@ using NUnit.Framework;
 
 namespace Sellevate.Gateway.Tests;
 
+/// <summary>
+/// Boots the gateway in-process and reads its live reverse-proxy configuration to prove the
+/// <c>/admin/users/*</c> slice is routed to the identity cluster and not to the retired monolith.
+/// </summary>
 [TestFixture]
 public class IdentityAdminUsersRouteFlipTests
 {

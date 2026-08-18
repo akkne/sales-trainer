@@ -4,19 +4,24 @@ using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
-public class UserEntityConfiguration : IEntityTypeConfiguration<User>
+/// <summary>
+/// Maps the user table. The unique index on <c>Email</c> is the identity invariant of the whole service:
+/// every login path resolves an address to at most one account, and a duplicate would make which account
+/// answers depend on row order.
+/// </summary>
+public sealed class UserEntityConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.ToTable("Users");
-        builder.HasKey(u => u.Id);
-        builder.Property(u => u.AvatarType)
+        builder.HasKey(user => user.Id);
+        builder.Property(user => user.AvatarType)
             .HasConversion<int>()
             .HasDefaultValue(AvatarKind.Default);
-        builder.Property(u => u.DefaultAvatarIndex)
+        builder.Property(user => user.DefaultAvatarIndex)
             .HasDefaultValue(0);
-        builder.Property(u => u.IsEmailVerified)
+        builder.Property(user => user.IsEmailVerified)
             .HasDefaultValue(false);
-        builder.HasIndex(u => u.Email).IsUnique();
+        builder.HasIndex(user => user.Email).IsUnique();
     }
 }

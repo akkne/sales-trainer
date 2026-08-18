@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Invites.Services.Abstract;
@@ -19,6 +20,26 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.PlatformAdmin.Services.Implementation;
 
+/// <summary>
+/// The platform-superadmin operations that need identity-db: minting impersonation tokens, reading
+/// the audit trail, and inviting an organization's first administrator.
+///
+/// <para>
+/// An impersonation audit row is written and committed <em>before</em> the token is handed back, so a
+/// token that exists always has a record behind it. The reverse order would let a crash between the
+/// two produce an unaudited session.
+/// </para>
+///
+/// <para>
+/// Bootstrapping runs the invite in its own DI scope with its own <see cref="TenantContext"/> pointed
+/// at the target organization. The request scope belongs to the superadmin and may already be pinned
+/// to a different organization (or to none), and <see cref="TenantContext"/> refuses to be re-pointed
+/// once set — deliberately. That is the same "open a scope per unit of work" shape background jobs
+/// use (docs/TENANCY/TENANCY.md §1.6), and it means the invite is created by the ordinary Phase 40.7
+/// <see cref="IInviteService"/> with the ordinary tenant guards active, not by a second, parallel
+/// invite path.
+/// </para>
+/// </summary>
 internal sealed class PlatformAdminService(
     IdentityDbContext databaseContext,
     IServiceScopeFactory serviceScopeFactory,
@@ -43,9 +64,6 @@ internal sealed class PlatformAdminService(
         var issuedAt = DateTime.UtcNow;
         var expiresAt = issuedAt.AddMinutes(impersonationOptions.Value.TokenLifetimeMinutes);
 
-        // The audit row is written and committed before the token is handed back, so a token that
-        // exists always has a record behind it. The reverse order would allow a crash between the
-        // two to produce an unaudited session.
         var auditEntry = new ImpersonationAuditEntry
         {
             Id = Guid.NewGuid(),
@@ -118,13 +136,6 @@ internal sealed class PlatformAdminService(
                 PlatformAdminConstants.OrganizationAlreadyBootstrappedMessage);
         }
 
-        // Everything below runs in its own DI scope with its own TenantContext set to the target
-        // organization. The request scope belongs to the superadmin and may already be pinned to a
-        // different organization (or to none), and TenantContext refuses to be re-pointed once set
-        // — deliberately. This is the same "open a scope per unit of work" shape background jobs
-        // use (docs/TENANCY/TENANCY.md §1.6), and it means the invite is created by the ordinary
-        // Phase 40.7 IInviteService with the ordinary tenant guards active, not by a second,
-        // parallel invite path.
         using var organizationScope = serviceScopeFactory.CreateScope();
         var scopedTenantContext = organizationScope.ServiceProvider.GetRequiredService<TenantContext>();
         scopedTenantContext.SetOrganization(organization.OrganizationId);
@@ -251,10 +262,10 @@ internal sealed class PlatformAdminService(
             new(JwtRegisteredClaimNames.Sub, actor.UserId.ToString()),
             new(JwtRegisteredClaimNames.Email, actor.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new("displayName", actor.DisplayName),
+            new(ClaimTypeNames.DisplayName, actor.DisplayName),
             new(ClaimTypes.Role, UserRole.User.ToString()),
-            new("org_id", organizationId.ToString()),
-            new("org_role", nameof(OrgRole.TenancyAdmin)),
+            new(ClaimTypeNames.OrganizationId, organizationId.ToString()),
+            new(AuthorizationPolicies.OrganizationRoleClaimType, nameof(OrgRole.TenancyAdmin)),
             new(ImpersonationClaimNames.IsImpersonation, "true"),
             new(ImpersonationClaimNames.ImpersonationId, impersonationId.ToString()),
             new(ImpersonationClaimNames.ActorUserId, actor.UserId.ToString()),

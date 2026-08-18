@@ -4,6 +4,11 @@ using Sellevate.Identity.Features.Organizations.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Maps the read-only projection of organization-service's tenant registry. The organization identifier
+/// is the primary key and is never database-generated — it arrives over Kafka already assigned by the
+/// service that owns it.
+/// </summary>
 public sealed class OrganizationReplicaEntityConfiguration : IEntityTypeConfiguration<OrganizationReplica>
 {
     private const int NameMaximumLength = 200;

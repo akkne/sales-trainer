@@ -45,11 +45,14 @@ public class TenantRlsMigrationBuilderExtensionsTests
     }
 
     [Test]
+    /// <summary>
+    /// A pooled physical connection that has ever run <c>SET LOCAL</c> reverts the GUC to <c>''</c>
+    /// (not NULL) once that transaction ends — confirmed against a real Postgres instance. Without
+    /// <c>NULLIF</c>, <c>''::uuid</c> raises an error instead of filtering to zero rows, so the
+    /// policy would fail open-with-an-error rather than fail closed.
+    /// </summary>
     public void EnableTenantRls_treats_an_empty_string_setting_as_unset_not_as_an_invalid_uuid()
     {
-        // A pooled physical connection that has ever run SET LOCAL reverts the GUC to '' (not
-        // NULL) once that transaction ends — confirmed against a real Postgres instance. Without
-        // NULLIF, ''::uuid raises an error instead of filtering to zero rows (not fail closed).
         var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
 
         migrationBuilder.EnableTenantRls("UserExerciseAttempts");
@@ -122,10 +125,12 @@ public class TenantRlsMigrationBuilderExtensionsTests
     }
 
     [Test]
+    /// <summary>
+    /// The same pooled-connection trap as the organization GUC: once <c>SET LOCAL</c> has run on a
+    /// connection, the setting comes back as <c>''</c> rather than NULL for the next transaction.
+    /// </summary>
     public void EnableTenantRls_treats_an_empty_platform_setting_as_off()
     {
-        // Same pooled-connection trap as the organization GUC: once SET LOCAL has run on a
-        // connection, the setting comes back as '' rather than NULL for the next transaction.
         var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
 
         migrationBuilder.EnableTenantRls("UserExerciseAttempts");

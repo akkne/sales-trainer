@@ -8,6 +8,34 @@ using Sellevate.Social.Identity;
 
 namespace Sellevate.Social.Infrastructure.Data;
 
+/// <summary>
+/// The Postgres side of social-service: friendships, the discussion feed, and the read-only replica
+/// of the platform's user directory.
+///
+/// <para>
+/// Phase 40.13. Every tenant-scoped entity carries a global query filter, listed one entity at a
+/// time on purpose — EF does not inherit filters through navigations, so a filter on
+/// <c>DiscussThread</c> says nothing about the <c>DiscussReplies</c> hanging off it, and
+/// <c>SocialTenancyModelTests</c> fails the build if an entity grows an <c>OrganizationId</c> without
+/// appearing here. The filters are convenience, not security: the boundary is the row-level-security
+/// policy the <c>AddOrganizationId</c> migration installs (docs/TENANCY/TENANCY.md §1.4-§1.5), and
+/// every filter also admits validated platform staff.
+/// </para>
+///
+/// <para>
+/// Two entities deviate. <c>DiscussTag</c> is content rather than tenant data — a <c>NULL</c>
+/// organization is the curated vocabulary every organization shares, so its filter is not plain
+/// equality; without that branch a new customer would open Discuss and find no tags at all.
+/// <c>UserReplica</c> carries no organization at all, because identities are cross-organization by
+/// design (§4.2), the same call learning, ai and gamification made; what keeps user <em>search</em>
+/// from leaking is <c>FriendService</c>, not this table.
+/// </para>
+///
+/// <para>
+/// A tenant-scoped read only sees rows while a transaction is open — see
+/// <see cref="TenantTransactionScope"/>, which every service method uses as its first statement.
+/// </para>
+/// </summary>
 public sealed class SocialDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
@@ -38,19 +66,6 @@ public sealed class SocialDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DiscussPhotoConfiguration());
         modelBuilder.ApplyConfiguration(new UserReplicaEntityConfiguration());
 
-        // Phase 40.13. Convenience, not security — the boundary is the RLS policy the
-        // AddOrganizationId migration installs (docs/TENANCY/TENANCY.md §1.4-§1.5).
-        //
-        // Every tenant-scoped entity is listed one by one, because EF does not inherit query
-        // filters through navigations: a filter on DiscussThread says nothing about the
-        // DiscussReplies hanging off it. SocialTenancyModelTests walks the model and fails the
-        // build if an entity grows an OrganizationId without appearing here.
-        //
-        // Friendship first, because it is the one this whole block exists for. A manager at
-        // customer A must not be able to find, friend or message somebody at customer B, and the
-        // friendship row is where that is decided — ChatService refuses to open a conversation
-        // between two people who are not accepted friends, so a friendship that cannot cross the
-        // boundary is also a conversation that cannot.
         modelBuilder.Entity<Friendship>()
             .HasQueryFilter(friendship => _tenantContext.IsPlatformWide || friendship.OrganizationId == _tenantContext.OrganizationId);
 
@@ -65,18 +80,10 @@ public sealed class SocialDbContext : DbContext
         modelBuilder.Entity<DiscussPhoto>()
             .HasQueryFilter(photo => _tenantContext.IsPlatformWide || photo.OrganizationId == _tenantContext.OrganizationId);
 
-        // The one content-flavour filter in this database: NULL means the curated vocabulary every
-        // organization shares. NOT plain equality — a new customer would otherwise open Discuss and
-        // find no tags at all.
         modelBuilder.Entity<DiscussTag>()
             .HasQueryFilter(tag =>
                 _tenantContext.IsPlatformWide
                 || tag.OrganizationId == null
                 || tag.OrganizationId == _tenantContext.OrganizationId);
-
-        // UserReplicas carries no organization: identities are cross-organization by design
-        // (TENANCY.md §4.2), the same call learning, ai and gamification made. What keeps user
-        // SEARCH from leaking is not this table but FriendService, which now joins through
-        // Friendships and the membership half — see SearchUsersAsync.
     }
 }

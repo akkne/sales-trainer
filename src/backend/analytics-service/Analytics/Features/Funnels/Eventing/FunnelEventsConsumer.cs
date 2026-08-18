@@ -6,6 +6,12 @@ using Sellevate.BuildingBlocks.Messaging;
 
 namespace Sellevate.Analytics.Features.Funnels.Eventing;
 
+/// <summary>
+/// Counts the conversion-relevant integration events of the whole platform into the Prometheus
+/// funnel counters. Stores nothing: every branch of <see cref="IFunnelEventRecorder"/> increments a
+/// process-local counter and returns, which is what makes the consumer loss-tolerant — a dropped
+/// message costs one tick of a graph, never a user-visible failure.
+/// </summary>
 internal sealed class FunnelEventsConsumer : KafkaConsumerBackgroundService
 {
     private readonly IFunnelEventRecorder _funnelEventRecorder;
@@ -22,15 +28,17 @@ internal sealed class FunnelEventsConsumer : KafkaConsumerBackgroundService
         _funnelEventRecorder = funnelEventRecorder;
     }
 
+    /// <summary>
+    /// Phase 40.25 added the two assignment topics as topics rather than as a projection: this
+    /// service still stores nothing, and the counters they feed are the platform-wide operational
+    /// funnel. The per-organization assignment funnel the РОП actually reads is computed in
+    /// learning-service, where the progress rows live — see docs/ANALYTICS_SERVICE.md.
+    /// </summary>
     protected override IReadOnlyCollection<string> Topics =>
     [
         BuildingBlocks.Eventing.Topics.UserRegistered,
         BuildingBlocks.Eventing.Topics.ExerciseCompleted,
         BuildingBlocks.Eventing.Topics.XpGranted,
-        // Phase 40.25. «Метрики воронки заданий — в analytics-service». Two topics rather than a
-        // projection: this service still stores nothing, and the counters they feed are the
-        // platform-wide operational funnel. The per-organization funnel the РОП reads is computed in
-        // learning-service, where the progress rows live (docs/ANALYTICS_SERVICE.md).
         BuildingBlocks.Eventing.Topics.AssignmentIssued,
         BuildingBlocks.Eventing.Topics.AssignmentProgressChanged,
     ];

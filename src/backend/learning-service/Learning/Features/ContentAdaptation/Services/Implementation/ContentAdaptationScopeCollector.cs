@@ -33,6 +33,13 @@ internal static class ContentAdaptationScopeCollector
     /// The exercises of one stage, in the order a learner meets them — lesson by lesson, and inside a
     /// lesson by position. The queue is walked in that order, so a reviewer reads a lesson's
     /// exercises the way the lesson plays them instead of in whatever order the database returned.
+    ///
+    /// <para>
+    /// The lesson title is reached by a join rather than by a correlated subquery inside the
+    /// projection. The title is only a label, and a subquery there is the kind of LINQ that compiles,
+    /// reads fine, and then fails on the first real Postgres connection — which in a background worker
+    /// is the least visible place in the service to discover it.
+    /// </para>
     /// </summary>
     public static async Task<IReadOnlyList<ContentAdaptationScopeRow>> CollectAsync(
         LearningDbContext databaseContext,
@@ -48,10 +55,6 @@ internal static class ContentAdaptationScopeCollector
                 && databaseContext.Skills.Any(skill => skill.Id == topic.SkillId && skill.Stage == stageKey)))
             .ResolveOverrides(databaseContext);
 
-        // Joined rather than projected through a correlated subquery: the title is only a label, and a
-        // subquery inside the projection is the kind of LINQ that compiles, reads fine, and fails on
-        // the first real Postgres connection — which for a background worker is the least visible
-        // place in the service.
         var rows = await databaseContext.Exercises
             .AsNoTracking()
             .Where(exercise => lessons.Any(lesson => lesson.Id == exercise.LessonId))

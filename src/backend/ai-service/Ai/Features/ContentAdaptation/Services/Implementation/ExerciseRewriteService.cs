@@ -127,6 +127,16 @@ internal sealed class ExerciseRewriteService(
         return promptBuilder.ToString();
     }
 
+    /// <summary>
+    /// Reads the proposed rewrite out of the completion.
+    ///
+    /// <para>
+    /// An explicit null, a missing key and a non-object all mean the same thing: nothing was proposed. The
+    /// caller records «без изменений», which resolves the item without a person having to look at it. The
+    /// content element is cloned because the document it belongs to is disposed at the end of the caller's
+    /// <c>using</c> block.
+    /// </para>
+    /// </summary>
     private static RewrittenExerciseDto ReadRewrite(JsonElement root)
     {
         var summary = AiJsonResponseReader.ReadStringOrNull(root, "summary");
@@ -137,12 +147,9 @@ internal sealed class ExerciseRewriteService(
 
         if (!root.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Object)
         {
-            // Explicit null, a missing key and a non-object all mean the same thing here: nothing was
-            // proposed. The caller records «без изменений», which resolves the item without a person.
             return new RewrittenExerciseDto(null, summary);
         }
 
-        // Cloned out of the document being disposed at the end of the caller's using block.
         return new RewrittenExerciseDto(content.Clone(), summary);
     }
 }

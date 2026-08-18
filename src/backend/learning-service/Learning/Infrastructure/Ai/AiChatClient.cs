@@ -35,6 +35,15 @@ internal sealed class AiChatClient(
     ITenantContext tenantContext,
     ILogger<AiChatClient> logger) : IOpenAiChatService
 {
+    private const string GenericProviderFailureMessage = "AI provider error";
+
+    private const string PaymentRequiredCode = "payment_required";
+    private const string RateLimitedCode = "rate_limited";
+    private const string ProviderAuthenticationCode = "provider_auth";
+    private const string ProviderRejectedCode = "provider_rejected";
+    private const string ProviderFailedCode = "provider_failed";
+    private const string ProviderUnreachableCode = "provider_unreachable";
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly AiServiceConfiguration _configuration = configurationOptions.Value;
@@ -47,6 +56,12 @@ internal sealed class AiChatClient(
     /// </summary>
     public bool IsConfigured => true;
 
+    /// <summary>
+    /// A 200 carrying a proxy's HTML error page degrades to <see cref="OpenAiRequestException"/>. The
+    /// removed in-process client made the same call about the provider doing this, and for the same
+    /// reason: an unreadable success is an upstream condition, not a defect here, and must not surface
+    /// as a 500.
+    /// </summary>
     public async Task<ChatMessageResult> SendChatMessageAsync(
         string systemPrompt,
         List<DialogMessage> conversationHistory,
@@ -67,16 +82,13 @@ internal sealed class AiChatClient(
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            // A 200 carrying a proxy's HTML error page. The removed in-process client made the same
-            // call about the provider doing this, and for the same reason: an unreadable success is
-            // an upstream condition, not a defect here, and must not surface as a 500.
             logger.LogWarning(exception, "AI service returned an unreadable chat completion body");
-            throw new OpenAiRequestException("AI provider error");
+            throw new OpenAiRequestException(GenericProviderFailureMessage);
         }
 
         if (body is null)
         {
-            throw new OpenAiRequestException("AI provider error");
+            throw new OpenAiRequestException(GenericProviderFailureMessage);
         }
 
         return new ChatMessageResult
@@ -86,6 +98,10 @@ internal sealed class AiChatClient(
         };
     }
 
+    /// <summary>
+    /// A malformed frame is skipped: it costs one lost delta, not a lost turn. The removed in-process
+    /// client made the same call about a malformed SSE payload.
+    /// </summary>
     public async IAsyncEnumerable<string> StreamChatMessageAsync(
         string systemPrompt,
         List<DialogMessage> conversationHistory,
@@ -114,8 +130,6 @@ internal sealed class AiChatClient(
             }
             catch (JsonException)
             {
-                // A malformed frame is one lost delta, not a lost turn. The removed client made the
-                // same call about a malformed SSE payload.
                 logger.LogDebug("Skipping unparseable chat stream frame");
                 continue;
             }
@@ -127,6 +141,11 @@ internal sealed class AiChatClient(
         }
     }
 
+    /// <summary>
+    /// A learner is mid-conversation, so the request declares itself
+    /// <see cref="AiCallHeaders.InteractiveWorkload"/> and runs to the organization's full allowance
+    /// rather than stopping at the batch reserve.
+    /// </summary>
     private HttpRequestMessage BuildRequest(string path, string systemPrompt, List<DialogMessage> history)
     {
         var request = new HttpRequestMessage(
@@ -140,8 +159,6 @@ internal sealed class AiChatClient(
                 options: SerializerOptions),
         };
 
-        // A learner is mid-conversation, so this runs to the organization's full allowance rather
-        // than stopping at the batch reserve.
         AiCallHeaders.Apply(request, tenantContext, AiCallHeaders.InteractiveWorkload);
 
         return request;
@@ -151,7 +168,15 @@ internal sealed class AiChatClient(
     /// Rebuilds the exception the in-process client used to throw, from the failure ai-service named.
     /// A response without a recognised code — a proxy error page, a 502 from something between the
     /// two services — degrades to <see cref="OpenAiRequestException"/> carrying the status, which is
-    /// what the old client did with an unparseable provider body.
+    /// what the old client did with an unparseable provider body. A body that is not this shape at all
+    /// is left unread and handled by that same opaque path.
+    ///
+    /// <para>
+    /// Phase 40.33. A bare <c>429</c> with no failure code is the <b>organization's own allowance</b>,
+    /// not the provider's. It is surfaced as a rate limit so the exercise chat degrades into its
+    /// neutral reply instead of a 500 — the learner sees a conversation that goes quiet rather than a
+    /// broken screen, and the reason is in the log and on the spend report.
+    /// </para>
     /// </summary>
     private async Task<Exception> TranslateFailureAsync(
         HttpResponseMessage response,
@@ -165,7 +190,6 @@ internal sealed class AiChatClient(
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            // Not our shape — treat as an opaque upstream failure below.
         }
 
         if ((int)response.StatusCode >= 500)
@@ -175,18 +199,15 @@ internal sealed class AiChatClient(
 
         return failure?.Code switch
         {
-            "payment_required" => new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance."),
-            "rate_limited" => new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later."),
-            "provider_auth" => new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration."),
-            "provider_rejected" or "provider_failed" or "provider_unreachable" =>
-                new OpenAiRequestException("AI provider error", failure.UpstreamStatusCode ?? (int)response.StatusCode),
-            // Phase 40.33. The organization's own allowance, not the provider's. Surfaced as a rate
-            // limit so the exercise chat degrades into its neutral reply instead of a 500 — the
-            // learner sees a conversation that goes quiet rather than a broken screen, and the reason
-            // is in the log and on the spend report.
+            PaymentRequiredCode => new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance."),
+            RateLimitedCode => new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later."),
+            ProviderAuthenticationCode => new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration."),
+            ProviderRejectedCode or ProviderFailedCode or ProviderUnreachableCode =>
+                new OpenAiRequestException(
+                    GenericProviderFailureMessage, failure.UpstreamStatusCode ?? (int)response.StatusCode),
             _ when response.StatusCode == HttpStatusCode.TooManyRequests =>
                 new OpenAiRateLimitException("Organization AI quota reached."),
-            _ => new OpenAiRequestException("AI provider error", (int)response.StatusCode),
+            _ => new OpenAiRequestException(GenericProviderFailureMessage, (int)response.StatusCode),
         };
     }
 

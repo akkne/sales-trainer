@@ -7,6 +7,16 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Voice;
 
+/// <summary>
+/// Tells the browser client whether voice is available and what limits to enforce locally.
+///
+/// <para>
+/// <c>Enabled</c> is the feature switch ANDed with the provider actually being configured, so a
+/// deployment that turned voice on without supplying a key reports it off rather than handing the client
+/// a microphone that fails on the first turn. The limits are advisory: the client uses them to show a
+/// countdown, and every one of them is enforced again server-side.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("dialog/voice")]
 [Authorize]

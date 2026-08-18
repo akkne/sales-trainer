@@ -47,7 +47,7 @@ internal sealed class AssignmentRepeatSweepService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var interval = TimeSpan.FromMinutes(Math.Clamp(options.Value.RepeatSweepIntervalMinutes, 1, 24 * 60));
+        var interval = options.Value.EffectiveRepeatSweepInterval;
         using var timer = new PeriodicTimer(interval);
 
         do
@@ -68,6 +68,21 @@ internal sealed class AssignmentRepeatSweepService(
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// One pass over the estate. Returns how many repeat waves were issued.
+    ///
+    /// <para>
+    /// <b>One scope per organization, never one reused.</b> <c>TenantContext</c> refuses to be
+    /// re-pointed at a second organization, which turns "the loop forgot to reset the tenant" from a
+    /// silent cross-tenant write into an exception.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One organization's failure is logged and stepped over</b> rather than allowed to cost every
+    /// other organization its repeats for the rest of the tick — that is the whole reason the loop
+    /// exists. Cancellation is the one exception that still propagates.
+    /// </para>
+    /// </summary>
     internal async Task<int> SweepAsync(CancellationToken cancellationToken)
     {
         var organizationIds = await EnumerateOrganizationsWithRepeatSchedulesAsync(cancellationToken);
@@ -80,9 +95,6 @@ internal sealed class AssignmentRepeatSweepService(
 
         foreach (var organizationId in organizationIds)
         {
-            // One scope per organization, never one reused: TenantContext refuses to be re-pointed
-            // at a second organization, which turns "the loop forgot to reset the tenant" from a
-            // silent cross-tenant write into an exception.
             using var scope = scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
 
@@ -98,8 +110,6 @@ internal sealed class AssignmentRepeatSweepService(
             }
             catch (Exception exception)
             {
-                // One organization's failure must not cost every other organization its repeats for
-                // the rest of the tick — that is the whole reason the loop exists.
                 logger.LogError(
                     exception,
                     "Assignment repeat sweep failed for organization {OrganizationId}; other organizations continue",
@@ -128,7 +138,7 @@ internal sealed class AssignmentRepeatSweepService(
     {
         var horizon = DateTime.UtcNow
             .AddDays(-Models.AssignmentRepeatScheduleLimits.MaximumOffsetDays)
-            .AddDays(-Math.Clamp(options.Value.RepeatCatchUpDays, 1, 90));
+            .AddDays(-options.Value.EffectiveRepeatCatchUpDays);
 
         using var scope = scopeFactory.CreateScope();
         scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();

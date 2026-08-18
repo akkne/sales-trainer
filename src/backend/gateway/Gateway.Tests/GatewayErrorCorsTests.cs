@@ -1,4 +1,3 @@
-using System.Net.Http;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using NUnit.Framework;

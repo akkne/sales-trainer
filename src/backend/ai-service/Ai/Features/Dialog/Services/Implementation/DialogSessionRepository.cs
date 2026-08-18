@@ -177,16 +177,22 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         return document is null ? 0 : document["total"].ToInt32();
     }
 
+    /// <summary>
+    /// Per-user voice totals for the caller's organization.
+    ///
+    /// <para>
+    /// The organization is the first key of the first stage on purpose: with the compound index built by
+    /// <c>docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js</c> this narrows to one
+    /// tenant's slice before anything else runs, and no ordering of the later stages can widen it again.
+    /// Platform staff are the one caller for whom the key is absent, and the admin voice-usage screen is
+    /// exactly the screen they need it absent for.
+    /// </para>
+    /// </summary>
     public async Task<List<DialogSessionVoiceUsage>> AggregateVoiceUsageAsync(
         DateTime dayStart,
         DateTime monthStart,
         CancellationToken cancellationToken = default)
     {
-        // The organization is the first key of the first stage on purpose: with the compound index
-        // built by docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js this narrows to
-        // one tenant's slice before anything else runs, and no ordering of the later stages can
-        // widen it again. Platform staff are the one caller for whom the key is absent, and this
-        // endpoint (admin voice usage) is exactly the screen they need it absent for.
         var matchStage = new BsonDocument
         {
             { "voiceSeconds", new BsonDocument("$gt", 0) },
@@ -355,7 +361,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         => Builders<DialogSession>.Filter.Eq(session => session.OrganizationId, RequireOrganizationId());
 
     /// <summary>
-    /// The aggregation-pipeline counterpart of <see cref="TenantFilter"/>. The organization stays
+    /// The aggregation-pipeline counterpart of <see cref="TenantReadFilter"/>. The organization stays
     /// the first key of the <c>$match</c> stage so the compound index built by
     /// docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js still leads; in
     /// platform-wide mode the key is absent and the pipeline reads every organization.

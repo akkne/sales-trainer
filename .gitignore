@@ -80,3 +80,7 @@ docs/Sellevate_Presentation_RU.pptx
 
 # Presentation (local only)
 presentation/
+
+# Python bytecode from the lint scripts in scripts/
+__pycache__/
+*.pyc

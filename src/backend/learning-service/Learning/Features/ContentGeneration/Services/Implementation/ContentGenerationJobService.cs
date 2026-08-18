@@ -21,6 +21,15 @@ internal sealed class ContentGenerationJobService(
     /// <summary>Phase 40.31. The width of <c>Assignments.SourceRef</c>, which is where it ends up.</summary>
     public const int MaximumGapSourceRefLength = 200;
 
+    /// <summary>
+    /// Lists the organization's runs.
+    ///
+    /// <para>
+    /// Projected in two steps rather than one because the refusal is a <c>jsonb</c> document, and
+    /// deserialising it is not something the provider can translate into SQL. The columns pulled are
+    /// still only the summary's — the material and the structure stay in the database.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<ContentGenerationJobSummaryDto>> GetJobsAsync(
         string? status,
         CancellationToken cancellationToken = default)
@@ -39,9 +48,6 @@ internal sealed class ContentGenerationJobService(
             query = query.Where(job => job.Status == status);
         }
 
-        // Projected in two steps rather than one: the refusal is a jsonb document and deserialising
-        // it is not something the provider can translate into SQL. The columns pulled are still only
-        // the summary's — the material and the structure stay in the database.
         var rows = await query
             .OrderByDescending(job => job.CreatedAt)
             .Select(job => new
@@ -87,6 +93,28 @@ internal sealed class ContentGenerationJobService(
         return job is null ? null : ToDto(job);
     }
 
+    /// <summary>
+    /// Opens a run from pasted material and hands it to the worker to structure.
+    ///
+    /// <para>
+    /// <b>An empty textarea is the one input that stays a 400.</b> There is nothing to refuse usefully
+    /// — «добавьте материал» is what the empty field already says — and
+    /// <c>CK_ContentGenerationJobs_Input</c> would refuse the row anyway. Everything above empty and
+    /// below the threshold becomes a run in the <c>insufficient</c> state instead, because that
+    /// refusal has something to say and something to be argued with.
+    /// </para>
+    ///
+    /// <para>
+    /// Stage one of the Phase 40.28 threshold runs here: the free half, before a single token is paid
+    /// for.
+    /// </para>
+    ///
+    /// <para>
+    /// A gap provenance string that is not one of ours is <b>refused rather than truncated</b>
+    /// (Phase 40.31). A reference nobody can parse back to a stage is worse than none, because the
+    /// panel would then neither suppress on it nor be able to say why.
+    /// </para>
+    /// </summary>
     public async Task<ContentGenerationJobDto> StartAsync(
         StartContentGenerationRequestDto request,
         Guid? actorId,
@@ -108,11 +136,6 @@ internal sealed class ContentGenerationJobService(
 
         var material = (request.Material ?? string.Empty).Trim();
 
-        // An empty textarea is the one input that stays a 400. There is nothing to refuse usefully —
-        // «добавьте материал» is what the empty field already says — and the table's
-        // CK_ContentGenerationJobs_Input would refuse the row anyway. Everything above empty and
-        // below the threshold becomes a run in the insufficient state instead, because that refusal
-        // has something to say and something to be argued with.
         if (material.Length == 0)
         {
             throw new ContentGenerationValidationException("material is required.");
@@ -124,7 +147,6 @@ internal sealed class ContentGenerationJobService(
                 $"material must be at most {MaximumMaterialLength} characters.");
         }
 
-        // Phase 40.28, stage one: the free half of the threshold, before a single token is paid for.
         var insufficiency = ContentSufficiencyInspector.InspectMaterial(material);
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
@@ -137,9 +159,6 @@ internal sealed class ContentGenerationJobService(
             CreatedBy = actorId,
             Title = title,
             SourceMaterial = material,
-            // Phase 40.31. Refused rather than truncated when it is not one of ours: a provenance
-            // string nobody can parse back to a stage is worse than none, because the panel would
-            // then neither suppress on it nor be able to say why.
             GapSourceRef = NormalizeGapSourceRef(gapSourceRef),
             Status = insufficiency is null
                 ? ContentGenerationJobStatuses.Structuring
@@ -173,6 +192,20 @@ internal sealed class ContentGenerationJobService(
     /// told «нет ни одного возражения» pastes their objections list and pays for reading the
     /// objections list — not for reading the fifty-page deck a second time.
     /// </para>
+    ///
+    /// <para>
+    /// <b>Only a refused run takes more material, and only a refused run needs to.</b> Adding to a run
+    /// that is mid-call would change the text under a claim already in flight; adding to a completed
+    /// one would describe a lesson generated from something else; and a <i>failed</i> run has its own
+    /// door — <c>retry</c> — which resumes the half that failed instead of re-reading anything. One
+    /// state, one way out of it.
+    /// </para>
+    ///
+    /// <para>
+    /// The free check runs again over the whole thing, so a run refused as off-topic that now carries
+    /// a sales script is not sent to a model just to be told the same. A run that is still too thin is
+    /// refused again here, for nothing.
+    /// </para>
     /// </summary>
     public async Task<ContentGenerationJobDto?> SupplementMaterialAsync(
         Guid jobId,
@@ -196,11 +229,6 @@ internal sealed class ContentGenerationJobService(
             return null;
         }
 
-        // Only a refused run takes more material, and only a refused run needs to. Adding to a run
-        // that is mid-call would change the text under a claim already in flight; adding to a
-        // completed one would describe a lesson generated from something else; and a *failed* run has
-        // its own door — `retry` — which resumes the half that failed instead of re-reading anything.
-        // One state, one way out of it.
         if (job.Status != ContentGenerationJobStatuses.Insufficient)
         {
             throw new ContentGenerationStateException(
@@ -218,9 +246,6 @@ internal sealed class ContentGenerationJobService(
         job.SourceMaterial = material;
         job.UpdatedAt = now;
 
-        // The free check runs again on the whole thing, so a run refused as off-topic that is now
-        // accompanied by a sales script is not sent to a model just to be told the same. A run that
-        // is still too thin is refused again, here, for nothing.
         var insufficiency = ContentSufficiencyInspector.InspectMaterial(material);
         if (insufficiency is not null)
         {
@@ -249,6 +274,31 @@ internal sealed class ContentGenerationJobService(
         return ToDto(job);
     }
 
+    /// <summary>
+    /// Accepts a human edit of the structured material, and re-decides the run's state from it.
+    ///
+    /// <para>
+    /// <b>A refused run is editable here as well</b> (Phase 40.28), because a refusal has to be
+    /// arguable by somebody who knows the answer: a sales lead told «нет ни одного возражения» may
+    /// simply know their four objections and type them, which is a better outcome than making them
+    /// find a document that contains them. What they cannot do is argue the threshold away — the
+    /// edited structure is re-inspected, and an edit that leaves it just as empty leaves the run
+    /// refused.
+    /// </para>
+    ///
+    /// <para>
+    /// Only the deterministic half of the inspection runs on an edit. The model's verdict was about
+    /// the material, and the human has just overruled the material with knowledge the material did
+    /// not contain; paying for a second opinion on their own typing would be both expensive and rude.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The edit decides the state in both directions.</b> Upward, a refused run that has been
+    /// filled in returns to the checkpoint. Downward, a checkpoint run edited <i>to</i> emptiness is
+    /// refused now rather than at approval — which is what stops it looking ready right up until the
+    /// button does nothing.
+    /// </para>
+    /// </summary>
     public async Task<ContentGenerationJobDto?> UpdateStructureAsync(
         Guid jobId,
         ContentStructureDto structure,
@@ -265,11 +315,6 @@ internal sealed class ContentGenerationJobService(
             return null;
         }
 
-        // Phase 40.28 admits `insufficient` here as well. A refusal has to be arguable by somebody
-        // who knows the answer: a РОП told «нет ни одного возражения» may simply know their four
-        // objections and type them, which is a better outcome than making them find a document that
-        // contains them. What they cannot do is argue the threshold away — the edited structure is
-        // re-inspected below, and an edit that leaves it just as empty leaves the run refused.
         if (job.Status is not (ContentGenerationJobStatuses.AwaitingReview
             or ContentGenerationJobStatuses.Insufficient))
         {
@@ -280,16 +325,9 @@ internal sealed class ContentGenerationJobService(
         job.Structure = ContentStructureDocumentSerializer.Serialize(structure);
         job.UpdatedAt = DateTime.UtcNow;
 
-        // Only the deterministic half runs here: the model's verdict was about the material, and the
-        // human has just overruled the material with knowledge the material did not contain. Paying
-        // for a second opinion on their own typing would be both expensive and rude.
         var insufficiency = ContentSufficiencyInspector.InspectStructure(
             ContentStructureDocumentSerializer.Deserialize(job.Structure));
 
-        // The edit decides the state in both directions. Upward, a refused run that has been filled
-        // in returns to the checkpoint. Downward, a checkpoint run edited *to* emptiness is refused
-        // now rather than at approval — which is what stops it from looking ready right up until the
-        // button does nothing.
         job.Status = insufficiency is null
             ? ContentGenerationJobStatuses.AwaitingReview
             : ContentGenerationJobStatuses.Insufficient;
@@ -304,6 +342,28 @@ internal sealed class ContentGenerationJobService(
         return ToDto(job);
     }
 
+    /// <summary>
+    /// Passes the checkpoint: the human has read the structure and asks for the lesson.
+    ///
+    /// <para>
+    /// <b>A run already past the door is returned, not thrown at.</b> That is what makes the button
+    /// safe to press twice and the request safe to retry; re-queueing here is what would buy a second
+    /// lesson.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The structure is re-inspected at the moment of approval</b> rather than trusted to have been
+    /// inspected when it was written — the last gate, and the one a race cannot skip. Between an edit
+    /// and an approval there is a network, a second tab and a stale screen. A refusal found here is
+    /// recorded first and thrown second, so the screen polling the run and the caller that pressed the
+    /// button get the same list, and the run does not sit at a checkpoint it cannot pass.
+    /// </para>
+    ///
+    /// <para>
+    /// A fresh half gets a fresh budget: the attempts spent structuring say nothing about whether
+    /// generation will succeed, and the lease has to be free for a worker to pick the run up.
+    /// </para>
+    /// </summary>
     public async Task<ContentGenerationJobDto?> ApproveAsync(
         Guid jobId,
         Guid? actorId,
@@ -318,9 +378,6 @@ internal sealed class ContentGenerationJobService(
             return null;
         }
 
-        // Already past the door. Returning the run rather than throwing is what makes the button
-        // safe to press twice and the request safe to retry; re-queueing here is what would buy a
-        // second lesson.
         if (job.Status is ContentGenerationJobStatuses.Generating or ContentGenerationJobStatuses.Completed)
         {
             return ToDto(job);
@@ -332,9 +389,6 @@ internal sealed class ContentGenerationJobService(
                 $"Only a run awaiting review can be approved (it is '{job.Status}').");
         }
 
-        // The last gate, and the one that cannot be skipped by a race: the structure is re-inspected
-        // at the moment of approval rather than trusted to have been inspected when it was written.
-        // Between an edit and an approval there is a network, a second tab and a stale screen.
         var structure = ContentStructureDocumentSerializer.Deserialize(job.Structure);
         var insufficiency = ContentSufficiencyInspector.InspectStructure(structure);
         if (insufficiency is not null)
@@ -346,8 +400,6 @@ internal sealed class ContentGenerationJobService(
             await databaseContext.SaveChangesAsync(cancellationToken);
             await tenantScope.CommitAsync(cancellationToken);
 
-            // Recorded first, then thrown. The screen that polls the run and the caller that pressed
-            // the button get the same list, and the run does not sit at a checkpoint it cannot pass.
             throw new ContentGenerationInsufficientMaterialException(
                 "There is not enough in this structure to generate exercises worth having.",
                 insufficiency);
@@ -360,8 +412,6 @@ internal sealed class ContentGenerationJobService(
         job.ApprovedBy = actorId;
         job.UpdatedAt = now;
 
-        // A fresh half gets a fresh budget: the attempts spent structuring say nothing about whether
-        // generation will succeed, and the lease has to be free for a worker to pick the run up.
         job.Attempts = 0;
         job.ClaimedAt = null;
         job.FailureReason = null;
@@ -374,6 +424,16 @@ internal sealed class ContentGenerationJobService(
         return ToDto(job);
     }
 
+    /// <summary>
+    /// Resumes a failed run.
+    ///
+    /// <para>
+    /// <b>Resumes the half that failed, never the whole pipeline.</b> Both halves are paid for in
+    /// tokens, and a retry that silently re-buys a half that already succeeded is a bill nobody can
+    /// explain. A run that failed while generating goes back to generating rather than back to the
+    /// checkpoint, because the human already answered that question.
+    /// </para>
+    /// </summary>
     public async Task<ContentGenerationJobDto?> RetryAsync(
         Guid jobId,
         CancellationToken cancellationToken = default)
@@ -399,10 +459,6 @@ internal sealed class ContentGenerationJobService(
                 "This run has already produced a lesson; there is nothing left to retry.");
         }
 
-        // Resume the half that failed, never the whole pipeline. Both halves are paid for in tokens,
-        // and a "retry" that silently re-buys a half that succeeded is a bill nobody can explain. A
-        // run that failed while generating goes back to generating rather than back to the
-        // checkpoint, because the human already answered that question.
         job.Status = job.Structure is null
             ? ContentGenerationJobStatuses.Structuring
             : job.ApprovedAt is not null

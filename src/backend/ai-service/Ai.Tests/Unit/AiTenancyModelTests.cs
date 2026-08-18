@@ -70,14 +70,17 @@ public class AiTenancyModelTests
         filtersMissingThePlatformBranch.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A dialog session belongs to exactly one organization — there is no such thing as a global one —
+    /// so it is tenant data. The library is nullable-owner by design, where <c>NULL</c> is the global
+    /// content every organization reads, so it cannot implement an interface whose
+    /// <c>OrganizationId</c> is non-nullable.
+    /// </summary>
     [Test]
     public void Dialog_sessions_are_tenant_data_and_the_dialog_library_is_content()
     {
-        // A session belongs to exactly one organization; there is no such thing as a global one.
         typeof(DialogSession).Should().BeAssignableTo<ITenantScoped>();
 
-        // The library is nullable-owner by design — NULL is the global content shared by every
-        // organization — so it cannot implement an interface whose OrganizationId is non-nullable.
         typeof(DialogBundle).Should().NotBeAssignableTo<ITenantScoped>();
         typeof(DialogMode).Should().NotBeAssignableTo<ITenantScoped>();
     }

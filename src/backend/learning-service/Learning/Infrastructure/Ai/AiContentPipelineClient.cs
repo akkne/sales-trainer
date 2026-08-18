@@ -63,6 +63,11 @@ internal sealed class AiContentPipelineClient(
             _configuration.ContentReviewPath, request, cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.33. Every route this client reaches is driven by a sweep, never by somebody waiting —
+    /// so all four declare themselves <see cref="AiCallHeaders.BatchWorkload"/> and are the first work
+    /// an organization running low on allowance loses.
+    /// </summary>
     private async Task<TResult> PostAsync<TRequest, TResult>(
         string path,
         TRequest request,
@@ -75,9 +80,6 @@ internal sealed class AiContentPipelineClient(
             Content = JsonContent.Create(request, options: SerializerOptions),
         };
 
-        // Phase 40.33. Every route this client reaches is driven by a sweep, never by somebody
-        // waiting — so all four declare themselves batch and are the first work an organization
-        // running low on allowance loses.
         AiCallHeaders.Apply(httpRequest, tenantContext, AiCallHeaders.BatchWorkload);
 
         using var response = await httpClient.SendAsync(httpRequest, cancellationToken);

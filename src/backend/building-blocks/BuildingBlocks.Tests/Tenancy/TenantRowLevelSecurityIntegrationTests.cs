@@ -36,6 +36,20 @@ public class TenantRowLevelSecurityIntegrationTests
     private Guid _organizationBRowId;
 
     [OneTimeSetUp]
+    /// <summary>
+    /// Builds the throwaway fixture: table, RLS policy, grants, seed rows.
+    ///
+    /// <para>
+    /// The policy is applied by calling the shipped <c>EnableTenantRls</c> helper rather than a
+    /// hand-copied re-statement of its SQL, so this fixture exercises exactly what a real service
+    /// migration would run and cannot drift away from it.
+    /// </para>
+    ///
+    /// <para>
+    /// Seeding happens on the admin/superuser connection, which always bypasses RLS regardless of
+    /// <c>FORCE</c> — the same reason migrations keep working under the owning role in production.
+    /// </para>
+    /// </summary>
     public async Task OneTimeSetUpAsync()
     {
         _isPostgresReachable = await LocalPostgresTestSettings.IsReachableAsync();
@@ -80,8 +94,6 @@ public class TenantRowLevelSecurityIntegrationTests
             );
             """);
 
-        // Exercises the shipped migration helper itself, not a hand-copied re-statement of it —
-        // this is the same SQL a real service migration would run via EnableTenantRls(...).
         await ExecuteAsync(testDatabaseConnection, BuildEnableTenantRlsSql());
 
         await ExecuteAsync(testDatabaseConnection, $"""
@@ -89,8 +101,6 @@ public class TenantRowLevelSecurityIntegrationTests
             GRANT SELECT, INSERT, UPDATE, DELETE ON "{TenantRlsIntegrationDbContext.TableName}" TO {LocalPostgresTestSettings.ApplicationRoleName};
             """);
 
-        // Seeded as the admin/superuser connection, which always bypasses RLS regardless of
-        // FORCE — the same reason migrations keep working under the owning role in production.
         await ExecuteAsync(testDatabaseConnection, $"""
             INSERT INTO "{TenantRlsIntegrationDbContext.TableName}" ("Id", "OrganizationId", "Name") VALUES
                 ('{_organizationARowId}', '{_organizationAId}', 'BelongsToOrganizationA'),
@@ -99,6 +109,10 @@ public class TenantRowLevelSecurityIntegrationTests
     }
 
     [OneTimeTearDown]
+    /// <summary>
+    /// Drops the throwaway database and role. Every step is best-effort and the <c>catch</c> is
+    /// intentionally silent: teardown of a disposable fixture must never turn a passing run red.
+    /// </summary>
     public async Task OneTimeTearDownAsync()
     {
         if (!_isPostgresReachable)
@@ -119,7 +133,6 @@ public class TenantRowLevelSecurityIntegrationTests
         }
         catch
         {
-            // Best-effort cleanup of a throwaway fixture — never fail the run over teardown.
         }
     }
 
@@ -168,6 +181,12 @@ public class TenantRowLevelSecurityIntegrationTests
     }
 
     [Test]
+    /// <summary>
+    /// Read paths — and <c>ExecuteDelete</c>, which bypasses the change tracker the same way a read
+    /// does — have no implicit EF transaction, so per the <c>SET LOCAL</c> resolution documented in
+    /// docs/DECISIONS.md the unit of work has to open one explicitly to give <c>SET LOCAL</c> a scope.
+    /// That explicit <c>BeginTransactionAsync</c> is part of what is under test here, not boilerplate.
+    /// </summary>
     public async Task ExecuteDelete_under_the_application_role_cannot_delete_another_organizations_row()
     {
         SkipIfPostgresIsNotReachable();
@@ -180,9 +199,6 @@ public class TenantRowLevelSecurityIntegrationTests
             .AddInterceptors(interceptor);
 
         await using var context = new TenantRlsIntegrationDbContext(optionsBuilder.Options);
-        // Read paths (and ExecuteDelete, which bypasses the change tracker the same way a read
-        // does) have no implicit EF transaction, so — per the SET LOCAL resolution documented in
-        // docs/DECISIONS.md — the unit of work opens one explicitly to give SET LOCAL a scope.
         await using var transaction = await context.Database.BeginTransactionAsync();
 
         var deletedRowCount = await context.TenantRlsTestRows

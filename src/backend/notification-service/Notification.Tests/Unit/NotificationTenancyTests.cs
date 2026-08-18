@@ -105,7 +105,8 @@ public class NotificationTenancyTests
     /// The end-to-end shape of the leak this block closes: a notification written for a user in one
     /// organization is invisible when the same user is read under another. The fake store is keyed
     /// by (organization, recipient) exactly like the real Redis key, so this fails if the
-    /// organization ever stops reaching the store.
+    /// organization ever stops reaching the store. The second read proves the notification exists,
+    /// so the emptiness assertion cannot pass against an empty store.
     /// </summary>
     [Test]
     public async Task A_notification_written_in_one_organization_is_invisible_in_another()
@@ -121,7 +122,6 @@ public class NotificationTenancyTests
 
         seenByB.Should().BeEmpty();
 
-        // Proven to exist, so the assertion above cannot pass on an empty store.
         var seenByA = await serviceForA.GetRecentAsync(RecipientUserId, limit: 20, includeRead: true);
         seenByA.Should().ContainSingle().Which.Title.Should().Be("A's title");
     }

@@ -5,6 +5,17 @@ using Sellevate.Learning.Features.Programs.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps one version of an organization's curriculum.
+///
+/// <para>
+/// <b>At most one mutable draft per organization, in the database rather than in C#</b> — the same race
+/// 40.15 refused to lose for lessons, one level up. Two administrators of the same organization pressing
+/// "edit the programme" at the same moment would otherwise produce two curricula with no merge story,
+/// and a programme is a list of references where a merge looks deceptively easy and silently reorders
+/// somebody's training.
+/// </para>
+/// </summary>
 public sealed class ProgramVersionEntityConfiguration : IEntityTypeConfiguration<ProgramVersion>
 {
     public void Configure(EntityTypeBuilder<ProgramVersion> builder)
@@ -33,11 +44,6 @@ public sealed class ProgramVersionEntityConfiguration : IEntityTypeConfiguration
         builder.HasIndex(version => new { version.OrganizationId, version.VersionNumber })
             .IsUnique();
 
-        // At most one mutable draft per organization, in the database rather than in C# — the same
-        // race 40.15 refused to lose for lessons, one level up. Two administrators of the same
-        // organization pressing "edit the programme" at the same moment would otherwise produce two
-        // curricula with no merge story, and a programme is a list of references where a merge looks
-        // deceptively easy and silently reorders somebody's training.
         builder.HasIndex(version => version.OrganizationId)
             .IsUnique()
             .HasFilter($"\"Status\" = '{ProgramVersionStatuses.Draft}'")

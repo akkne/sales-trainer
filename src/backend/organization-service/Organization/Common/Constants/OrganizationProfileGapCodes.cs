@@ -16,6 +16,15 @@ namespace Sellevate.Organization.Common.Constants;
 /// </para>
 ///
 /// <para>
+/// <b>A gap code and a profile field name are the same string on purpose.</b> Each code below is
+/// defined as its <see cref="OrganizationProfileFields"/> counterpart rather than as a second literal,
+/// because <c>OrganizationProfileDraftMerger.Plan</c> orders its per-field proposals by
+/// <see cref="All"/> and looks each one up by name: two vocabularies that merely happened to agree
+/// would turn a one-character typo into a runtime failure on the apply route instead of a compile
+/// error here.
+/// </para>
+///
+/// <para>
 /// <b>The questions are fixed here, not authored by the model.</b> This is 40.28's call
 /// («коды на проводе, предложения на сервере», docs/DECISIONS.md 2026-08-18) applied unchanged, and
 /// for the same two reasons: a model writes a different question every run, so the screen cannot
@@ -27,25 +36,25 @@ namespace Sellevate.Organization.Common.Constants;
 public static class OrganizationProfileGapCodes
 {
     /// <summary>Nothing in <c>product</c>.</summary>
-    public const string Product = "product";
+    public const string Product = OrganizationProfileFields.Product;
 
     /// <summary>Nothing in <c>icp</c>.</summary>
-    public const string Icp = "icp";
+    public const string Icp = OrganizationProfileFields.Icp;
 
     /// <summary>Fewer than <see cref="MinimumObjectionCount"/> objections.</summary>
-    public const string Objections = "objections";
+    public const string Objections = OrganizationProfileFields.Objections;
 
     /// <summary>Fewer than <see cref="MinimumScriptStageCount"/> script stages.</summary>
-    public const string ScriptStages = "script_stages";
+    public const string ScriptStages = OrganizationProfileFields.ScriptStages;
 
     /// <summary>Nothing in <c>tone</c>.</summary>
-    public const string Tone = "tone";
+    public const string Tone = OrganizationProfileFields.Tone;
 
     /// <summary>Nothing in <c>banned_claims</c>.</summary>
-    public const string BannedClaims = "banned_claims";
+    public const string BannedClaims = OrganizationProfileFields.BannedClaims;
 
     /// <summary>Nothing in <c>glossary</c>.</summary>
-    public const string Glossary = "glossary";
+    public const string Glossary = OrganizationProfileFields.Glossary;
 
     /// <summary>
     /// The gap stops [CONTENT_PARAMETERIZATION.md](../../../../docs/CONTENT_PARAMETERIZATION.md) from

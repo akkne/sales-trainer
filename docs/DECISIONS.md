@@ -5236,3 +5236,181 @@ projects.** Twice in a row it reported one project's 53 tests and then nothing a
 require iterating over `src/backend/*/*.Tests/*.csproj`, and since no workflow in `.github/` runs
 `dotnet test` at all, nothing catches this automatically. Anyone wiring CI should loop over the
 projects, not the solution.
+
+---
+
+## 2026-08-18 — Code cleanliness audit: rationale rescued from deleted comments
+
+CODESTYLE §9 was rewritten this day (`///` documentation required on service and infrastructure
+classes, `//` explanatory prose banned) and every service was then swept. Most rationale carried by
+the deleted `//` comments moved into the `///` summary of its enclosing type, where it belongs. The
+items below could not: they explain decisions rather than types, or they live in a `Program.cs` whose
+top-level statements cannot carry an XML doc comment. Losing them would have cost real knowledge, so
+they are recorded here.
+
+### Ordering constraints that no test would catch
+
+**`UseSellevateTenantContext()` must run after `UseAuthorization()`.** The endpoint — and therefore
+its `[TenantScoped]` metadata — must already be resolved when the tenant middleware inspects it.
+Moving the call earlier silently disables the tenant requirement on every route: nothing fails, the
+gate simply stops gating. Present in all eleven `Program.cs` files.
+
+**`AddSellevateTenancy` must precede `AddDbContext`**, and a tenant-scoped context must never use
+`AddDbContextPool`. EF Core's pool reuses the instance together with everything it closed over at
+construction, including the `ITenantContext`-backed global query filter, so the first tenant to touch
+a pooled instance leaks its filter onto every later caller. Enforced by
+`scripts/tenancy-pool-lint.py`, which as of this audit scans code only — the ban is expected to
+appear as prose inside the very summaries it polices.
+
+**`EnterSystemMode()` must be declared before the `DbContext` is resolved**, in the outbox relay and
+in both identity cleanup services. The connection interceptor decides whether to emit
+`SET LOCAL app.organization_id` the first time a transaction opens on the context, so the mode has to
+be settled while the scope is still empty. `TenantContext` also refuses to be re-pointed afterwards.
+Both orders produce a working relay until a service hands it a tenant-scoped scope, so a refactor
+could invert this with every test still green.
+
+### Error handling that looks like over-catching and is not
+
+**`KafkaConsumerBackgroundService`'s consume loop catches bare `Exception` around the handler.**
+Handler exceptions are already caught by `RunHandlerWithRetriesAsync`; this catch covers everything
+*around* the handler — the Redis idempotency store, the offset commit, the scope's service
+resolution. None of that was guarded, and .NET's default `BackgroundServiceExceptionBehavior` is
+`StopHost`, so a five-second Redis restart or a routine consumer-group rebalance took the whole
+service down, HTTP API included, and `restart:` turned that into a crash loop. This base class backs
+thirteen consumers. The deleted comment also carried a `// Review, 40.34` marker — if that review is
+still outstanding, this is the only record of it.
+
+**Redis connection strings are validated by hand before `ConnectionMultiplexer.Connect`,** so a
+misconfigured container fails at startup with a message naming `ConnectionStrings__Redis` instead of
+a `NullReferenceException` thrown out of a `!` operator.
+
+**`AddProblemDetails()` and `UseExceptionHandler()` are paired deliberately** (RFC 7807): unhandled
+exceptions become structured `ProblemDetails` rather than HTML error pages.
+
+### Metering: why the charge sits where it sits
+
+**The streaming LLM charge is in a `finally`, not after the loop.** `StreamChatMessageAsync` is an
+async iterator: when a client hangs up mid-turn the consumer stops enumerating, the iterator is
+disposed at the `yield return`, and anything after the loop never runs — while the provider has still
+billed everything the model produced. A straight-line charge meant every abandoned turn was billed by
+the provider and metered as nothing, on the highest-frequency LLM call in the product, where mid-turn
+abandonment is normal.
+
+**The streaming path estimates tokens instead of measuring them.** An SSE stream carries no `usage`
+block, and requesting one through `stream_options` is a request shape not every OpenAI-compatible
+gateway accepts. Breaking every voice call to make the cheapest call exact is a bad trade; the
+expensive calls are all non-streaming and all measured.
+
+**TTS is metered inside `YandexTtsService`, not in the router.** `CachingTtsRouter` serves short
+repeated phrases from memory with no provider call. A cache hit costs nothing, so it must be recorded
+as nothing — which only holds if the charge sits at the point that actually spends money.
+
+### Transactions and concurrency
+
+**One short transaction scope per read, never one around the whole method** (gamification's league,
+streak and experience-point services). The insert recovers from a unique violation and carries on;
+inside a single long transaction that violation would poison the transaction and the recovery path
+could not run. Writes need no scope of their own — EF opens an implicit transaction per
+`SaveChangesAsync`, which is what triggers `SET LOCAL` — so scoping the read alone is both sufficient
+and the only shape that keeps the concurrency guard working. A write scope must never nest inside a
+read scope, whose dispose rolls back.
+
+**One transaction *and one `catch`* per repeat wave** (`AssignmentRepeatIssueService`). A wave that
+cannot be built must not roll back a wave that can, and the unique index that catches a racing tick
+should fail one insert rather than the tick. The transaction boundary alone did not deliver that:
+without the catch, a collision unwound the whole method and abandoned every remaining due wave for
+the organization. Found and fixed in the 40.34 review.
+
+**`RedisNotificationStore` mutates only through Lua.** Two dispatchers and an API request can touch
+one inbox concurrently; only server-side atomicity stops a concurrent "mark all as read" from
+resurrecting a notification the capacity cap had just trimmed. `ReplaceAllLua` indexes by JSON `id`
+rather than by list position for the same reason.
+
+**Recurring jobs use the DI-resolved `IRecurringJobManager`, not the static `RecurringJob` facade.**
+The static API reads `JobStorage.Current`, which is only set once the Hangfire server has started —
+calling it before `application.Run()` throws "Current JobStorage instance has not been initialized
+yet".
+
+### Schema decisions that look like mistakes
+
+**`UserExperiencePointsRecord.SourceEventId`'s unique index is deliberately not organization-scoped,**
+unlike every other index in that database. `SourceEventId` is a Kafka event id, unique across the
+platform by construction, so the index enforces "one grant per event" — a statement about the event
+stream, not about an organization. Adding the organization would let the same event be granted once
+per tenant, which is the opposite of its purpose.
+
+**A repeat assignment's `CreatedBy` is deliberately `null`.** No human pressed anything, which is what
+the nullable column shipped in 40.21 is for. Attributing the row to the sales lead who wrote the
+origin would put their name on an act they did not perform, on a day they may no longer work here.
+
+**Origin ids are projected as `Guid?` on purpose**, so the generated SQL compares the column itself
+rather than an unwrapped projection of it — the same result set, one less thing for the provider to
+translate. Reads like a typo; is not.
+
+**Friend-request lifecycle asymmetry.** Declining keeps the row as a tombstone so the requester can
+revive it later; cancelling hard-deletes it so the pair returns to "no request ever happened". A
+reciprocal simultaneous request is caught by the canonical-pair unique index and reported as "already
+exists" rather than as a write failure.
+
+### Service wiring
+
+**organization-service and company-service do not call `AddSellevateEventing`.** Both only *produce*
+Kafka events and never consume, so each registers the publisher and topic provisioner directly rather
+than the full helper, which also wires the Redis-backed consumer idempotency store neither has ever
+needed. Both services carried this rationale as a comment pointing at the other as the source of
+truth, and both comments were deleted in this audit — this entry is now the only record.
+
+**`InviteService` injects the concrete `TenantContext`, not `ITenantContext`,** because invite
+acceptance must call `SetOrganization` from inside the service. A genuine, documented exception to
+CODESTYLE §4.
+
+**Central JWT validation at the gateway is deliberately non-mandatory.** The gateway validates the
+token once but never requires one: public endpoints (login, swagger, metrics) must pass through
+anonymously. When a valid token is present the validated identity is forwarded downstream as trusted
+`X-User-*` headers; otherwise the downstream service enforces its own `[Authorize]`. Strangler
+passthrough posture — the gateway is not the sole authorization point.
+
+**`GatewayErrorCorsMiddleware` must wrap the reverse proxy.** A gateway-generated answer (404 unknown
+route, 502 unreachable upstream, 504 timeout) carries no downstream CORS headers, so without it every
+gateway-level failure reaches the browser as "blocked by CORS policy" and the status code that
+explains the failure is invisible. Proxied answers already carry the downstream service's headers,
+and a duplicated `Access-Control-Allow-Origin` is rejected by browsers — hence the "only if absent"
+guard.
+
+### `CancellationToken`s that are accepted and ignored
+
+`RedisIdempotencyStore.HasProcessedAsync`/`MarkProcessedAsync`, `RedisHealthCheck.CheckHealthAsync`,
+`KafkaTopicProvisioner.StartAsync` and every method of notification-service's three Redis-backed
+classes take a token and pass it to nothing. This is not an oversight: StackExchange.Redis
+(`KeyExistsAsync`, `StringSetAsync`, `PingAsync`) and Confluent's `CreateTopicsAsync` expose no
+`CancellationToken` overload. **Do not "fix" it by wrapping in `WaitAsync`** — that abandons the call
+rather than cancelling it, which is worse than waiting.
+
+### Two claims in the codebase that were simply wrong
+
+**A duplicate `NotificationType` template registration throws at startup.** A comment above
+`templates.ToDictionary(...)` claimed "last registration wins if two templates ever claim the same
+type". `ToDictionary` throws on a duplicate key. The code was always right; anyone who relied on
+override-by-registration-order was working from a false premise.
+
+**`OrganizationController` is gated by `RequirePlatformAdministrator`, not `RequireSuperAdmin`.** Its
+own doc comment still asserted the pre-split policy. The attribute and its test were already correct;
+only the prose was stale. Running the tenant registry is ordinary platform administration — only
+adding and removing users is superadmin-exclusive.
+
+### Feature gaps discovered while reading, not introduced
+
+- **The pre-call briefing's feedback-summaries list is always empty.** Practice-session feedback text
+  lives in ai-service's Mongo store; company-service has no cross-service read for it (out of scope
+  in 39.12) and ai-service's prompt degrades gracefully when the list is empty. Worth an owner
+  decision on whether 39.12's scope should be revisited.
+- **`GET /friends/activity` always answers `[]`.** `GetFriendActivityFeedAsync` returns an empty list
+  and ignores its `limit`, while `docs/FRIENDS.md` documents an activity feed limited to 20 items.
+- **`DiscussThreadQuery.IncludeAll` is never read.** `AdminDiscussController` passes `IncludeAll: true`
+  believing moderation sees more; it does not.
+- **Leftovers of the removed gamification in social-service:** `GetFriendsAsync` orders by a
+  `TotalXpAmount` that is always `0`, and `GetFriendLeaderboardAsync` ranks by list position over
+  all-zero scores.
+- **Chat messages are embedded in the conversation document.** `GetMessagesAsync` loads the whole
+  conversation and pages in memory. A `// TODO SO3` proposed moving messages to their own collection;
+  the TODO is gone, the intent is recorded here.

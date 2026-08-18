@@ -5,29 +5,30 @@ using Microsoft.IdentityModel.Tokens;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Driver;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Eventing;
-using Sellevate.Social.Infrastructure.HealthChecks;
 using Sellevate.Social.Features.Discuss;
 using Sellevate.Social.Features.Friends;
-using Sellevate.Social.Infrastructure.Configuration;
 using Sellevate.Social.Infrastructure.Data;
-using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Social.Infrastructure.HealthChecks;
 using Sellevate.Social.Infrastructure.Mongo;
 using Sellevate.Social.Infrastructure.Storage;
 using Sellevate.Social.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
-using Sellevate.Social.Common.Constants;
+
+const string DefaultLokiUrl = "http://loki:3100";
+const string DefaultFrontendUrl = "http://localhost:3000";
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[ConfigurationKeys.LokiUrl] ?? DefaultLokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
@@ -47,31 +48,23 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 
 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
-// Phase 40.13. Registers the request-scoped ITenantContext plus the two interceptors: the
-// cross-tenant write guard and the one that issues SET LOCAL app.organization_id for the
-// row-level-security policies. Never switch this to EF Core's pooled-context helper
-// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py) — a pooled context would cache the first
-// tenant's query filter and hand it to every later caller.
 builder.Services.AddSellevateTenancy();
 
 builder.Services.AddDbContext<SocialDbContext>((serviceProvider, databaseOptions) =>
     databaseOptions
-        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .UseNpgsql(builder.Configuration.GetConnectionString(
+            ConfigurationKeys.ConnectionStringNames.Postgres))
         .AddInterceptors(
             serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
             serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
-builder.Services.Configure<MongoConfiguration>(builder.Configuration.GetSection(MongoConfiguration.SectionName));
-builder.Services.AddSingleton<IMongoClient>(_ =>
-    new MongoClient(builder.Configuration.GetConnectionString("Mongo")));
-builder.Services.AddSingleton<MongoDbContext>();
+builder.Services.AddSocialMongo(builder.Configuration);
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
+    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString(
+        ConfigurationKeys.ConnectionStringNames.Redis)!));
 
-builder.Services.AddSellevateEventing(builder.Configuration);
-builder.Services.AddScoped<ISocialEventPublisher, KafkaSocialEventPublisher>();
-builder.Services.AddHostedService<UserReplicaConsumer>();
+builder.Services.AddSocialEventing(builder.Configuration);
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -91,7 +84,7 @@ builder.Services
     .AddDiscussFeatureServices();
 
 const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[ConfigurationKeys.JwtKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
     throw new InvalidOperationException(
@@ -104,9 +97,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[ConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[ConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
@@ -115,7 +108,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[ConfigurationKeys.FrontendUrl] ?? DefaultFrontendUrl)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -144,10 +137,6 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-// Phase 40.13. Populates the request-scoped ITenantContext from the X-Organization-Id header the
-// gateway sets from the validated token (and strips from inbound requests). After UseAuthorization
-// so the endpoint — and therefore its [TenantScoped] metadata — is already resolved: a controller
-// marked [TenantScoped] gets 403 rather than running with no tenant.
 application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
@@ -159,7 +148,8 @@ using (var serviceScope = application.Services.CreateScope())
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
+        builder.Configuration.GetConnectionString(ConfigurationKeys.ConnectionStringNames.Postgres)!,
+        startupLogger);
 
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<SocialDbContext>();
     databaseContext.Database.Migrate();
@@ -170,4 +160,25 @@ using (var serviceScope = application.Services.CreateScope())
 
 application.Run();
 
+/// <summary>
+/// Startup for social-service. Two orderings in this file are load-bearing and neither is obvious
+/// from reading it top to bottom.
+///
+/// <para>
+/// Phase 40.13. <c>AddSellevateTenancy</c> registers the request-scoped <c>ITenantContext</c> plus two
+/// interceptors — the cross-tenant write guard, and the one that issues
+/// <c>SET LOCAL app.organization_id</c> for the row-level-security policies. The context is registered
+/// with plain <c>AddDbContext</c> and must never move to EF Core's pooled-context helper
+/// (docs/CODESTYLE.md, <c>scripts/tenancy-pool-lint.py</c>): a pooled context caches the first tenant's
+/// query filter and hands it to every later caller.
+/// </para>
+///
+/// <para>
+/// <c>UseSellevateTenantContext</c> populates that context from the <c>X-Organization-Id</c> header the
+/// gateway sets from the validated token (and strips from inbound requests). It runs after
+/// <c>UseAuthorization</c> so the endpoint — and therefore its <c>[TenantScoped]</c> metadata — is
+/// already resolved: a controller marked <c>[TenantScoped]</c> then answers 403 instead of running with
+/// no tenant.
+/// </para>
+/// </summary>
 public partial class Program { }

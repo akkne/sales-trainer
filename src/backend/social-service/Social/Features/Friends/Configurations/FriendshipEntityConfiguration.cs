@@ -4,6 +4,23 @@ using Sellevate.Social.Features.Friends.Models;
 
 namespace Sellevate.Social.Features.Friends.Configurations;
 
+/// <summary>
+/// Maps the friendship row, and with it the two guarantees the application cannot enforce on its own.
+///
+/// <para>
+/// <c>IX_Friendships_CanonicalPair</c> is the interesting one: the least/greatest pair of user ids is
+/// a stored computed column, so (A,B) and (B,A) collide in one unique index and two people who ask
+/// each other simultaneously cannot end up with two friendships. Phase 40.13 put the organization
+/// first in that index — not cosmetic, since memberships (40.6) let one person belong to two
+/// customers, and the old platform-wide pair rejected the second organization's friendship between
+/// the same two people as a duplicate.
+/// </para>
+///
+/// <para>
+/// The check constraint refuses a self-friendship at the database, because a row that got past the
+/// service would otherwise be unremovable through it.
+/// </para>
+/// </summary>
 public sealed class FriendshipEntityConfiguration : IEntityTypeConfiguration<Friendship>
 {
     public void Configure(EntityTypeBuilder<Friendship> builder)
@@ -22,12 +39,6 @@ public sealed class FriendshipEntityConfiguration : IEntityTypeConfiguration<Fri
             new { friendship.OrganizationId, friendship.RequesterId, friendship.AddresseeId })
             .IsUnique();
 
-        // Canonical-pair index: ensures (A,B) and (B,A) cannot coexist even under concurrent inserts.
-        // Stored as computed expression LEAST(id,id), GREATEST(id,id) at the DB level.
-        //
-        // Phase 40.13 put the organization first. Not cosmetic: memberships (40.6) let one person
-        // belong to two customers, and the old platform-wide pair meant the second organization's
-        // friendship between the same two people was rejected as a duplicate of the first.
         builder.HasIndex(friendship =>
             new { friendship.OrganizationId, friendship.CanonicalLowId, friendship.CanonicalHighId })
             .IsUnique()

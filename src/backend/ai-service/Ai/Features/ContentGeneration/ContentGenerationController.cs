@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.ContentGeneration.Models;
 using Sellevate.Ai.Features.ContentGeneration.Services.Abstract;
 using Sellevate.Ai.Features.ContentGeneration.Services.Implementation;
@@ -53,7 +54,7 @@ public sealed class ContentGenerationController(
             return BadRequest(new { message = "material is required." });
         }
 
-        if (request.Material.Length > MaterialStructuringService.MaximumMaterialLength)
+        if (request.Material.Length > AiRequestSizeLimits.MaximumSourceMaterialCharacters)
         {
             return BadRequest(new { message = "material exceeds maximum allowed size." });
         }
@@ -65,17 +66,23 @@ public sealed class ContentGenerationController(
         catch (OpenAiException openAiException)
         {
             logger.LogWarning(openAiException, "AI provider error while structuring uploaded material");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             logger.LogWarning(invalidOperationException, "Structuring uploaded material failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             logger.LogWarning(httpRequestException, "AI provider unreachable while structuring uploaded material");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 
@@ -96,17 +103,23 @@ public sealed class ContentGenerationController(
         catch (OpenAiException openAiException)
         {
             logger.LogWarning(openAiException, "AI provider error while generating exercises");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             logger.LogWarning(invalidOperationException, "Generating exercises failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             logger.LogWarning(httpRequestException, "AI provider unreachable while generating exercises");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 }

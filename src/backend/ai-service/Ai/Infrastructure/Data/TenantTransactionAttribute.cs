@@ -12,6 +12,10 @@ namespace Sellevate.Ai.Infrastructure.Data;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 internal sealed class TenantTransactionAttribute() : TypeFilterAttribute(typeof(TenantTransactionFilter));
 
+/// <summary>
+/// The filter <see cref="TenantTransactionAttribute"/> installs. Commits only when the action completed
+/// without an exception; the scope's dispose rolls back otherwise.
+/// </summary>
 internal sealed class TenantTransactionFilter(AiDbContext databaseContext) : IAsyncActionFilter
 {
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)

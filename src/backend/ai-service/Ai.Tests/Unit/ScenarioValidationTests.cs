@@ -54,8 +54,6 @@ public class ScenarioValidationTests
             .Count(call => call.GetMethodInfo().Name == nameof(IOpenAiChatService.GenerateTextAsync));
     }
 
-    // ── Length gate ─────────────────────────────────────────────────────────
-
     [Test]
     public async Task Validate_RejectsTooShortScenario_WithoutCallingTheModel()
     {
@@ -75,8 +73,6 @@ public class ScenarioValidationTests
         verdict.RejectionReason.Should().Contain(ScenarioLimits.MaximumLength.ToString());
         (await ModelCallCountAsync()).Should().Be(0);
     }
-
-    // ── Model verdicts ──────────────────────────────────────────────────────
 
     [Test]
     public async Task Validate_ReturnsValid_WhenModelSaysRelevant()
@@ -119,8 +115,6 @@ public class ScenarioValidationTests
 
         (await _service.ValidateAsync(SalesScenario)).IsValid.Should().BeTrue();
     }
-
-    // ── Caching ─────────────────────────────────────────────────────────────
 
     [Test]
     public async Task Validate_AnswersRepeatedScenarioFromCache()
@@ -180,8 +174,6 @@ public class ScenarioValidationTests
         verdict.IsValid.Should().BeTrue("Redis is an optimization, not a dependency");
     }
 
-    // ── Failing closed ──────────────────────────────────────────────────────
-
     [Test]
     public async Task Validate_Throws_WhenProviderFails()
     {
@@ -220,8 +212,6 @@ public class ScenarioValidationTests
         retry.IsValid.Should().BeTrue("an unavailable check must leave no verdict behind");
     }
 
-    // ── Prompt fencing ──────────────────────────────────────────────────────
-
     [Test]
     public void PromptBuilder_FencesTheScenarioAsData()
     {
@@ -243,8 +233,6 @@ public class ScenarioValidationTests
         CustomScenarioPromptBuilder.BuildFeedbackSystemPrompt("Базовый промт.", null)
             .Should().Be("Базовый промт.");
     }
-
-    // ── Phase 40.11: the verdict cache is per organization ────────────────
 
     /// <summary>
     /// Without the organization in the key, one customer's cached verdict answers another
@@ -277,9 +265,9 @@ public class ScenarioValidationTests
 
         await otherOrganizationService.ValidateAsync(SalesScenario);
 
-        // Two entries for one text: the second organization paid for its own verdict rather than
-        // reading the first one's.
-        _cache.Keys.Should().HaveCount(2);
+        _cache.Keys.Should().HaveCount(2,
+            "two entries for one text: the second organization paid for its own verdict rather than "
+            + "reading the first one's");
     }
 
     /// <summary>

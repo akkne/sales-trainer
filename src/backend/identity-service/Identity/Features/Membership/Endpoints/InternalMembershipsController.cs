@@ -32,6 +32,16 @@ namespace Sellevate.Identity.Features.Membership.Endpoints;
 /// route itself is <see cref="InternalServiceAuthFilter"/>: without it, anybody able to address the
 /// pod could name any organization and read its roster.
 /// </para>
+///
+/// <para>
+/// <c>Memberships</c> is not <c>ITenantScoped</c> (Phase 40.6) and carries no row-level-security
+/// policy, so the organization filter is written out in the query rather than inherited from an
+/// ambient query filter — the same shape <see cref="MembershipsController"/> uses one file over, and
+/// the reason this controller reads the tenant explicitly. The <c>Forbid()</c> on a missing
+/// organization is unreachable through <see cref="TenantScopedAttribute"/> for a caller with no
+/// platform role, which a service never has; it is kept because "no organization" must never widen
+/// into "everybody".
+/// </para>
 /// </summary>
 [ApiController]
 [Route("internal/memberships")]
@@ -70,15 +80,9 @@ public sealed class InternalMembershipsController(
         var currentOrganizationId = tenantContext.OrganizationId;
         if (currentOrganizationId is null)
         {
-            // Unreachable through [TenantScoped] for a caller with no platform role, which a
-            // service never has. Kept because "no organization" must never widen into "everybody".
             return Forbid();
         }
 
-        // Memberships is not ITenantScoped (Phase 40.6) and carries no row-level-security policy, so
-        // the organization filter is written out here rather than inherited from a query filter.
-        // That is the same shape MembershipsController uses one file over, and it is the reason this
-        // controller reads the tenant explicitly instead of trusting an ambient filter to exist.
         var activeMemberships = await databaseContext.Memberships
             .AsNoTracking()
             .Where(membership => membership.OrganizationId == currentOrganizationId

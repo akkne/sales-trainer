@@ -49,8 +49,6 @@ public class NotificationServiceTests
             RetentionDays = retentionDays
         });
 
-        // A real TenantContext rather than a stub, so these tests exercise the same guard that
-        // ships: an organization can be set once and never re-pointed.
         var tenantContext = new TenantContext();
         tenantContext.SetOrganization(organizationId ?? OrganizationId);
 
@@ -113,8 +111,6 @@ public class NotificationServiceTests
 
         for (var created = 0; created < 10; created++)
         {
-            // Distinct relatedEntityId per notification — these are genuinely different
-            // notifications, not domain-event replays, so they are not deduplicated.
             await service.CreateAsync(BuildRequest(relatedEntityId: $"related-{created}"));
         }
 
@@ -220,19 +216,19 @@ public class NotificationServiceTests
         (await store.GetAllAsync(OrganizationId, RecipientUserId)).Should().OnlyContain(notification => notification.IsRead);
     }
 
-    // ── NO3: domain-level idempotency ─────────────────────────────────────────
-
+    /// <summary>
+    /// Two calls with identical RecipientUserId + NotificationType + RelatedEntityId are the same
+    /// domain event being replayed — a Kafka redelivery — and the second must be ignored.
+    /// </summary>
     [Test]
     public async Task CreateAsync_SameDomainEvent_DoesNotCreateDuplicateNotification()
     {
-        // Two calls with identical RecipientUserId + NotificationType + RelatedEntityId
-        // simulate the same domain event being replayed (e.g. Kafka redelivery).
         var store = new InMemoryNotificationStore();
         var service = CreateService(store);
-        var request = BuildRequest(); // type=AchievementUnlocked, relatedEntityId="related-1"
+        var request = BuildRequest();
 
         await service.CreateAsync(request);
-        await service.CreateAsync(request); // replay — must be ignored
+        await service.CreateAsync(request);
 
         var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         stored.Should().ContainSingle("second create with the same business key must be skipped");
@@ -268,8 +264,6 @@ public class NotificationServiceTests
         (await store.GetAllAsync(OrganizationId, RecipientUserId)).Should().HaveCount(2);
     }
 
-    // ── Email side channel ────────────────────────────────────────────────────
-
     [Test]
     public async Task CreateAsync_WithSendEmailTrue_DispatchesEmail()
     {
@@ -294,11 +288,12 @@ public class NotificationServiceTests
         var dispatcher = new RecordingEmailDispatcher();
         var service = CreateService(store, emailDispatcher: dispatcher);
 
-        await service.CreateAsync(BuildRequest()); // SendEmail defaults to false
+        await service.CreateAsync(BuildRequest());
 
         dispatcher.Dispatched.Should().BeEmpty();
     }
 
+    /// <summary>A deduplicated replay must not produce a second email either.</summary>
     [Test]
     public async Task CreateAsync_DeduplicatedReplay_DoesNotDispatchEmailTwice()
     {
@@ -310,12 +305,10 @@ public class NotificationServiceTests
             "/discuss/1", "reply-1", SendEmail: true);
 
         await service.CreateAsync(request);
-        await service.CreateAsync(request); // replay — deduped, must not email again
+        await service.CreateAsync(request);
 
         dispatcher.Dispatched.Should().ContainSingle();
     }
-
-    // ── NO2: input sanitization ───────────────────────────────────────────────
 
     [Test]
     public async Task CreateAsync_ControlCharactersInTitleAndBody_AreStripped()

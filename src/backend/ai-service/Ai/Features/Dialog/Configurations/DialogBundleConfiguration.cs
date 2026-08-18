@@ -4,6 +4,15 @@ using Sellevate.Ai.Features.Dialog.Models;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+/// <summary>
+/// EF mapping for dialog bundles.
+///
+/// <para>
+/// Phase 40.11. Every bundle read is "mine or global", so the organization leads the composite index.
+/// That index is built by <c>docs/TENANCY/sql/40.11_ai_organization_indexes_concurrently.sql</c> rather
+/// than by the migration — see the note on <c>20260815_AddOrganizationId</c>.
+/// </para>
+/// </summary>
 public sealed class DialogBundleConfiguration : IEntityTypeConfiguration<DialogBundle>
 {
     public void Configure(EntityTypeBuilder<DialogBundle> builder)
@@ -27,9 +36,6 @@ public sealed class DialogBundleConfiguration : IEntityTypeConfiguration<DialogB
         builder.HasIndex(bundle => bundle.SkillId);
         builder.HasIndex(bundle => bundle.SortOrder);
 
-        // Phase 40.11. Every bundle read is "mine or global", so the organization leads the index.
-        // Built by docs/TENANCY/sql/40.11_ai_organization_indexes_concurrently.sql, not by the
-        // migration — see the note on 20260815_AddOrganizationId.
         builder.HasIndex(bundle => new { bundle.OrganizationId, bundle.SortOrder });
     }
 }

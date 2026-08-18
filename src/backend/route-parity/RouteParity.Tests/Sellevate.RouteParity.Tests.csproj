@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Sellevate.RouteParity.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="FluentAssertions" Version="6.12.1" />
+  </ItemGroup>
+
+  <!--
+    Every service that owns HTTP routes. The parity check reflects over these assemblies rather than
+    reading their source, because nine controllers declare their route through a `const` and a source
+    regex sees `RouteConstants.X` instead of a path.
+
+    The gateway itself is referenced as a configuration file rather than as an assembly: the routing
+    table is data, and reading it from disk avoids pulling nine `Program` entry points into one test
+    host.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\ai-service\Ai\Sellevate.Ai.csproj" />
+    <ProjectReference Include="..\..\analytics-service\Analytics\Sellevate.Analytics.csproj" />
+    <ProjectReference Include="..\..\company-service\Company\Sellevate.Company.csproj" />
+    <ProjectReference Include="..\..\gamification-service\Gamification\Sellevate.Gamification.csproj" />
+    <ProjectReference Include="..\..\identity-service\Identity\Sellevate.Identity.csproj" />
+    <ProjectReference Include="..\..\learning-service\Learning\Sellevate.Learning.csproj" />
+    <ProjectReference Include="..\..\notification-service\Notification\Sellevate.Notification.csproj" />
+    <ProjectReference Include="..\..\organization-service\Organization\Sellevate.Organization.csproj" />
+    <ProjectReference Include="..\..\social-service\Social\Sellevate.Social.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\gateway\Gateway\appsettings.json" Link="gateway-appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

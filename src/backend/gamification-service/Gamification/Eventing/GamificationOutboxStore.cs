@@ -4,6 +4,17 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Eventing;
 
+/// <summary>
+/// gamification-db's half of the outbox contract: hands the relay the undispatched messages, oldest
+/// first, and stamps one as dispatched.
+///
+/// <para>
+/// Ordering by occurrence time rather than by insertion is what makes the relay's delivery order match
+/// the order the events actually happened in. <c>OutboxMessages</c> carries no RLS policy and no query
+/// filter — it is plumbing read only by the system-mode relay — so this store deliberately sees every
+/// tenant's rows (docs/TENANCY/TENANCY.md §1.7).
+/// </para>
+/// </summary>
 internal sealed class GamificationOutboxStore : IOutboxStore
 {
     private readonly GamificationDbContext _databaseContext;

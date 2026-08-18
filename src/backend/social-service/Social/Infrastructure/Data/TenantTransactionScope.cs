@@ -59,12 +59,15 @@ internal sealed class TenantTransactionScope : IAsyncDisposable
         CancellationToken cancellationToken)
         => BeginAsync(databaseContext, cancellationToken);
 
+    /// <summary>
+    /// Opens the transaction, unless one is already open or the provider has none. A non-relational
+    /// provider is the in-memory one the unit tests use: no transactions and no row-level security, so
+    /// there is nothing to scope and the scope becomes an object that owns nothing.
+    /// </summary>
     private static async Task<TenantTransactionScope> BeginAsync(
         SocialDbContext databaseContext,
         CancellationToken cancellationToken)
     {
-        // IsRelational() is false only for the in-memory provider the unit tests use, which has no
-        // transactions and no row-level security — there is nothing to scope there.
         if (!databaseContext.Database.IsRelational() || databaseContext.Database.CurrentTransaction is not null)
         {
             return new TenantTransactionScope(null);

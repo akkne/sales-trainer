@@ -6,6 +6,12 @@ using Sellevate.Identity.Infrastructure.Configuration;
 
 namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 
+/// <summary>
+/// Verifies a Google identity token against Google's published keys and this deployment's OAuth client
+/// id. The audience check is the point: a token minted for a different application is cryptographically
+/// valid and must still be refused. Nothing here decides whether the identity may sign in — that is
+/// <see cref="Sellevate.Identity.Features.Auth.Services.Abstract.IAuthenticationService"/>'s call.
+/// </summary>
 internal sealed class GoogleTokenValidator(IOptions<GoogleAuthConfiguration> googleOptions) : IGoogleTokenValidator
 {
     public async Task<GoogleUserPayload> ValidateAsync(

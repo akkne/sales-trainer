@@ -120,12 +120,13 @@ public class NotificationEventMapperTests
         request.Should().BeNull();
     }
 
-    // ── NO4a: surrogate-safe (rune-boundary) truncation ──────────────────────
-
+    /// <summary>
+    /// A preview of exactly 160 ASCII characters sits on the limit, not over it, so it must come
+    /// through whole and without an ellipsis.
+    /// </summary>
     [Test]
     public void Map_ChatMessageSent_PreviewExactlyAtLimit_IsNotTruncated()
     {
-        // 160 ASCII characters — must come through without an ellipsis.
         var recipientId    = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
         var exactPreview   = new string('x', 160);
@@ -137,25 +138,24 @@ public class NotificationEventMapperTests
         var request = _mapper.Map(envelope);
 
         request.Should().NotBeNull();
-        // Body = "A: " + 160 'x' — no ellipsis
         request!.Body.Should().EndWith("x");
         request.Body.Should().NotEndWith("…");
     }
 
+    /// <summary>
+    /// The 160th rune position is occupied by a supplementary character (U+1F600 GRINNING FACE,
+    /// two UTF-16 code units), and the preview runs past it — 159 ASCII characters, the emoji, then
+    /// ten more, so 170 runes in 171 code units. A naive <c>[..160]</c> slice would land inside the
+    /// surrogate pair and produce an ill-formed string; rune-aware truncation must stop before it.
+    /// </summary>
     [Test]
     public void Map_ChatMessageSent_PreviewOverLimitWithMultibyteChar_TruncatesOnRuneBoundary()
     {
-        // Build a preview where the 160th rune position is occupied by a supplementary
-        // character (U+1F600 GRINNING FACE) that takes 2 UTF-16 code units.
-        // A naive [..160] slice would land inside the surrogate pair and produce an
-        // ill-formed string; the rune-aware truncation must stop before it.
         var recipientId    = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
 
-        // 159 ASCII chars + one emoji (2 code units) = 161 code units total, 160 runes.
-        // Then append more text so the total exceeds 160 runes → truncation triggers.
-        var emoji   = char.ConvertFromUtf32(0x1F600); // 2 UTF-16 code units
-        var preview = new string('a', 159) + emoji + new string('b', 10); // 170 runes
+        var emoji   = char.ConvertFromUtf32(0x1F600);
+        var preview = new string('a', 159) + emoji + new string('b', 10);
 
         var envelope = EventEnvelope.Create(
             Topics.ChatMessageSent,
@@ -164,12 +164,9 @@ public class NotificationEventMapperTests
         var request = _mapper.Map(envelope);
 
         request.Should().NotBeNull();
-        // Must end with the ellipsis and must be a valid (well-formed) string.
         request!.Body.Should().EndWith("…");
         request.Body.IsNormalized().Should().BeTrue("truncated string must not contain unpaired surrogates");
     }
-
-    // ── Discuss reply ────────────────────────────────────────────────────────
 
     [Test]
     public void Map_DiscussReplyCreated_FlagsEmailAndLinksToThread()
@@ -232,8 +229,6 @@ public class NotificationEventMapperTests
         request.Should().NotBeNull();
         request!.Body.Should().Be("Zara: ");
     }
-
-    // ── Company follow-up due ────────────────────────────────────────────────
 
     [Test]
     public void Map_CompanyFollowUpDue_ProducesInAppOnlyNotificationWithCompanyNameInTitle()

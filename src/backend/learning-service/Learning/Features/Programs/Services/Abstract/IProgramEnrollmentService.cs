@@ -26,6 +26,11 @@ public interface IProgramEnrollmentService
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Every pin in the caller's organization, oldest enrollment first — the administrator's view of
+    /// who sits on which snapshot. Unpaged, because a pin exists only once per person and the
+    /// organization's roster bounds the result.
+    /// </summary>
     Task<IReadOnlyList<ProgramEnrollmentDto>> GetEnrollmentsAsync(
         CancellationToken cancellationToken = default);
 

@@ -22,6 +22,17 @@ namespace Sellevate.Ai.Features.Dialog.Overrides;
 /// </summary>
 public static class DialogModeOverrideResolution
 {
+    /// <summary>
+    /// Hides a global mode from an organization that has an active override of it.
+    ///
+    /// <para>
+    /// <c>candidate.IsActive</c> in the anti-join matters: <c>AcceptBaseAsync</c> retires an override by
+    /// deactivating the row rather than deleting it. Without that clause a retired row still satisfied
+    /// the anti-join, so the global mode stayed hidden while the override was excluded everywhere else
+    /// and the organization was left with neither. The learning-service twin has always had the
+    /// equivalent <c>!candidate.IsArchived</c> in <c>ContentOverrideResolution</c>. Found in review, 40.34.
+    /// </para>
+    /// </summary>
     public static IQueryable<DialogMode> ResolveOverrides(
         this IQueryable<DialogMode> modes,
         AiDbContext databaseContext)
@@ -36,11 +47,6 @@ public static class DialogModeOverrideResolution
             return modes;
         }
 
-        // `candidate.IsActive` matters: AcceptBaseAsync retires an override by deactivating the row
-        // rather than deleting it. Without this clause the retired row still satisfied the anti-join,
-        // so the global mode stayed hidden while the override was excluded everywhere else and the
-        // organization was left with neither. The learning-service twin has always had the equivalent
-        // `!candidate.IsArchived` (ContentOverrideResolution). Found in review, 40.34.
         return modes.Where(mode =>
             mode.OrganizationId != null
             || !databaseContext.DialogModes.Any(candidate =>

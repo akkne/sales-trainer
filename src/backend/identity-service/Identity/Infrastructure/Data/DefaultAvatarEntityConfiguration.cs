@@ -4,15 +4,20 @@ using Sellevate.Identity.Features.Avatars.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
-public class DefaultAvatarEntityConfiguration : IEntityTypeConfiguration<DefaultAvatar>
+/// <summary>
+/// Maps the stock avatar catalog. <c>Index</c> is uniquely indexed because it is the slot
+/// <c>DefaultAvatarIndexResolver</c> maps a user onto: two rows claiming the same slot would make the
+/// picture a user gets depend on row order.
+/// </summary>
+public sealed class DefaultAvatarEntityConfiguration : IEntityTypeConfiguration<DefaultAvatar>
 {
     public void Configure(EntityTypeBuilder<DefaultAvatar> builder)
     {
         builder.ToTable("DefaultAvatars");
-        builder.HasKey(a => a.Id);
-        builder.Property(a => a.ObjectKey).IsRequired();
-        builder.Property(a => a.Index).IsRequired();
+        builder.HasKey(defaultAvatar => defaultAvatar.Id);
+        builder.Property(defaultAvatar => defaultAvatar.ObjectKey).IsRequired();
+        builder.Property(defaultAvatar => defaultAvatar.Index).IsRequired();
 
-        builder.HasIndex(a => a.Index).IsUnique();
+        builder.HasIndex(defaultAvatar => defaultAvatar.Index).IsUnique();
     }
 }

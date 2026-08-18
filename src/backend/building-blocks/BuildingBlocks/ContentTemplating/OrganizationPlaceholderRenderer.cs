@@ -60,10 +60,16 @@ public static class OrganizationPlaceholderRenderer
             System.Text.Unicode.UnicodeRanges.All),
     };
 
+    /// <summary>
+    /// Ceiling on one match attempt. The pattern is linear and the input is stored content rather
+    /// than request data, so this is a backstop against a pathological template, not a live hazard.
+    /// </summary>
+    private static readonly TimeSpan PlaceholderMatchTimeout = TimeSpan.FromSeconds(1);
+
     private static readonly Regex PlaceholderPattern = new(
         @"\{\{\s*(?<key>[A-Za-z0-9_.\-]+)\s*\}\}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
-        TimeSpan.FromSeconds(1));
+        PlaceholderMatchTimeout);
 
     /// <summary>
     /// The neutral wording each supported placeholder falls back to. These are the phrases the base
@@ -141,6 +147,16 @@ public static class OrganizationPlaceholderRenderer
            && PlaceholderPattern.Matches(template).Any(match =>
                match.Groups["key"].Value.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Resolves one <c>organization.</c>-namespaced field to its substitution, or
+    /// <see langword="null"/> when the field is not a placeholder this renderer knows.
+    ///
+    /// <para>
+    /// A glossary miss falls back to the term itself, not to nothing: the sentence still reads, it
+    /// just uses the generic word instead of the customer's word for it. A known-but-unfilled field
+    /// falls back to <see cref="Fallbacks"/>.
+    /// </para>
+    /// </summary>
     private static string? Resolve(string field, OrganizationProfileSnapshot profile)
     {
         if (field.StartsWith(GlossaryPrefix, StringComparison.OrdinalIgnoreCase))
@@ -154,8 +170,6 @@ public static class OrganizationPlaceholderRenderer
             var match = profile.Glossary.FirstOrDefault(entry =>
                 string.Equals(entry.Key, term, StringComparison.OrdinalIgnoreCase));
 
-            // A glossary miss falls back to the term itself, not to nothing: the sentence still
-            // reads, it just uses the generic word instead of the customer's word for it.
             return string.IsNullOrWhiteSpace(match.Value) ? term : match.Value;
         }
 

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
@@ -17,13 +19,13 @@ namespace Sellevate.Identity.Features.Auth;
 /// </summary>
 public sealed class ExpiredEmailVerificationCleanupService(
     IServiceScopeFactory scopeFactory,
+    IOptions<BackgroundJobConfiguration> backgroundJobOptions,
     ILogger<ExpiredEmailVerificationCleanupService> logger) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromHours(backgroundJobOptions.Value.ExpiredEmailVerificationCleanupIntervalHours));
         do
         {
             try
@@ -42,11 +44,15 @@ public sealed class ExpiredEmailVerificationCleanupService(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// System mode is declared before the <see cref="IdentityDbContext"/> is resolved, so the
+    /// context is built against a scope whose mode is already decided — the same ordering the
+    /// sibling <see cref="ExpiredRefreshTokenCleanupService"/> depends on.
+    /// </summary>
     private async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
 
-        // Before the DbContext is resolved — see the sibling refresh-token cleanup service.
         scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
 
         var databaseContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();

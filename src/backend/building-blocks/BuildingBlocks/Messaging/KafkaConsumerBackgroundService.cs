@@ -28,6 +28,12 @@ namespace Sellevate.BuildingBlocks.Messaging;
 /// </summary>
 public abstract class KafkaConsumerBackgroundService : BackgroundService
 {
+    /// <summary>
+    /// How long the consume loop pauses after an unhandled error around the handler, so a broker or
+    /// Redis outage becomes a slow retry rather than a tight spin against a failing dependency.
+    /// </summary>
+    private static readonly TimeSpan UnhandledErrorBackoff = TimeSpan.FromSeconds(1);
+
     private readonly KafkaSettings _settings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IIdempotencyStore _idempotencyStore;
@@ -70,13 +76,34 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
         IServiceProvider scopedServices,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Hands the consume loop to a dedicated background thread. Confluent's <c>Consume()</c> is a
+    /// blocking call, so running it inline would stall the host's startup/shutdown thread.
+    /// </summary>
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Confluent's Consume() blocks; run the loop on a dedicated background thread
-        // so we never stall the host's startup/shutdown thread.
         return Task.Run(() => ConsumeLoop(stoppingToken), stoppingToken);
     }
 
+    /// <summary>
+    /// Consumes until cancellation, committing an offset only once its message is accounted for.
+    ///
+    /// <para>
+    /// The outer <c>catch</c> around <see cref="ProcessMessageAsync"/> is load-bearing and must not
+    /// be narrowed. Handler exceptions are already caught by the processor's retry path; what this
+    /// catches is everything <em>around</em> the handler — the Redis idempotency store, the offset
+    /// commit, and the scope's service resolution. None of that was guarded, and .NET's default
+    /// <c>BackgroundServiceExceptionBehavior</c> is <c>StopHost</c>, so a five-second Redis restart
+    /// or a routine consumer-group rebalance took the whole service down, HTTP API included, and
+    /// <c>restart:</c> turned that into a crash loop. This base class backs thirteen consumers
+    /// across the platform.
+    /// </para>
+    ///
+    /// <para>
+    /// An <see cref="OperationCanceledException"/> reaching the outer handler is a normal shutdown,
+    /// not a failure, and is deliberately absorbed without logging.
+    /// </para>
+    /// </summary>
     private async Task ConsumeLoop(CancellationToken stoppingToken)
     {
         var config = new ConsumerConfig
@@ -102,9 +129,9 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                 {
                     result = consumer.Consume(stoppingToken);
                 }
-                catch (ConsumeException ex)
+                catch (ConsumeException consumeException)
                 {
-                    Logger.LogError(ex, "Kafka consume error in group '{Group}'", _settings.ConsumerGroupId);
+                    Logger.LogError(consumeException, "Kafka consume error in group '{Group}'", _settings.ConsumerGroupId);
                     continue;
                 }
 
@@ -119,24 +146,16 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                 }
                 catch (Exception exception)
                 {
-                    // Handler exceptions are already caught by RunHandlerWithRetriesAsync. What this
-                    // catches is everything *around* the handler: the Redis idempotency store, the
-                    // offset commit, and the scope's service resolution. None of that was guarded,
-                    // and .NET's default BackgroundServiceExceptionBehavior is StopHost — so a
-                    // five-second Redis restart or a routine consumer-group rebalance took the whole
-                    // service down, HTTP API included, and `restart:` turned that into a crash loop.
-                    // This base class backs thirteen consumers across the platform. Review, 40.34.
                     Logger.LogError(
                         exception,
                         "Unhandled error processing a Kafka message in group '{Group}'; continuing", _settings.ConsumerGroupId);
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                    await Task.Delay(UnhandledErrorBackoff, stoppingToken);
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // Normal shutdown.
         }
         finally
         {

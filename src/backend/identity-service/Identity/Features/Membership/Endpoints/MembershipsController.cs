@@ -22,6 +22,11 @@ namespace Sellevate.Identity.Features.Membership.Endpoints;
 /// Removing a user from an organization is the one privilege the 2026-08-16 role split reserves
 /// for a superadmin, so this route is <c>RequireOrgSuperAdmin</c> (docs/DECISIONS.md).
 /// </para>
+/// <para>
+/// <c>Membership</c> is keyed on <c>(UserId, OrganizationId)</c> and is not <c>ITenantScoped</c>
+/// (Phase 40.6), so the organization filter is written out explicitly in every query here rather
+/// than inherited from a query filter.
+/// </para>
 /// </summary>
 [ApiController]
 [Route("memberships")]
@@ -41,8 +46,6 @@ public sealed class MembershipsController(
             return Forbid();
         }
 
-        // Membership is keyed on (UserId, OrganizationId) and is not ITenantScoped (40.6), so the
-        // organization filter is written out explicitly rather than inherited from a query filter.
         var membership = await databaseContext.Memberships
             .FirstOrDefaultAsync(
                 candidate => candidate.UserId == userId && candidate.OrganizationId == currentOrganizationId,

@@ -7,6 +7,15 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Companies.Services.Implementation;
 
+/// <summary>
+/// Builds the briefing prompt and asks the provider for the sheet.
+///
+/// <para>
+/// It reads <c>BriefingModel</c> / <c>MaximumBriefingTokenCount</c> rather than the open-question or
+/// feedback settings the feature originally piggybacked on, so briefing can be tuned without moving
+/// grading — see <c>OpenAiConfiguration</c>.
+/// </para>
+/// </summary>
 internal sealed class BriefingService : IBriefingService
 {
     private const string TriggerPrompt = "Составь шпаргалку по данным выше.";
@@ -30,9 +39,6 @@ internal sealed class BriefingService : IBriefingService
             throw new InvalidOperationException("OpenAI API is not configured");
 
         var systemPrompt = BuildSystemPrompt(request);
-        // Dedicated BriefingModel/MaximumBriefingTokenCount (rather than the open-question/
-        // feedback config the briefing feature originally piggybacked on) so briefing can be
-        // tuned independently — see OpenAiConfiguration.
         return await _openAiChatService.GenerateTextAsync(
             systemPrompt,
             TriggerPrompt,

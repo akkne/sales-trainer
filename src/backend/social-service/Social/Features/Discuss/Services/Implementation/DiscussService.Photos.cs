@@ -7,6 +7,16 @@ namespace Sellevate.Social.Features.Discuss.Services.Implementation;
 
 internal sealed partial class DiscussService
 {
+    /// <summary>
+    /// Stores a batch of photos against a thread or a reply, but only for the person who authored it.
+    /// The batch is all-or-nothing: every file is validated before any object is written, and a
+    /// failed database commit deletes whatever already reached object storage — otherwise a rolled-back
+    /// upload would leave orphaned objects nothing can ever reference or bill for.
+    ///
+    /// <para>
+    /// The per-owner cap counts photos already stored, so it bounds the total rather than one request.
+    /// </para>
+    /// </summary>
     public async Task<(DiscussPhotoUploadStatus Status, IReadOnlyList<DiscussPhotoDto> Photos)> UploadPhotosAsync(
         DiscussPhotoOwner ownerType,
         Guid ownerId,
@@ -74,7 +84,6 @@ internal sealed partial class DiscussService
         }
         catch (Exception)
         {
-            // DB write failed — best-effort delete all objects already written to S3
             foreach (var key in uploadedKeys)
                 await DeleteObjectBestEffortAsync(key, cancellationToken);
             throw;
@@ -84,6 +93,11 @@ internal sealed partial class DiscussService
         return (DiscussPhotoUploadStatus.Success, photos);
     }
 
+    /// <summary>
+    /// Removes a photo the acting user authored. The row goes first and the object afterwards, on a
+    /// best-effort basis: a stored object nothing points at is waste, while a row pointing at a
+    /// deleted object is a broken image on somebody's screen.
+    /// </summary>
     public async Task<DiscussOperationStatus> DeletePhotoAsync(Guid photoId, Guid actingUserId, CancellationToken cancellationToken = default)
     {
         await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
@@ -116,11 +130,19 @@ internal sealed partial class DiscussService
         return DiscussOperationStatus.Success;
     }
 
+    /// <summary>
+    /// Streams a photo's bytes. The object key is read from a row this organization can see, so the
+    /// tenant boundary for object storage is this query and not the key — the key is namespaced as
+    /// well (see <see cref="ResolveObjectKeyPrefix"/>) for the benefit of whoever reads a bucket
+    /// listing without a database to join against.
+    ///
+    /// <para>
+    /// A row whose object has gone missing reads as no photo at all rather than as an error: the
+    /// endpoint serving this is anonymous, and a failure there is a broken image, not an incident.
+    /// </para>
+    /// </summary>
     public async Task<(Stream Content, string ContentType)?> GetPhotoContentAsync(Guid photoId, CancellationToken cancellationToken = default)
     {
-        // The object key is read from a row this organization can see, so the tenant boundary for
-        // MinIO is this query, not the key. The key is namespaced anyway — see
-        // ResolveObjectKeyPrefix — because an operator staring at a bucket listing has no query.
         await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
 
         var photo = await _databaseContext.DiscussPhotos.AsNoTracking()

@@ -5,6 +5,17 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Achievements.Services.Implementation;
 
+/// <summary>
+/// Maintains the per-user learning counters achievement conditions read: completed lessons and
+/// whether any skill has been finished.
+///
+/// <para>
+/// Creates the row on first use, so callers never have to. The lesson counter is incremented, not
+/// recomputed — the source of truth for "how many lessons" is learning-service, and this is a running
+/// projection of its events, so a replayed event would double-count. Idempotency is therefore the
+/// consumer's responsibility, not this service's.
+/// </para>
+/// </summary>
 internal sealed class LearningProgressService(GamificationDbContext databaseContext) : ILearningProgressService
 {
     public async Task RecordLessonCompletedAsync(Guid userId, CancellationToken cancellationToken = default)

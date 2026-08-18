@@ -1,14 +1,19 @@
-using System.Net.Http.Json;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Infrastructure.Configuration;
 
 namespace Sellevate.Company.Infrastructure.Ai;
 
+/// <summary>
+/// Calls ai-service to turn pasted raw notes or a transcript into the fields of a draft call-log
+/// entry. Persists nothing and asserts nothing about accuracy: the result is a draft a person
+/// reviews before it is saved, which is why a partially filled answer is acceptable here while an
+/// unnoticed failure is not.
+/// </summary>
 internal sealed class ParseLogAiClient : IParseLogAiClient
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const string FailureLogTemplate = "AI call log parsing returned {StatusCode}: {Body}";
+    private const string ServiceLabel = "AI parse-log service";
 
     private readonly HttpClient _httpClient;
     private readonly AiServiceConfiguration _configuration;
@@ -33,35 +38,14 @@ internal sealed class ParseLogAiClient : IParseLogAiClient
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.ParseLogPath;
+        using var response = await AiServiceCall.PostAsync(
+            _httpClient,
+            _tenantContext,
+            AiServiceCall.BuildRequestUri(_configuration.BaseUrl, _configuration.ParseLogPath),
+            request,
+            cancellationToken);
 
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = JsonContent.Create(request, options: SerializerOptions),
-        };
-
-        // Phase 40.33. ai-service meters LLM spend per organization and refuses a call that names
-        // none, so the tenant travels with the request rather than being inferred there.
-        AiCallHeaders.Apply(httpRequest, _tenantContext);
-
-        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning(
-                "AI call log parsing returned {StatusCode}: {Body}",
-                response.StatusCode, responseBody);
-            throw new InvalidOperationException(
-                $"AI parse-log service returned {(int)response.StatusCode}.");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<ParseLogAiResult>(
-            SerializerOptions, cancellationToken);
-
-        if (result is null)
-            throw new InvalidOperationException("AI parse-log service returned an empty body.");
-
-        return result;
+        return await AiServiceCall.ReadResultAsync<ParseLogAiResult>(
+            response, _logger, FailureLogTemplate, ServiceLabel, cancellationToken);
     }
 }

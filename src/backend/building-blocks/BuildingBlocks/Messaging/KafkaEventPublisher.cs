@@ -18,22 +18,35 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
 {
     private const string DeadLetterReasonHeader = "x-dead-letter-reason";
     private const string DeadLetterAtHeader = "x-dead-letter-at";
+    private const string DeadLetterTimestampFormat = "O";
+    private const int MinimumPublishTimeoutSeconds = 1;
+
+    /// <summary>
+    /// How long <see cref="Dispose"/> blocks so in-flight messages reach the broker before the host
+    /// tears the producer down. Bounded on purpose: a shutdown must not hang on a dead broker.
+    /// </summary>
+    private static readonly TimeSpan ShutdownFlushTimeout = TimeSpan.FromSeconds(5);
 
     private readonly IProducer<string, string> _producer;
     private readonly ILogger<KafkaEventPublisher> _logger;
     private readonly TimeSpan _publishTimeout;
 
+    /// <summary>
+    /// Builds the shared producer. <c>MessageTimeoutMs</c> is pinned to
+    /// <see cref="KafkaSettings.PublishTimeoutSeconds"/> because librdkafka's own default retries an
+    /// unreachable broker for five minutes before reporting the failure, and every producer call
+    /// would inherit that as its worst case.
+    /// </summary>
     public KafkaEventPublisher(IOptions<KafkaSettings> settings, ILogger<KafkaEventPublisher> logger)
     {
         _logger = logger;
-        _publishTimeout = TimeSpan.FromSeconds(Math.Max(1, settings.Value.PublishTimeoutSeconds));
+        _publishTimeout = TimeSpan.FromSeconds(
+            Math.Max(MinimumPublishTimeoutSeconds, settings.Value.PublishTimeoutSeconds));
         var config = new ProducerConfig
         {
             BootstrapServers = settings.Value.BootstrapServers,
             Acks = Acks.All,
             EnableIdempotence = true,
-            // Without this librdkafka retries an unreachable broker for 5 minutes before it
-            // reports the failure, and every producer call inherits that as its worst case.
             MessageTimeoutMs = (int)_publishTimeout.TotalMilliseconds,
         };
         _producer = new ProducerBuilder<string, string>(config).Build();
@@ -49,6 +62,11 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
     ///
     /// <paramref name="cancellationToken"/> is accepted for interface symmetry and unused: there is
     /// nothing to wait for, and cancelling the caller must not un-announce a committed change.
+    ///
+    /// <para>
+    /// The <c>catch</c> covers a full local queue or a producer in a fatal state — both of which
+    /// lose the event, which is why they are logged as errors rather than rethrown.
+    /// </para>
     /// </summary>
     public Task PublishAsync<TData>(
         string topic,
@@ -86,7 +104,6 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
         }
         catch (Exception exception)
         {
-            // The local queue is full, or the producer is in a fatal state.
             _logger.LogError(
                 exception,
                 "Could not queue {EventType} ({EventId}) for {Topic}; the event is lost",
@@ -111,6 +128,16 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
             .WaitAsync(_publishTimeout, cancellationToken);
     }
 
+    /// <summary>
+    /// Parks a poison message on its dead-letter topic, stamping the failure reason and the current
+    /// UTC instant as headers.
+    ///
+    /// <para>
+    /// Unlike <see cref="PublishAsync{TData}"/>, a failure here <b>propagates</b>: the caller decides
+    /// what to do with a message it could neither process nor park, and swallowing it would commit
+    /// the offset on a message that went nowhere.
+    /// </para>
+    /// </summary>
     public async Task PublishAsync(
         string deadLetterTopic,
         string partitionKey,
@@ -121,11 +148,12 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
         var headers = new Headers
         {
             { DeadLetterReasonHeader, System.Text.Encoding.UTF8.GetBytes(failureReason) },
-            { DeadLetterAtHeader, System.Text.Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("O")) },
+            {
+                DeadLetterAtHeader,
+                System.Text.Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString(DeadLetterTimestampFormat))
+            },
         };
 
-        // Unlike a domain event, a failure here must propagate: the caller decides what to do with
-        // a message it could neither process nor park.
         var result = await ProduceWithinTimeoutAsync(
             deadLetterTopic,
             new Message<string, string> { Key = partitionKey, Value = rawValue, Headers = headers },
@@ -136,13 +164,17 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
             deadLetterTopic, result.Partition.Value, result.Offset.Value, failureReason);
     }
 
+    /// <summary>
+    /// Re-emits an outbox row's stored envelope verbatim. Also propagates on failure — the outbox
+    /// row then stays unsent and the relay retries it on a later tick, which is what preserves
+    /// at-least-once delivery.
+    /// </summary>
     public async Task ForwardAsync(
         string topic,
         string partitionKey,
         string payload,
         CancellationToken cancellationToken = default)
     {
-        // Also propagates on failure — the outbox row stays unsent and is retried later.
         var result = await ProduceWithinTimeoutAsync(
             topic,
             new Message<string, string> { Key = partitionKey, Value = payload },
@@ -153,10 +185,13 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
             topic, result.Partition.Value, result.Offset.Value);
     }
 
+    /// <summary>
+    /// Flushes for at most <see cref="ShutdownFlushTimeout"/> so queued messages reach the broker,
+    /// then releases the producer.
+    /// </summary>
     public void Dispose()
     {
-        // Block briefly so in-flight messages reach the broker before shutdown.
-        _producer.Flush(TimeSpan.FromSeconds(5));
+        _producer.Flush(ShutdownFlushTimeout);
         _producer.Dispose();
     }
 }

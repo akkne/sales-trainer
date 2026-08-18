@@ -43,17 +43,14 @@ public sealed class StreakTimezoneTests
     [Test]
     public async Task RegisterActivity_SameDayInConfiguredTimezone_DoesNotIncrementStreak()
     {
-        // Arrange: first call on 2026-06-15 creates the streak
         var dayOne = new DateOnly(2026, 6, 15);
         var service = CreateService(dayOne);
         var userId = Guid.NewGuid();
 
         await service.RegisterActivityAsync(userId);
 
-        // Act: second call on the same day (same fixed clock) — should be idempotent
         await service.RegisterActivityAsync(userId);
 
-        // Assert
         var streak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == userId);
         streak.CurrentStreakDayCount.Should().Be(1);
     }
@@ -61,26 +58,26 @@ public sealed class StreakTimezoneTests
     [Test]
     public async Task RegisterActivity_NextDayInConfiguredTimezone_IncrementsStreak()
     {
-        // Arrange: create streak on day 1
         var dayOne = new DateOnly(2026, 6, 15);
         var serviceDay1 = CreateService(dayOne);
         var userId = Guid.NewGuid();
         await serviceDay1.RegisterActivityAsync(userId);
 
-        // Act: next calendar day in the configured timezone
         var dayTwo = dayOne.AddDays(1);
         var serviceDay2 = CreateService(dayTwo);
         await serviceDay2.RegisterActivityAsync(userId);
 
-        // Assert
         var streak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == userId);
         streak.CurrentStreakDayCount.Should().Be(2);
     }
 
+    /// <summary>
+    /// A gap restarts the current count at one but must never lower the longest-ever count: the
+    /// all-time record is history, not state that a missed day can rewrite.
+    /// </summary>
     [Test]
     public async Task RegisterActivity_AfterGapInConfiguredTimezone_ResetsToOne()
     {
-        // Arrange: create streak with LastActivityDate two days ago
         var twoDaysAgo = new DateOnly(2026, 6, 13);
         var today = new DateOnly(2026, 6, 15);
         var userId = Guid.NewGuid();
@@ -94,20 +91,23 @@ public sealed class StreakTimezoneTests
         });
         await _databaseContext.SaveChangesAsync();
 
-        // Act
         var service = CreateService(today);
         await service.RegisterActivityAsync(userId);
 
-        // Assert: gap resets streak
         var streak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == userId);
         streak.CurrentStreakDayCount.Should().Be(1);
-        streak.LongestStreakDayCount.Should().Be(10); // longest preserved
+        streak.LongestStreakDayCount.Should().Be(10);
     }
 
+    /// <summary>
+    /// Phase 40.13: the Hangfire entry point iterates organizations and needs a scope factory, so the
+    /// rule under test is exercised through <c>ResetStaleStreaksAsync</c>, which takes an
+    /// already-scoped context. Only a streak whose last activity predates yesterday is stale —
+    /// yesterday's is still alive, because today has not ended yet.
+    /// </summary>
     [Test]
     public async Task StreakResetJob_UsesConfiguredTimezone_ResetsOnlyStaleStreaks()
     {
-        // Arrange: three streaks with activities at different dates relative to "today"
         var today = new DateOnly(2026, 6, 15);
         var yesterday = today.AddDays(-1);
         var twoDaysAgo = today.AddDays(-2);
@@ -122,12 +122,9 @@ public sealed class StreakTimezoneTests
             new UserStreak { Id = Guid.NewGuid(), UserId = todayUserId, CurrentStreakDayCount = 1, LongestStreakDayCount = 1, LastActivityDate = today });
         await _databaseContext.SaveChangesAsync();
 
-        // Phase 40.13: the Hangfire entry point iterates organizations and needs a scope factory;
-        // the rule under test is the reset itself, which now takes an already-scoped context.
         await StreakResetJob.ResetStaleStreaksAsync(
             _databaseContext, new FixedStreakClock(today), CancellationToken.None);
 
-        // Assert
         var staleStreak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == staleUserId);
         var yesterdayStreak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == yesterdayUserId);
         var todayStreak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == todayUserId);

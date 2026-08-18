@@ -4,6 +4,11 @@ using Sellevate.Identity.Features.Auth.Exceptions;
 
 namespace Sellevate.Identity.Infrastructure;
 
+/// <summary>
+/// Turns the domain exceptions this service throws into ProblemDetails responses, and everything else
+/// into a 500. Exception messages are echoed to the caller only below 500: a 4xx message is written for
+/// a human to act on, while a 500 could carry internal detail and is logged instead.
+/// </summary>
 internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(

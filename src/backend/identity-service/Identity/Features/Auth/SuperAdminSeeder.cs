@@ -7,7 +7,13 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
 
-public sealed class SuperAdminSeeder(
+/// <summary>
+/// Ensures the configured platform superadministrator exists on every startup. Idempotent, and
+/// deliberately promoting rather than recreating: if the address already belongs to an ordinary user,
+/// that user is raised to <c>SuperAdmin</c> so changing the configured address never orphans the
+/// account behind it or creates a duplicate.
+/// </summary>
+internal sealed class SuperAdminSeeder(
     IdentityDbContext databaseContext,
     IUserEventPublisher userEventPublisher,
     IOptions<SuperAdminConfiguration> superAdminOptions,

@@ -5,6 +5,18 @@ using Sellevate.Learning.Features.DialogReviews.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps a coaching note or a filed dispute about one graded conversation. The session identifier is the
+/// same width as <c>UserDialogScores.SessionId</c>, which is where every value here is copied from.
+///
+/// <para>
+/// The three indexes are the three screens: the manager's inbox — "what has been said to me, and what
+/// have I filed", one indexed range per person inside one organization; the РОП's queue, open disputes
+/// first and newest first, with kind before status because the queue is always asked for one kind at a
+/// time; and everything ever said about one conversation, which is what the transcript screen shows
+/// alongside the messages.
+/// </para>
+/// </summary>
 public sealed class DialogReviewNoteEntityConfiguration : IEntityTypeConfiguration<DialogReviewNote>
 {
     public void Configure(EntityTypeBuilder<DialogReviewNote> builder)
@@ -20,7 +32,6 @@ public sealed class DialogReviewNoteEntityConfiguration : IEntityTypeConfigurati
             .HasMaxLength(20)
             .HasDefaultValue(DialogReviewKinds.CoachingNote);
 
-        // Same width as UserDialogScores.SessionId, which is where every value here is copied from.
         builder.Property(note => note.SessionId).IsRequired().HasMaxLength(64);
         builder.Property(note => note.DialogModeKey).IsRequired().HasMaxLength(100);
 
@@ -36,16 +47,10 @@ public sealed class DialogReviewNoteEntityConfiguration : IEntityTypeConfigurati
             .HasMaxLength(20)
             .HasDefaultValue(DialogReviewStatuses.Open);
 
-        // The manager's inbox: "what has been said to me, and what have I filed" — one indexed range
-        // per person inside one organization.
         builder.HasIndex(note => new { note.OrganizationId, note.SubjectUserId, note.Status });
 
-        // The РОП's queue: open disputes first, newest first. Kind before status because the queue is
-        // always asked for one kind at a time.
         builder.HasIndex(note => new { note.OrganizationId, note.Kind, note.Status, note.CreatedAt });
 
-        // Everything ever said about one conversation, which is what the transcript screen shows
-        // alongside the messages.
         builder.HasIndex(note => new { note.OrganizationId, note.SessionId });
     }
 }

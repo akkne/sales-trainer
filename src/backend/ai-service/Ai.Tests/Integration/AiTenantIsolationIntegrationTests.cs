@@ -67,8 +67,6 @@ public class AiTenantIsolationIntegrationTests
     private string _organizationASessionId = string.Empty;
     private string _organizationBSessionId = string.Empty;
 
-    // ── fixture lifecycle ────────────────────────────────────────────────
-
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -105,7 +103,6 @@ public class AiTenantIsolationIntegrationTests
             }
             catch
             {
-                // Best-effort cleanup of a throwaway fixture — never fail the run over teardown.
             }
         }
 
@@ -118,7 +115,6 @@ public class AiTenantIsolationIntegrationTests
             }
             catch
             {
-                // As above.
             }
         }
 
@@ -126,7 +122,6 @@ public class AiTenantIsolationIntegrationTests
         {
             try
             {
-                // By name, never FLUSHDB: this Redis is shared with the developer's running stack.
                 var database = _redis.GetDatabase();
                 foreach (var organizationId in new[] { OrganizationAId, OrganizationBId })
                 {
@@ -136,15 +131,12 @@ public class AiTenantIsolationIntegrationTests
             }
             catch
             {
-                // As above.
             }
 
             await _redis.CloseAsync();
             _redis.Dispose();
         }
     }
-
-    // ── Postgres: the dialog library ─────────────────────────────────────
 
     [Test]
     public async Task Global_dialog_library_stays_visible_to_both_organizations()
@@ -220,12 +212,10 @@ public class AiTenantIsolationIntegrationTests
 
         var act = async () => await context.SaveChangesAsync();
 
-        // WITH CHECK on the content policy: a row whose organization is neither NULL nor the
-        // current one cannot be inserted, whatever the application believes.
-        await act.Should().ThrowAsync<DbUpdateException>();
+        await act.Should().ThrowAsync<DbUpdateException>(
+            "the content policy's WITH CHECK refuses a row whose organization is neither NULL nor the "
+            + "current one, whatever the application believes");
     }
-
-    // ── Mongo: dialog sessions ───────────────────────────────────────────
 
     [Test]
     public async Task One_organizations_sessions_are_invisible_to_another()
@@ -272,7 +262,6 @@ public class AiTenantIsolationIntegrationTests
         incremented.Should().BeFalse();
         deleted.Should().BeFalse();
 
-        // And A's session is still intact and unchanged.
         var repositoryForA = CreateSessionRepository(OrganizationAId);
         var session = await repositoryForA.FindForUserAsync(_organizationASessionId, OrganizationAUserId);
 
@@ -308,8 +297,6 @@ public class AiTenantIsolationIntegrationTests
             .WithMessage("Organization context is not set.");
     }
 
-    // ── Redis: caches and dedupe ─────────────────────────────────────────
-
     [Test]
     public async Task Two_organizations_never_read_each_others_cached_verdict()
     {
@@ -338,8 +325,6 @@ public class AiTenantIsolationIntegrationTests
             "one organization marking an event processed must not suppress the other organization's copy of it");
     }
 
-    // ── setup helpers ────────────────────────────────────────────────────
-
     private static async Task SetUpPostgresAsync()
     {
         await using (var maintenanceConnection = new NpgsqlConnection(LocalAiStoreTestSettings.AdminConnectionString()))
@@ -352,9 +337,6 @@ public class AiTenantIsolationIntegrationTests
             await ExecuteAsync(maintenanceConnection, $"DROP DATABASE IF EXISTS {LocalAiStoreTestSettings.TestDatabaseName};");
             await ExecuteAsync(maintenanceConnection, $"DROP ROLE IF EXISTS {LocalAiStoreTestSettings.ApplicationRoleName};");
             await ExecuteAsync(maintenanceConnection, $"CREATE DATABASE {LocalAiStoreTestSettings.TestDatabaseName};");
-            // NOBYPASSRLS is the whole point: FORCE ROW LEVEL SECURITY still lets a superuser (and,
-            // without FORCE, the table owner) read everything, so isolation tested as the admin
-            // role would pass no matter what the policies said.
             await ExecuteAsync(maintenanceConnection, $"""
                 CREATE ROLE {LocalAiStoreTestSettings.ApplicationRoleName}
                     WITH LOGIN PASSWORD '{LocalAiStoreTestSettings.ApplicationRolePassword}'
@@ -366,8 +348,6 @@ public class AiTenantIsolationIntegrationTests
                 """);
         }
 
-        // The real migrations, run as the owner — exactly how production gets its schema and its
-        // RLS policies. Nothing in this fixture writes DDL of its own.
         await using (var migrationContext = CreateAdminContext())
         {
             await migrationContext.Database.MigrateAsync();
@@ -388,10 +368,14 @@ public class AiTenantIsolationIntegrationTests
         await SeedDialogLibraryAsync(testDatabaseConnection);
     }
 
+    /// <summary>
+    /// Seeds one global row and one row per organization, as the database owner. The owner bypasses
+    /// nothing, but it is allowed to write on both sides of the boundary — which the fixture needs,
+    /// because it has to create the very data the application role must then fail to see. Reads run as
+    /// the throwaway NOBYPASSRLS role instead.
+    /// </summary>
     private static async Task SeedDialogLibraryAsync(NpgsqlConnection connection)
     {
-        // Seeded as the owner, which bypasses nothing but is allowed to write rows for both
-        // organizations — the fixture needs data on both sides of the boundary it is testing.
         await InsertBundleAsync(connection, GlobalBundleId, organizationId: null, "Global");
         await InsertBundleAsync(connection, OrganizationABundleId, OrganizationAId, "A");
         await InsertBundleAsync(connection, OrganizationBBundleId, OrganizationBId, "B");
@@ -444,14 +428,22 @@ public class AiTenantIsolationIntegrationTests
         await command.ExecuteNonQueryAsync();
     }
 
+    /// <summary>
+    /// Seeds both organizations' sessions <b>through the repository</b>, never as hand-written documents.
+    ///
+    /// <para>
+    /// That is the load-bearing choice in this fixture. Mongo has no query filter and no row-level
+    /// security, so <see cref="DialogSessionRepository"/> stamping the organization on write is the
+    /// entire boundary. Seeding documents by hand would stamp them correctly no matter what the
+    /// repository does — every isolation assertion below would keep passing while the thing they exist
+    /// to protect had stopped working.
+    /// </para>
+    /// </summary>
     private async Task SetUpMongoAsync()
     {
         await new MongoClient(LocalAiStoreTestSettings.MongoConnectionString())
             .DropDatabaseAsync(LocalAiStoreTestSettings.MongoDatabaseName);
 
-        // Inserted through the repository on purpose: if the repository ever stopped stamping the
-        // organization on write, every isolation assertion below would still pass against
-        // hand-written documents and the regression would go unnoticed.
         var organizationASession = new DialogSession
         {
             UserId = OrganizationAUserId,
@@ -470,8 +462,6 @@ public class AiTenantIsolationIntegrationTests
         await CreateSessionRepository(OrganizationBId).InsertAsync(organizationBSession);
         _organizationBSessionId = organizationBSession.Id;
     }
-
-    // ── plumbing ─────────────────────────────────────────────────────────
 
     private static AiDbContext CreateAdminContext()
     {
