@@ -105,8 +105,7 @@ internal sealed class ContentGenerationStepRunner(
 
         return await databaseContext.ContentGenerationJobs
             .AsNoTracking()
-            .Where(job => (job.Status == ContentGenerationJobStatuses.Structuring
-                           || job.Status == ContentGenerationJobStatuses.Generating)
+            .Where(job => ContentGenerationJobStatuses.WorkerOwned.Contains(job.Status)
                           && job.Attempts < options.Value.MaximumAttempts
                           && (job.ClaimedAt == null || job.ClaimedAt < leaseExpiry))
             .OrderBy(job => job.CreatedAt)
@@ -138,8 +137,7 @@ internal sealed class ContentGenerationStepRunner(
 
         var claimedRowCount = await databaseContext.ContentGenerationJobs
             .Where(job => job.Id == jobId
-                          && (job.Status == ContentGenerationJobStatuses.Structuring
-                              || job.Status == ContentGenerationJobStatuses.Generating)
+                          && ContentGenerationJobStatuses.WorkerOwned.Contains(job.Status)
                           && job.Attempts < maximumAttempts
                           && (job.ClaimedAt == null || job.ClaimedAt < leaseExpiry))
             .ExecuteUpdateAsync(

@@ -130,8 +130,7 @@ internal sealed class ContentGenerationSweepService(
 
         return await databaseContext.ContentGenerationJobs
             .IgnoreQueryFilters()
-            .Where(job => (job.Status == ContentGenerationJobStatuses.Structuring
-                           || job.Status == ContentGenerationJobStatuses.Generating)
+            .Where(job => ContentGenerationJobStatuses.WorkerOwned.Contains(job.Status)
                           && job.Attempts < maximumAttempts
                           && (job.ClaimedAt == null || job.ClaimedAt < leaseExpiry))
             .Select(job => job.OrganizationId)
