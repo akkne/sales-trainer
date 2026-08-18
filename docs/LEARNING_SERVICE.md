@@ -652,6 +652,8 @@ job. Full argument in [DECISIONS.md](DECISIONS.md) (2026-08-18); ASSIGNMENTS.md 
 | `AssignmentDeadlineSweepService` (40.23, digest 40.26) | **per-organization iteration** over a **system** enumeration | Warns everybody who has not finished an assignment whose deadline is inside the lead window (24h by default), sends the organization's administrators a digest naming who has not **started** it (40.26, and only when that list is non-empty), then stamps `Assignments.DeadlineNoticeSentAt` — one timestamp for both, because they announce the same date. The enumeration reads one column — organization ids of rows already known to be due — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before warning anybody, so a progress row belonging to somebody who has left does not mail them their old employer's deadline. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4e and DONT_FORGET. |
 
 | `AssignmentRepeatSweepService` (40.24) | **per-organization iteration** over a **system** enumeration | Issues the repeat waves whose day has come, as new assignments linked to their origin. The enumeration reads one column — organization ids of assignments that carry a repeat schedule and were issued recently enough for a wave to still be pending — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before issuing anything, and a failure to read it skips that organization for the tick with nothing recorded, so the next tick retries. **Needs `BYPASSRLS` for the enumeration only** — and this is the job where that matters most, because its output is invisible by nature: nobody notices a repeat that was never created. See [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4f and DONT_FORGET. |
+| `ContentGenerationSweepService` (40.27) | **per-organization iteration** over a **system** enumeration | Advances the content pipeline one step per run: the structuring call, then — only after a human approved the structure — the generation call that writes a lesson. **Needs `BYPASSRLS` for the enumeration only**; unlike the two above, its silence is loud, because a person is watching a spinner. See [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4h. |
+| `ContentAdaptationSweepService` (40.32) | **per-organization iteration** over a **system** enumeration | Answers a few items of a batch tone rewrite or content review per tick — one LLM call per exercise — and writes a **proposal** onto the item. It cannot write an `Exercise`: applying a proposal is an admin request, which is where «никогда не автоприменение» actually lives. The batch carries the lease, the item carries the idempotency, so an interruption costs the one call in flight. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4i and DONT_FORGET. |
 
 Until 40.23 there was no per-organization iteration job in learning-service; the deadline sweep was
 the first and 40.24's repeat sweep is the second. An **unset tenant is an exception, never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
@@ -821,6 +823,15 @@ screen in 40.23 — could not reach this service through the gateway at all. Not
 the frontend checks (`tsc`, `vitest`) do not know the gateway exists and no test asserts that a
 controller route has a gateway route. Recorded in [DONT_FORGET.md](DONT_FORGET.md).
 
+**Phase 40.32 added one gateway entry, `/admin/content/{**catch-all}`, and finding that it was
+missing is the trap paying for itself.** The block's own routes live under
+`/admin/content/adaptations`, and the parse of `appsettings.json` turned up something worse than a
+missing route for new code: **there has never been a route matching `/admin/content/*` at all**, so
+40.18's `/admin/content/overrides` — the copy-on-write and staleness-queue API — has been unreachable
+from outside the cluster since it shipped. One catch-all, no `Methods` restriction, covers both.
+Recorded in [DONT_FORGET.md](DONT_FORGET.md), because it also means 40.18 was never exercised end to
+end.
+
 **Phase 40.31 added no gateway entry, and that was checked rather than assumed.** Its four routes live
 under `/admin/team/skill-gaps`, which the `learning-admin-team` route
 (`/admin/team/{**catch-all}`, no method restriction) already covers — including the `DELETE`. The trap
@@ -911,6 +922,49 @@ What belongs to this service, and why it is split the way it is:
   the checkpoint, the sufficiency threshold, the attempts, the lease and the archived arrival are all
   identical. A block that had needed a second pipeline for the dashboard's button would have been a
   block that got the first one wrong.
+
+## Batch content adaptation and AI content review (Phase 40.32)
+
+The pipeline above builds a lesson out of a document. This is the other direction: take content that
+already exists and either **rewrite a whole stage into the customer's voice** or **say what is
+methodically wrong with what their РОП wrote by hand**. Full description:
+[CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md); routes in [API_CONTRACTS.md](API_CONTRACTS.md); the
+two tables in [DB_SCHEMA.md](DB_SCHEMA.md).
+
+What belongs to this service, and why it is shaped the way it is:
+
+- **Both halves are one machine.** `ContentAdaptationJobs.Mode` is `tone_rewrite` or
+  `quality_review`; everything else — the scope query, the lease, the per-item claim, the queue, the
+  worker — is shared. They differ in the prompt and in whether an item carries anything applicable.
+- **Not the LLM calls.** `POST /ai/content/rewrite` and `POST /ai/content/review`, internal and
+  un-gatewayed, sharing the `/ai/content` prefix, the client and the timeout with 40.27's two.
+- **`ContentAdaptationSweepService`** is the ninth entry in
+  [BACKGROUND_JOBS.md §2.1](TENANCY/BACKGROUND_JOBS.md) and the seventh production
+  `IgnoreQueryFilters()` call site. One LLM call per exercise, a few items per tick, each committed on
+  its own; the batch carries the lease and the item carries the "already paid for" fact, so a batch
+  interrupted at item forty resumes at forty-one.
+- **The worker cannot write an `Exercise`, and that is the block.** It writes
+  `ContentAdaptationItems` and its batch's status columns. The only code that turns a proposal into an
+  edit is `ContentAdaptationJobService.AcceptItemAsync`, inside an organization administrator's
+  request, aimed at one item by id. There is no bulk verb, deliberately.
+- **The scope is collected through 40.18's read resolution**, so a lesson the organization has already
+  forked contributes *their* exercises and one they have not contributes the library's — never both.
+  Accepting a proposal against a global exercise **forks the lesson first**
+  (`IContentOverrideService.CreateOverrideAsync`) and writes the body into the copy, because RLS
+  cannot protect the global library: "global" is a null and the content policy admits it in its
+  `WITH CHECK` clause.
+- **Accepting publishes nothing.** It writes the draft `Exercise` row exactly as
+  `PUT /admin/exercises/{id}` does; minting a `LessonVersion` per accepted sentence would produce a
+  version history nobody can read, and 40.15's argument is that a version is a decision. The change
+  reaches learners when somebody publishes.
+- **Staleness is the accept-time guard.** The item stores the hash of the body the model was shown and
+  accept recomputes it against the row about to be written. A mismatch is a 409: somebody edited that
+  exercise after the model read it, and applying would discard their words. 40.18 refused to build a
+  three-way merge of prose and grading criteria; refusing is the same answer one level down.
+- **The review's vocabulary is this service's** (`ContentReviewFindingCodes`, seven codes). ai-service
+  returns codes and a quoted fragment; the Russian sentence and the `blocking`/`advisory` severity are
+  resolved here. That is 40.28's arrangement, and the reason it matters is that «сколько упражнений у
+  этого клиента с неизмеримыми критериями» is then a query rather than a reading exercise.
 
 ## Local dev
 
