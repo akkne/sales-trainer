@@ -18,8 +18,8 @@ public sealed class AdminDialogExportTests
         return AiDbContextFactory.CreateInMemory();
     }
 
-    private static AdminDialogController CreateController(AiDbContext db) =>
-        new(db, NullLogger<AdminDialogController>.Instance)
+    private static AdminDialogController CreateController(AiDbContext databaseContext) =>
+        new(databaseContext, NullLogger<AdminDialogController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
@@ -27,10 +27,10 @@ public sealed class AdminDialogExportTests
     [Test]
     public async Task Export_ReturnsBundlesWithNestedModes_InImportableShape()
     {
-        await using var db = CreateInMemory();
+        await using var databaseContext = CreateInMemory();
         var skillId = Guid.NewGuid();
         var bundleId = Guid.NewGuid();
-        db.DialogBundles.Add(new DialogBundle
+        databaseContext.DialogBundles.Add(new DialogBundle
         {
             Id = bundleId,
             SkillId = skillId,
@@ -40,7 +40,7 @@ public sealed class AdminDialogExportTests
             SortOrder = 1,
             IsActive = true,
         });
-        db.DialogModes.Add(new DialogMode
+        databaseContext.DialogModes.Add(new DialogMode
         {
             Id = Guid.NewGuid(),
             BundleId = bundleId,
@@ -54,9 +54,9 @@ public sealed class AdminDialogExportTests
             VoiceEnabled = false,
             VoiceId = null,
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        var result = await CreateController(db).Export(CancellationToken.None);
+        var result = await CreateController(databaseContext).Export(CancellationToken.None);
 
         var export = (result.Result as OkObjectResult)!.Value as DialogExportDto;
         export.Should().NotBeNull();
@@ -74,20 +74,20 @@ public sealed class AdminDialogExportTests
     [Test]
     public async Task Export_OrdersBundlesBySortOrder()
     {
-        await using var db = CreateInMemory();
-        db.DialogBundles.Add(new DialogBundle
+        await using var databaseContext = CreateInMemory();
+        databaseContext.DialogBundles.Add(new DialogBundle
         {
             Id = Guid.NewGuid(), SkillId = Guid.NewGuid(), Title = "Second",
             Description = "", IconEmoji = "💬", SortOrder = 2, IsActive = true,
         });
-        db.DialogBundles.Add(new DialogBundle
+        databaseContext.DialogBundles.Add(new DialogBundle
         {
             Id = Guid.NewGuid(), SkillId = Guid.NewGuid(), Title = "First",
             Description = "", IconEmoji = "💬", SortOrder = 1, IsActive = true,
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        var result = await CreateController(db).Export(CancellationToken.None);
+        var result = await CreateController(databaseContext).Export(CancellationToken.None);
 
         var export = (result.Result as OkObjectResult)!.Value as DialogExportDto;
         export!.Bundles.Select(b => b.Title).Should().ContainInOrder("First", "Second");

@@ -18,6 +18,16 @@ using Sellevate.Ai.Tests.Helpers;
 
 namespace Sellevate.Ai.Tests.Unit;
 
+/// <summary>
+/// The company-context prompt: what a persona is told about the customer's company, and how that text
+/// is fenced.
+///
+/// <para>
+/// Phase 40.23 made <c>DialogService</c> ask learning-service whether the session it is starting is
+/// somebody's assignment. Every case in this file is about the prompt rather than about assignments, so
+/// each of them wires a default substitute that answers "no".
+/// </para>
+/// </summary>
 [TestFixture]
 public class CompanyContextDialogTests
 {
@@ -112,9 +122,6 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
-            // Phase 40.23: DialogService now asks learning-service whether the session it is
-            // starting is somebody's assignment. A default substitute answers "no", which is what
-            // every case in this file is about.
             Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
@@ -143,12 +150,14 @@ public class CompanyContextDialogTests
         composedPrompt.Should().Contain("Цель звонка пользователя: Записать встречу");
     }
 
+    /// <summary>
+    /// The company name, description and goal must be wrapped in explicit BEGIN/END data delimiters —
+    /// defence in depth against prompt injection through any of those three user-supplied fields.
+    /// Added as a fast-follow to the 39.17 review.
+    /// </summary>
     [Test]
     public void ChatSystemPrompt_WithCompanyContext_FencesCompanyDataBlock()
     {
-        // 39.17 PR #24 review fast-follow: company name/description/goal must be wrapped in
-        // explicit BEGIN/END data delimiters, defense-in-depth against prompt injection via any
-        // of those user-supplied fields.
         var basePrompt = "Ты — менеджер по продажам.";
         var companyCallContext = new CompanyCallContext
         {
@@ -267,6 +276,12 @@ public class CompanyContextDialogTests
         session.CompanyCallContext.Should().BeNull();
     }
 
+    /// <summary>
+    /// The persona's name, position and personality are the fields most directly attacker-controlled —
+    /// a persona can be generated from a customer's own text or authored by hand — so they are fenced as
+    /// data, and fenced <b>separately</b> from the role-play instruction, which has to stay outside the
+    /// fence to still read as an instruction. Added as a fast-follow to the 39.17 review.
+    /// </summary>
     [Test]
     public void ChatSystemPrompt_WithPersona_AppendsRolePlayInstructionAndPersonaFields()
     {
@@ -294,10 +309,6 @@ public class CompanyContextDialogTests
     [Test]
     public void ChatSystemPrompt_WithPersona_FencesPersonaDataBlock()
     {
-        // 39.17 PR #24 review fast-follow: persona name/position/personality — the field most
-        // directly attacker-controlled via a generated or user-authored persona — must be fenced
-        // as data, separately from the "ВОЙДИ В РОЛЬ" role-play instruction which stays outside
-        // the fence.
         var basePrompt = "Ты — менеджер по продажам.";
         var companyCallContext = new CompanyCallContext
         {
@@ -346,11 +357,14 @@ public class CompanyContextDialogTests
         composedPrompt.Should().Contain("лёгкий");
     }
 
+    /// <summary>
+    /// A byte-for-byte pin on the assembled prompt. It began as an "unchanged since pre-39.14" pin and
+    /// was updated once, for the 39.17 fast-follow that wraps the company block in data fences — so a
+    /// diff here means the prompt every learner sees changed, whether or not anyone intended it.
+    /// </summary>
     [Test]
     public void ChatSystemPrompt_WithoutPersona_MatchesFencedCompanyOnlyOutput_ByteForByte()
     {
-        // Was a byte-for-byte "unchanged since pre-39.14" pin; updated for the 39.17 PR #24
-        // review fast-follow that wraps the company block in explicit data fences.
         var basePrompt = "Ты — менеджер по продажам.";
         var companyCallContext = new CompanyCallContext
         {
@@ -416,9 +430,6 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
-            // Phase 40.23: DialogService now asks learning-service whether the session it is
-            // starting is somebody's assignment. A default substitute answers "no", which is what
-            // every case in this file is about.
             Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
@@ -448,9 +459,6 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
-            // Phase 40.23: DialogService now asks learning-service whether the session it is
-            // starting is somebody's assignment. A default substitute answers "no", which is what
-            // every case in this file is about.
             Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
@@ -475,9 +483,6 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
-            // Phase 40.23: DialogService now asks learning-service whether the session it is
-            // starting is somebody's assignment. A default substitute answers "no", which is what
-            // every case in this file is about.
             Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
