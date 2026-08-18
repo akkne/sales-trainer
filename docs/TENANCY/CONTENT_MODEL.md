@@ -385,7 +385,7 @@ expensive at ten customers.
 
 ---
 
-## 5. Generated content (Phases 40.27–40.28)
+## 5. Generated content (Phases 40.27–40.28, second trigger 40.31)
 
 The one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md):
 **generated content is not a fourth kind of content.** A run produces the same three things every
@@ -415,3 +415,21 @@ Four consequences follow from that, and each one was a fork.
   with forks of our curriculum; this guards against it filling with lessons generated from nothing.
   A `Lesson` row is cheap to create and expensive to be wrong about — it is versioned, assignable and
   reportable — so a run with nothing to say produces no row rather than an empty one.
+
+**Phase 40.31 added a second way to start such a run, and deliberately changed none of the four
+consequences above.** `POST /admin/team/skill-gaps/{stageKey}/content` starts a run because the
+dashboard measured the team failing a stage of the sales funnel, rather than because somebody pasted a
+deck. Two things about it belong in this document:
+
+- **The material is composed from the profile of §3, not uploaded.** There is no textarea behind that
+  button, so the run's `source_material` is written deterministically — the measurement, the stage's
+  weakest skills, and the organization's own product, ICP, tone, objections, script stages, glossary
+  and banned claims. That is the third distinct use §3 gets, after 40.19's substitution and 40.27's
+  seeding of the structuring call, and it is the strongest argument the profile has yet had for
+  existing: an organization that filled it in gets exercises about their objections, and one that did
+  not gets 40.28's refusal naming what to add.
+- **The generated lesson is indistinguishable from any other generated lesson.** Owned, not an
+  override, archived on arrival, and absent entirely when 40.28 refuses. The only difference lives on
+  the run (`ContentGenerationJobs.GapSourceRef`) and on the assignment eventually made from it
+  (`source_type = gap_detected`) — provenance, not content. A block that had needed a fifth kind of
+  content for the dashboard's button would have been a block that got §5 wrong.

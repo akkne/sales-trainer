@@ -511,6 +511,33 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
 
    A seventh call site is a finding until proven otherwise.
 
+### 40.31 added no job, no consumer and no seventh `IgnoreQueryFilters()`, and it had a real reason to
+
+Phase 40.31 (closing the loop from metric to content) is the block where the temptation was concrete
+rather than theoretical, so the refusal is worth writing down.
+
+The obvious shape for «дашборд сам предлагает» is a nightly sweep: enumerate organizations, recompute
+each team's heat map, write the gaps it finds into a table, extinguish the ones that closed, expire
+the dismissals. That is a ninth worker, a seventh `IgnoreQueryFilters()`, a second writer of a table
+nobody reads between ticks, and a panel that is stale by up to a day.
+
+**None of it was built, and the block is smaller for it.** The suggestions are computed inside the
+administrator's own HTTP request, from the same `ITeamSkillMapService` call the heat map is drawn
+from — a concrete tenant in context, an ordinary `TenantTransactionScope`, no enumeration and no
+system mode anywhere. A gap that closes stops being offered because the matrix stops showing it, not
+because a job noticed. The only stored fact is a refusal (`TeamSkillGapDismissals`), and it needs no
+sweep either: its expiry is a `WHERE ExpiresAt > now()` on the read, and the rule that reopens it
+early is a comparison against `AccuracyPercentAtDismissal` in the same query. An expired row costs one
+index entry and is overwritten the next time somebody dismisses that stage.
+
+The counts in §5 therefore stand: **29 `AddHostedService` registrations, eight workers in §2.1, six
+`IgnoreQueryFilters()` call sites.** A seventh is still a finding.
+
+What 40.31 *does* touch in worker territory is one column on a table an existing worker owns:
+`ContentGenerationJobs.GapSourceRef`. `ContentGenerationSweepService` (§4h) neither reads nor writes
+it — the column is set once at creation and read only by HTTP paths — so the worker's enumeration,
+its lease and its claim `UPDATE` are byte-for-byte what 40.27 shipped.
+
 ### 40.25 added no job and no consumer, and that is worth stating
 
 Phase 40.25 (the РОП's dashboard) is a read block. It adds **no** `IHostedService`, **no** new

@@ -278,6 +278,10 @@ reach that are not part of the platform library. Full contracts in
 | POST | /admin/assignments/:id/remind?scope=unfinished\|not_started | learning-service | **(40.26)** the one-click nudge the deadline digest links to |
 | GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | ai-service | the team's graded conversations |
 | GET | /admin/dialog-sessions/:sessionId | ai-service | one transcript, with per-message indexes |
+| GET | /admin/team/skill-gaps?days= | learning-service | **(40.31)** what to do next: the failing funnel stages, and the ones deliberately not offered |
+| POST | /admin/team/skill-gaps/:stageKey/content | learning-service | **(40.31)** the button — start a content run aimed at that stage |
+| POST | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** «не сейчас» |
+| DELETE | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** take the refusal back |
 
 **There is no screen for any of this yet, and that is 40.20.** The admin-panel split — a platform
 superadmin panel and an organization panel — is waiting on the owner's design, and every block from
@@ -311,6 +315,28 @@ notice that opened it. The endpoint in the table above already answers with that
 is the only missing piece. The link deliberately does **not** perform the reminder on load: a URL that
 messages a team the moment it is fetched is a URL a mail scanner fires. Until the screen exists both
 links 404 — recorded in [DONT_FORGET.md](DONT_FORGET.md).
+
+**Phase 40.31 turned the dashboard into a tool, and left the whole thing invisible for the same
+reason.** Four more routes, no screen. Four notes for whoever builds it, and the first is the block's
+entire product claim:
+
+- **The suggestion panel belongs beside the heat map, not on a page of its own.** «Отчёт открывают
+  раз в квартал, инструмент — раз в неделю» is a claim about one screen: the red cell and the button
+  that does something about it have to be in the same field of view. A separate «предложения» tab is
+  a report about a report.
+- **Render `suppressed`, do not drop it.** Every entry says why a real failure is not being offered
+  (`dismissed` / `run_in_progress` / `recently_addressed`), until when, and — for the run cases — the
+  run's id. A panel that shows nothing is indistinguishable from a broken one, and «почему мне ничего
+  не предлагают» is the question that gets a feature switched off. `run_in_progress` should render as
+  a link into the checkpoint screen below, not as a greyed-out button.
+- **The button is one press and it is not instant.** `POST …/content` returns a
+  `ContentGenerationJobDto` in `structuring`, `insufficient` or — if a run for that stage is already
+  alive — the existing run, unchanged. All three are the same screen: the checkpoint screen of the
+  section below. Do not build a second progress UI for this path.
+- **Do not let the client assemble `sourceRef` or `sourceType`.** Both are returned by the server and
+  both are derived again server-side when the assignment is created (`POST /admin/assignments` with
+  `contentGenerationJobId`). A screen that posts `sourceType: "gap_detected"` by hand is a screen that
+  can label anything as measured.
 
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |

@@ -1,7 +1,7 @@
 # The admin content pipeline — structure, stop, generate
 
-**Status:** implemented (Phases 40.27–40.28, 2026-08-18), **API-only** — the screen is 40.20 and is
-waiting on the owner's design.
+**Status:** implemented (Phases 40.27–40.28, second entry point 40.31, 2026-08-18), **API-only** —
+the screen is 40.20 and is waiting on the owner's design.
 
 The РОП pastes their material and gets a lesson. Between those two things the pipeline **stops** and
 shows what it read — the product, who they sell to, the objections, the stages of their script, the
@@ -92,6 +92,32 @@ Full request/response shapes: [API_CONTRACTS.md](API_CONTRACTS.md).
 The two LLM routes — `POST /ai/content/structure` and `POST /ai/content/generate` — are **internal**
 service-to-service endpoints behind `InternalServiceAuthFilter` and are deliberately not exposed
 through the gateway, exactly like `POST /ai/evaluate`.
+
+### 3a. The second door (Phase 40.31)
+
+There is one more way in, and it belongs to a different feature: `POST
+/admin/team/skill-gaps/{stageKey}/content`, the button by which the РОП's dashboard proposes
+generating exercises for the funnel stage its heat map says the team is failing
+([ASSIGNMENTS.md §3.4](TENANCY/ASSIGNMENTS.md)).
+
+It creates an ordinary run. Same six states, same worker, same lease, same checkpoint, same
+sufficiency threshold, same archived arrival. **Nothing in this pipeline branches on where a run came
+from**, and that is the whole point of listing it here: the block that needed a button did not need a
+second pipeline. Two differences, both outside the state machine:
+
+- **The material is composed, not pasted.** There is no textarea behind that button, so
+  `sourceMaterial` is written deterministically from the measurement (which stage, what accuracy, over
+  how many attempts, how many managers below the bar, and the stage's weakest skills) followed by the
+  organization profile — §4's field list as plain readable Russian. It is stored verbatim like any
+  other material and shown back at the checkpoint, so «откуда это взялось» has the same kind of answer
+  it always had. An organization with an empty profile gets a run in `insufficient` carrying §4a's own
+  codes, which is correct rather than broken: we do not know enough about that company to write
+  exercises for them, and the refusal names what to add.
+- **The run carries `gapSourceRef`** — `skill-gap:<stage>@<yyyy-MM-dd>`. It is read by the suggestion
+  panel, which will not offer a stage that already has a live run (and returns *that* run if the
+  button is pressed again, rather than buying a second lesson), and it is copied into
+  `Assignment.SourceRef` with `source_type = gap_detected` when `POST /admin/assignments` is called
+  with `contentGenerationJobId`.
 
 ---
 
@@ -285,8 +311,9 @@ structuring.
   have. The one thing worth knowing from this side is that **a run refused after structuring is still
   a usable profile source** — the structure is on the row, and a profile needs less than a lesson does.
   See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029).
-- **No file upload and no call recordings.** The material is pasted text. 40.30 owns recordings, and
-  the consent and retention question it has to answer first.
+- **No file upload and no call recordings.** The material is pasted text — or, since 40.31, text
+  composed by the server from a measured gap and the organization profile (§3a). 40.30 owns
+  recordings, and the consent and retention question it has to answer first.
 - **No per-item accept/reject of generated exercises.** 40.32. The lesson arrives archived precisely
   because that gate does not exist yet.
 - **No tests.** Rule №3 in [DONT_FORGET.md](DONT_FORGET.md) — what is missing and why it matters is
