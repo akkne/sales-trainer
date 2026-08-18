@@ -1600,7 +1600,7 @@ without it the client received a 200 with zero frames and the persona simply sta
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequirePlatformAdmin` — revised 2026-08-16). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). Response shape unchanged. |
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequirePlatformAdmin` — revised 2026-08-16). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). **Phase 40.33 added four fields** — `organizationDailyLimitSeconds`, `organizationMonthlyLimitSeconds`, `organizationUsedSecondsToday`, `organizationUsedSecondsThisMonth` — because the per-user rows answered «кто много говорит» and never answered «сколько осталось у компании». Existing fields unchanged. |
 
 ```jsonc
 // AdminVoiceUsageDto
@@ -2447,3 +2447,122 @@ separate human act on the existing 40.15 route.
 the Russian sentence and the `blocking`/`advisory` severity are resolved by learning-service, so two
 runs over the same exercise produce the same complaint and «сколько упражнений с этим дефектом» is a
 query. Codes learning-service does not know are dropped, never rendered blank.
+
+---
+
+## AI quotas and spend (Phase 40.33)
+
+Full description: [AI_QUOTAS.md](AI_QUOTAS.md). Two gatewayed admin routes and four internal ones.
+
+### `GET /admin/ai-usage` — `RequireOrgAdmin`
+
+This month's spend for the caller's organization. **Organization administrators, not platform staff
+only**: the person who has to know their content pipeline is about to stop is the РОП whose pipeline
+it is, and telling them a month later through a support ticket is the situation the roadmap bullet
+«расход виден в дашборде раньше, чем в счёте от провайдера» exists to prevent.
+
+```jsonc
+{
+  "periodKey": "2026-08",            // the UTC month
+  "currency": "RUB",
+  "quotaState": "ok",                // ok | warning | batch_paused | exhausted
+  "llmPromptTokens": 812340,
+  "llmCompletionTokens": 214905,
+  "llmTotalTokens": 1027245,
+  "llmMonthlyTokenLimit": 20000000,
+  "llmCallCount": 1841,
+  "llmEstimatedCallCount": 1602,     // counted from characters, not from a reported usage block
+  "speechCharacters": 418220,
+  "voiceUsedMinutesToday": 37,
+  "voiceDailyLimitMinutes": 600,
+  "voiceUsedMinutesThisMonth": 612,
+  "voiceMonthlyLimitMinutes": 6000,
+  "estimatedCost": 1443.12,          // derived from the price table, never stored. null if nothing priced
+  "hasUnpricedModels": true,         // at least one model used this month has no price configured
+  "models": [
+    { "model": "gpt-4o", "kind": "llm", "promptTokens": 612340, "completionTokens": 180905,
+      "callCount": 1610, "speechCharacters": 0, "estimatedCost": null },
+    { "model": "yandex-tts", "kind": "tts", "promptTokens": 0, "completionTokens": 0,
+      "callCount": 231, "speechCharacters": 418220, "estimatedCost": 543.68 }
+  ]
+}
+```
+
+- **`quotaState` has four values and the third is the interesting one.** `batch_paused` means the
+  organization is past its batch ceiling: background pipelines have stopped, conversations have not.
+  A report that only said `ok`/`exhausted` would leave an administrator wondering why their content
+  pipeline went quiet in a month they can still hold calls in.
+- **`estimatedCost` is derived, never stored**, and `null` for a model with no configured price —
+  reported as unpriced rather than as free, because zero reads as "this model costs nothing".
+- **`llmEstimatedCallCount` is high by design**: only streamed dialog turns are estimated, and they
+  are the most numerous and the cheapest calls in the product. Everything expensive carries the
+  provider's own token count.
+- A **platform administrator with no organization header** reads the installation-wide total
+  (`IsPlatformWide` widening, 40.16). Safe in a way `/admin/voice/usage` was not before 40.11: it
+  returns per-model token counts and no identities at all.
+
+### `GET` / `PUT /admin/ai-quota` — `RequirePlatformAdmin`, `[TenantScoped]`
+
+```jsonc
+// PUT body — every field optional; omitting one CLEARS it back to the platform default
+{ "voiceDailyLimitMinutes": 1200, "voiceMonthlyLimitMinutes": null,
+  "llmMonthlyTokenLimit": 50000000, "batchReservePercent": 20,
+  "note": "Contract 2026-Q3, raised after the onboarding batch" }
+
+// Response (both verbs)
+{ "voiceDailyLimitMinutes": 1200, "voiceMonthlyLimitMinutes": null,
+  "llmMonthlyTokenLimit": 50000000, "batchReservePercent": 20,
+  "note": "…",
+  "isOrganizationSpecific": true,          // false when no row exists and everything below is a default
+  "effectiveVoiceDailyLimitMinutes": 1200,
+  "effectiveVoiceMonthlyLimitMinutes": 6000,   // ← the platform default showing through the null above
+  "effectiveLlmMonthlyTokenLimit": 50000000,
+  "effectiveBatchReservePercent": 20,
+  "updatedAt": "2026-08-18T04:11:00Z" }
+```
+
+**Platform staff only, and that is a commercial boundary rather than a technical one.** A quota is
+what the customer bought; an organization administrator raising their own is not an administrative
+action, it is a purchase. The organization edited is the caller's `X-Organization-Id` — for platform
+staff, the one they impersonated into (40.9) — so there is no organization id in the route and none
+in the body (`scripts/tenancy-boundary-lint.py`).
+
+`batchReservePercent` is clamped to 0–90; a negative limit is read as null.
+
+### A quota refusal, on any metered route
+
+```jsonc
+// 429
+{ "error": "Organization AI quota reached",
+  "resource": "llm_tokens",          // llm_tokens | voice_minutes
+  "period": "month_batch_reserve",   // day | month | month_batch_reserve
+  "used": 18000412, "limit": 18000000 }
+```
+
+**429, not 402.** 402 is reserved for the *provider* telling us **our** balance is empty
+(`OpenAiPaymentRequiredException`); conflating them would make a customer's cap look like our outage.
+Voice keeps its existing 429 shape (`{error, period, usedSeconds, limitSeconds}`) with `period`
+reading `organization day` / `organization month`.
+
+An **unattributed** metered call — one arriving with no `X-Organization-Id` — is `400`
+`{ "error": "An organization is required for metered AI calls." }`. A caller mistake with a fixed
+remedy, reported as such rather than as a server fault.
+
+### Internal, un-gatewayed (`X-Internal-Service-Secret`, like `/ai/evaluate`)
+
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /ai/chat | `{systemPrompt, messages:[{role, content}]}` → `{content, isStopSignal}` |
+| POST | /ai/chat/stream | same body → `application/x-ndjson`, one `{"d":"…"}` per content delta |
+| POST | /ai/tts | `{text, voiceId?}` → `audio/wav` |
+| GET | /ai/quota/preflight?workload=batch\|interactive | — → `{allowed: bool}`. **Reads only** |
+
+The first three are what learning-service's deleted in-process provider clients used to do. On a
+provider failure they answer with a **named** code so the caller rebuilds the same exception it used
+to throw itself — `payment_required` (402), `rate_limited` (429), `provider_auth` (503),
+`provider_rejected` / `provider_failed` / `provider_unreachable` (503), with the upstream status
+alongside. The provider's own body never travels: it is redacted and dropped inside ai-service, per
+[LLM_FAILURE_HANDLING.md](LLM_FAILURE_HANDLING.md).
+
+All four require `X-Organization-Id`, and all callers now send it. `X-Ai-Workload` (`batch` /
+`interactive`, default `interactive`) declares whether a person is waiting.

@@ -1480,6 +1480,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddAssignmentDeadlineNotice` (learning-service) | 2026-08-17 | Phase 40.23. **One nullable column**, `Assignments."DeadlineNoticeSentAt"` — when the "deadline is close" notice went out for the deadline the row currently has; cleared whenever the deadline changes. No index, no backfill, no `_indexes_concurrently.sql`, no maintenance window: `Assignments` is empty in every deployed database (nothing could create one before 40.21, and 40.21 shipped without a screen), so the column is added over zero rows and no existing row changes meaning. The index is omitted deliberately rather than forgotten — see the note in the `Assignments` section above. This is the migration behind the block that finally gives `AssignmentProgressRecords` a row **creator**: the audience fan-out. Verification script: `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (read-only, never executed). |
 | `AddAssignmentRepeats` (learning-service) | 2026-08-18 | Phase 40.24. **Two nullable columns** — `Assignments."RepeatOfAssignmentId"` (self-referencing FK, `ON DELETE RESTRICT`) and `"RepeatWaveIndex"` — one **unique partial index** over them, three check constraints, and a `CREATE OR REPLACE` of the 40.21 freeze trigger that adds both columns to its frozen set. The index is created here rather than deferred to a `_indexes_concurrently.sql` because it is a *correctness* constraint, not a performance one: a wave has been issued exactly when its row exists, so this index is the only thing standing between two sweep ticks racing inside one window and the same shortened assignment landing on the same team twice. A sent-ness column of the kind 40.23 added was **impossible** here — the origin may be `closed`, and the freeze trigger refuses any update to a closed row. `CK_Assignments_RepeatNoCascade` (a repeat carries no schedule of its own) is what stops the fan-out from becoming exponential. No backfill, no maintenance window: `Assignments` is empty in every deployed database. Verification script: `docs/TENANCY/sql/40.24_assignment_repeats_verify.sql` (read-only, never executed). |
 | `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
+| `AddOrganizationQuotas` (ai-service) | 2026-08-18 | Phase 40.33, Stage G. Two new **strict tenant** tables in `ai` — `OrganizationQuotas` (one row per organization that has been given limits of its own) and `AiUsageRecords` (what each organization spent on each model in each UTC month) — both with `EnableTenantRls` (plain equality, never the content flavour: there is no global allowance and no global bill), both with the tenant column leading the primary key so a row without an owner is unrepresentable. **Indexes are created here and there is no companion `_indexes_concurrently.sql`**: both tables are created empty by this migration, and every read is a prefix scan on the leading key columns of a table holding one row per organization per model per month. **No backfill, and none is possible or needed** — no spend was ever recorded before this migration, and an absent `OrganizationQuotas` row deliberately means «the platform defaults in `AiQuotas:Default…`» rather than «unmetered», so every organization is metered from the first request after the deploy without a single row being written. Verification: `docs/TENANCY/sql/40.33_ai_quotas_verify.sql` (read-only, never executed). |
 
 ---
 
@@ -1930,3 +1931,75 @@ Migration: `AddContentAdaptationBatches` (2026-08-18, Phase 40.32). Creates both
 for the plainest reason yet: nothing is added to an existing table at all, so every index including
 the partial unique one is built over zero rows. Read-only verification:
 `docs/TENANCY/sql/40.32_content_adaptation_verify.sql` (never executed).
+
+---
+
+### Tables: `OrganizationQuotas` and `AiUsageRecords` (ai-db — Phase 40.33, strict tenant data, RLS enabled)
+
+The meter. One table says what an organization may spend, the other says what it did. Full
+description: [AI_QUOTAS.md](AI_QUOTAS.md).
+
+#### `OrganizationQuotas`
+
+| Column | Type | Notes |
+|---|---|---|
+| `OrganizationId` | uuid | **PK**, no default generation — the tenant column *is* the key |
+| `VoiceDailyLimitMinutes` | int | nullable — organization-wide voice minutes per UTC day |
+| `VoiceMonthlyLimitMinutes` | int | nullable — same, per UTC month |
+| `LlmMonthlyTokenLimit` | bigint | nullable — prompt + completion tokens per UTC month, all models |
+| `BatchReservePercent` | int | nullable — share of the LLM allowance background pipelines may not touch |
+| `Note` | varchar(1000) | nullable — free text for the operator: which contract this number came from |
+| `UpdatedAt` | timestamptz | NOT NULL |
+
+**Every limit is nullable and null means "the platform default"** (`AiQuotas:Default…`), not
+"unlimited". `0` means "this window is disabled" and is a different value on purpose. That
+distinction is the whole answer to the fail-open / fail-closed question: an organization with no row
+is metered against the defaults, which is exactly what ai-service did before this block, so no
+missing row and no failed replication can hand anybody an unmetered night of voice.
+
+**The table is in ai-db rather than organization-db**, unlike every other per-organization setting.
+The alternative — columns on `OrganizationProfile`, replicated here over
+`organization.profile.updated` as 40.19's replica is — was rejected on one concrete failure: the
+moment an operator most needs to change a limit is the moment a customer is standing at it, and a
+lagging or dead-lettering consumer would leave the raise invisible to the enforcer with nothing in
+the raise's own response saying so.
+
+#### `AiUsageRecords`
+
+| Column | Type | Notes |
+|---|---|---|
+| `OrganizationId` | uuid | **PK part 1** |
+| `PeriodKey` | varchar(7) | **PK part 2** — the UTC month, `yyyy-MM`. A string because it is a bucket label, not a date |
+| `Model` | varchar(128) | **PK part 3** — the provider model for `llm` rows, the provider name for `tts`/`stt` |
+| `Kind` | varchar(16) | NOT NULL — `llm` / `tts` / `stt`. Derived from `Model`, stored so the report need not guess |
+| `PromptTokens` | bigint | NOT NULL |
+| `CompletionTokens` | bigint | NOT NULL |
+| `CallCount` | bigint | NOT NULL |
+| `EstimatedCallCount` | bigint | NOT NULL — of `CallCount`, how many were counted from an estimate because the provider reported no `usage` |
+| `SpeechCharacters` | bigint | NOT NULL |
+| `UpdatedAt` | timestamptz | NOT NULL |
+
+Four things about this table are decisions, not defaults.
+
+- **Postgres, not Redis, unlike the voice gate right beside it.** The two have different jobs. Voice
+  reserves seconds before a stream and refunds the tail milliseconds later, many times a minute, and
+  already has a durable record of its own in Mongo `dialog_sessions`. LLM spend is written once per
+  completion — next to a call that takes seconds — and its whole point is to be readable next month,
+  before the invoice arrives. A counter a Redis eviction can silently zero is not that.
+- **The write is one `INSERT … ON CONFLICT DO UPDATE SET x = x + excluded.x`.** No read-modify-write
+  anywhere, so two concurrent completions on one organization cannot lose each other's tokens — the
+  same property 40.27 required of the pipeline claim, and for the same reason: the alternative costs
+  money rather than a retry.
+- **One row per model, not one per organization.** Models differ in price by more than an order of
+  magnitude, so a single blended token total cannot be turned into money without lying. The
+  breakdown makes the cost estimate a sum of per-model products.
+- **Money is not a column.** Tokens and characters are what the provider bills and what we can count
+  exactly; a stored price is a guess frozen at write time. Cost is derived on read from
+  `AiQuotas:PricePerMillionTokens`, which is also why editing that table moves no limit — the limit
+  is counted in tokens. A model absent from the price table is reported as **unpriced**, never as
+  free: zero would read as "this model costs nothing", which is the one reading of a spend report
+  that must never be accidental.
+
+Migration: `AddOrganizationQuotas` (2026-08-18, Phase 40.33). Creates both tables empty and applies
+`EnableTenantRls` to each. **No backfill, no maintenance window, no concurrent-index script** — the
+ninth block in a row.
