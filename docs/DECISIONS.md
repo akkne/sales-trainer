@@ -4625,3 +4625,214 @@ The two recreated `CHECK`s validate against a table that is empty on every real 
 - **No prompt was ever executed.** Same as 40.27: the sufficiency instructions have never been run
   against a live provider, so the calibration of `isSufficient` is a design, not an observation. The
   first live run is a human's.
+
+---
+
+## 2026-08-18 — Phase 40.32: batch tone adaptation and AI content review
+
+Roadmap block 40.32, the last of stage F. Two features in one bullet list: «перепиши все упражнения
+этапа "закрытие" под наш продукт и тон» → фоновая джоба → список диффов → **принять/отклонить
+поштучно, никогда не автоприменение**, and an AI review of content the РОП wrote by hand (ambiguous
+correct answer, obvious distractors, unmeasurable free-answer criteria). Both shipped.
+
+### Both halves are one machine, distinguished by a `Mode` column
+
+The honest assessment first: these are two features, and the instruction was to ship the first
+completely rather than both halfway. They are shipped complete because **they differ in one prompt
+and one column and in nothing else.** Both select a stage's worth of exercises, both spend one LLM
+call per exercise, both must survive a process dying halfway through sixty items, both must never
+touch live content on their own, and both end in a queue a person walks item by item.
+
+Building them separately would have bought a second lease protocol, a second claim `UPDATE`, a
+second entry in [TENANCY/BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §2.1, a second admin
+controller and a second place to get idempotency subtly wrong — in exchange for nothing, because the
+shared parts are the parts that are hard to get right.
+
+What the mode does decide is the one asymmetry that matters and it is enforced in two places: a
+`tone_rewrite` item carries a proposed body and can be **applied**; a `quality_review` item carries
+findings and cannot. Accepting a review item is a 409 from the service and is unrepresentable in the
+database (`CK_ContentAdaptationItems_Proposal`).
+
+**Rejected: making review part of publishing a lesson version.** It reads well — nothing bad reaches
+learners — and it is wrong twice. It puts a minutes-long LLM call on the publish path, and it makes a
+model the gatekeeper of a customer's own content. A review that blocks is a review that gets
+disabled the first time it is wrong about an exercise the РОП knows is fine.
+
+### The batch is the lease, the item is the idempotency key
+
+40.27 could put both on the run: a run makes two calls and «has it produced a lesson» is one column.
+A batch makes up to sixty, so the item is the row that answers «за это уже заплатили». An item
+carrying an answer is never queued again, whatever happens to the process holding the batch's lease.
+
+That is the whole answer to «что происходит с пакетом, прерванным на середине»: the lease releases,
+the next tick claims the batch, reads only the items still `pending`, and the cost of the interruption
+is the one call that was in flight. Each item is committed in a transaction of its own for the same
+reason — batching sixty writes would discard answers already billed for.
+
+The attempt budget is **per item**, not per batch. One exercise the model chokes on must not exhaust
+a budget that is protecting fifty-nine good proposals; `POST …/retry` re-queues exactly the failed
+items and nothing else.
+
+### The worker cannot reach an `Exercise`, and that is where «никогда не автоприменение» lives
+
+`ContentAdaptationStepRunner` writes `ContentAdaptationItems` and its batch's status columns. That is
+the complete list. The only code in the system that writes an exercise body out of a proposal is
+`ContentAdaptationJobService.AcceptItemAsync`, and it runs inside an organization administrator's
+HTTP request with their user id on the row.
+
+So the roadmap's prohibition is a fact about which types a class may write rather than a rule
+somebody has to keep remembering. The database backs it as far as SQL can: an accepted item must
+carry the proposal it applied and the exercise it was written to, and nothing outside the accepted
+state may claim an application. What SQL cannot say is «a human pressed it» — that part is the shape.
+
+**There is deliberately no bulk verb.** «Применить всё» is auto-apply with a person's name attached.
+If sixty decisions is too many, the answer is a narrower stage, which is what the per-batch ceiling
+(`MaximumItemsPerJob`, 60) exists to force. A stage above the ceiling is **refused with the count**,
+never silently truncated: a half-adapted stage is a promise nobody discovers we failed to keep until
+a manager asks why half of it still sounds generic.
+
+### Where a rewrite lands: the existing tables, through 40.18's copy-on-write
+
+The developed alternatives were a new `LessonVersion` per accepted item (40.15) and a private draft
+store. Both were rejected for the same reason: a rewrite of one exercise is an edit of one exercise,
+which the product already has a home for.
+
+- **The scope is collected through `ContentOverrideResolution`** (40.18). An organization that has
+  already forked a lesson gets *their* exercises in the batch; one that has not gets the global
+  library rows. Neither case can produce both — resolution is precisely the rule that hides a base
+  row when a live override of it exists, and without it a forked lesson would appear twice and the
+  reviewer would answer the same question about a row nobody reads.
+- **Accepting a proposal against a global exercise forks the lesson first**, through
+  `IContentOverrideService.CreateOverrideAsync` — the same call pressing "edit" makes. This is the
+  hard requirement, not a nicety: RLS cannot protect the global library, because "global" is a null
+  and the content policy admits `OrganizationId IS NULL` in its `WITH CHECK` clause
+  (`ContentAuthoringGuard`). Writing the base row would apply one customer's tone edit to every other
+  customer's curriculum. Section 4 of
+  [40.32_content_adaptation_verify.sql](TENANCY/sql/40.32_content_adaptation_verify.sql) checks for
+  exactly that and expects zero rows.
+- **The fork's exercise is addressed positionally.** `CreateOverrideAsync` clones exercises in
+  `(OrderInLesson, Id)` order with fresh ids and keeps no mapping, so the target is the row at the
+  same index. Exact for a copy nobody has touched; when the counts or the type at that index differ,
+  the answer is a refusal with a sentence, never a guess — guessing wrong here means writing one
+  exercise's rewrite over a different exercise.
+- **No version is published.** Accepting writes the draft row, exactly as `PUT /admin/exercises/{id}`
+  does. Publishing a new `LessonVersion` stays a separate human act on the existing 40.15 route,
+  because a frozen version is what a learner's recorded attempt points at and minting one per
+  accepted sentence would produce a version history nobody can read.
+
+### `BaseContentHash`: the staleness rule, and why it is compared against the target
+
+An item records the SHA-256 of the canonical body the model was shown
+(`ContentSnapshotSerializer.BuildCanonicalExerciseBody`, the type included because the same JSON is a
+valid `choose_option` and an invalid `free_text`). Accept recomputes it and refuses on a mismatch.
+
+The comparison is made against **the row about to be written**, not the row the proposal was read
+from. Those are the same row for a lesson the organization owns, and they are the base and its fresh
+byte-identical copy for one it does not — so one comparison covers both, and it also covers the case
+that would otherwise be a silent data loss: a second accept into a lesson the organization forked
+earlier and hand-edited at that position. A mismatch means somebody wrote there after the model read
+it, and applying would discard their words. 40.18 refused to build a three-way merge of prose and
+grading criteria on the grounds that it produces plausible nonsense which then grades a living
+salesperson; refusing is the same answer, one level down.
+
+Staleness on the read path is **computed, never stored** — the same shape 40.18 used for override
+staleness and 40.31 for the suggestion panel. There is no flag, so there is no flag to be wrong, and
+an item stops being stale the moment the exercise is put back the way it was.
+
+### What a «дифф» physically is: two documents, a leaf list, and a sentence
+
+The roadmap asks for «список диффов» shown item by item. Three things travel, and none of them is a
+merged document:
+
+1. **The current body and the proposed body, whole.** The screen can always fall back to them.
+2. **A field-level change list** (`ContentFieldChangeSummarizer`): which JSON leaves differ, as
+   `options[1].text`, with both values truncated for display. This is an enumeration of two trees, not
+   an authoring act — nothing on the server produces a third document. Arrays are compared
+   positionally on purpose: a rewrite that reorders options is a change the reviewer should see, not
+   one to be smoothed away by matching on content.
+3. **The model's own sentence** about what it changed and why (`ChangeSummary`). This is the half the
+   leaf list can never supply, and it is what lets somebody answer yes or no in five seconds.
+
+`ChangedFieldCount` is stored on the item rather than recomputed on read. That is not a cache: it
+describes the proposal, which is frozen, and not the exercise, which is not — recomputing it in the
+list would mean re-reading sixty bodies to render a column, against bodies that may since have moved.
+
+**A rewrite that changed nothing resolves as `unchanged` and never reaches the queue**, and the
+prompt tells the model twice that «ничего не меняю» is a permitted answer. A model required to
+produce a change produces one, and sixty cosmetic rewrites of exercises that were already fine is how
+a reviewer learns to accept everything without reading it.
+
+### The review's vocabulary is closed, and the severity is the server's
+
+Seven codes (`ContentReviewFindingCodes`): the roadmap's three plus the four the same reading turns up
+for free. ai-service returns codes and at most a quoted fragment; the Russian sentence and the
+`blocking`/`advisory` split live in learning-service. This is 40.28's arrangement applied to critique
+and for the same three reasons — a model-authored complaint is different every run, untranslatable,
+and uncountable. The last one is the point: because the vocabulary is closed, «сколько упражнений у
+этого клиента с неизмеримыми критериями» is a query, and section 8 of the verify script is it.
+
+Two of the seven are `blocking`, and `banned_claim_rewarded` is why the split exists at all. An
+exercise whose *correct* answer promises something the organization forbids does not merely permit
+the claim — it teaches it and then scores the salesperson well for making it. A queue of sixty
+advisory notes must not bury that one.
+
+**The reviewer diagnoses and never repairs.** A service that found the ambiguity and silently fixed it
+would be a model editing a customer's curriculum with nobody in the loop, which is the thing this
+whole block exists to prevent. Finding nothing is the expected answer, resolves the item without
+reaching a person, and the prompt says so twice: a reviewer that always produces at least one
+complaint is one nobody believes by the tenth exercise. The asymmetry is accepted knowingly — a missed
+defect costs one weak exercise, a false alarm costs the credibility of every true one.
+
+### One live batch per (organization, mode, stage), enforced by a partial unique index
+
+`UX_ContentAdaptationJobs_Live` over `(OrganizationId, Mode, StageKey)` filtered to the two live
+statuses. This is a cost control, not tidiness: two clicks a second apart both read no live batch
+under READ COMMITTED and both start one, and the customer pays twice for the same sixty calls. The
+service also reads first, but only so the second click gets a sentence instead of a unique-violation.
+
+A rejected item is **not** remembered as a standing exemption, unlike 40.31's dismissals. A dismissal
+there suppresses a suggestion recomputed from unchanged numbers; here the next batch is a new question
+asked of a possibly different profile, and a hidden permanent exemption on an exercise is the kind of
+state nobody can find later when they wonder why one lesson never gets adapted.
+
+### The batch's `Status` is a projection
+
+Recomputed from the items inside every writing transaction (`ContentAdaptationStatusCalculator`). A
+tick that dies after answering three items leaves nothing wrong, because there is no counter to be
+behind. The column exists so the worker's enumeration and the admin list can be indexed, never as the
+source of truth. Same rule as 40.22's «derive state, never increment», and the reason a batch cannot
+get stuck claiming to be finished while ten items still have no proposal.
+
+### The gateway had no route for `/admin/content/...` at all, and 40.18 has been unreachable since it shipped
+
+The 40.25 trap, checked by parsing `appsettings.json` rather than assumed — and this time it found
+something. 40.18's `AdminContentOverridesController` lives at `/admin/content/overrides`, and there
+has never been a gateway route matching `/admin/content/*`: the copy-on-write and staleness-queue API
+has been unreachable from outside the cluster since the block shipped. One route
+(`learning-admin-content` → `/admin/content/{**catch-all}`, no `Methods` restriction) covers this
+block's new endpoints and fixes 40.18's at the same time. Recorded in
+[DONT_FORGET.md](DONT_FORGET.md) because it means 40.18 was never exercised end to end.
+
+### No long index, and therefore no `40.32_*_indexes_concurrently.sql`
+
+Stated explicitly, as the six blocks before this one did. Both tables are **created empty** by
+`AddContentAdaptationBatches`, so every index — including the partial unique one — is built over zero
+rows and there is nothing to rewrite. No column was added to an existing table, so there is no
+metadata-only `ADD COLUMN` to reason about either. The read-only check script is
+[40.32_content_adaptation_verify.sql](TENANCY/sql/40.32_content_adaptation_verify.sql) and it has
+**not** been executed against any database.
+
+### Not done, on purpose
+
+- **No screen.** Same as 40.27/40.28/40.31: the РОП's admin UI is 40.20 and waits for the owner's
+  design. This block ships the API the screen will call, including the field-level change list, which
+  exists precisely so the screen is not the thing that has to compute a diff.
+- **No re-run of a stage while its batch is open.** Deliberate, see the unique index above.
+- **No tests.** Rule №3 in [DONT_FORGET.md](DONT_FORGET.md); the uncovered cases are written out
+  there under «Тесты, которых нет», and the two most dangerous are the positional fork mapping and the
+  staleness comparison, because both fail by writing the wrong words into a customer's live exercise
+  rather than by throwing.
+- **No prompt was ever executed.** Neither the rewriter nor the reviewer has been run against a live
+  provider. Their calibration is a design and not an observation — in particular nobody knows how
+  often the rewriter returns `{"content": null}`, and that number is the difference between a useful
+  queue and sixty cosmetic diffs.
