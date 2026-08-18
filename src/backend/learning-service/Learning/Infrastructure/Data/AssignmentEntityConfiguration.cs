@@ -45,6 +45,9 @@ public sealed class AssignmentEntityConfiguration : IEntityTypeConfiguration<Ass
         builder.Property(assignment => assignment.RepeatSchedule)
             .HasColumnType("jsonb");
 
+        builder.Property(assignment => assignment.RepeatOfAssignmentId);
+        builder.Property(assignment => assignment.RepeatWaveIndex);
+
         builder.Property(assignment => assignment.OpensAt);
         builder.Property(assignment => assignment.Deadline);
 
@@ -71,5 +74,29 @@ public sealed class AssignmentEntityConfiguration : IEntityTypeConfiguration<Ass
         builder.HasIndex(assignment => new { assignment.OrganizationId, assignment.Status, assignment.Deadline });
 
         builder.HasIndex(assignment => new { assignment.OrganizationId, assignment.CreatedAt });
+
+        // Phase 40.24. A repeat points at the assignment a human created. RESTRICT rather than
+        // CASCADE for the same reason the progress foreign key is RESTRICT: an origin is the record
+        // of what was asked, and deleting it out from under three waves of scores would rewrite
+        // history. In practice it never fires — only a draft may be deleted (AssignmentService), and
+        // a draft has never been issued, so it can have no waves.
+        builder.HasOne<Assignment>()
+            .WithMany()
+            .HasForeignKey(assignment => assignment.RepeatOfAssignmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Phase 40.24. The idempotency guarantee of the repeat sweep, and the reason the sweep needs
+        // no "already issued" flag anywhere: a wave has been issued exactly when its row exists. Two
+        // ticks racing inside one window collide here rather than issuing the same shortened work to
+        // the same people twice.
+        //
+        // Deliberately NOT tenant-leading, the second such exception in this feature and for the same
+        // two reasons 40.21 recorded on IX_AssignmentProgressRecords_AssignmentId_Status: it is the
+        // only index covering the foreign key above, so without it Postgres scans the whole table on
+        // every attempt to delete an assignment; and an origin id is globally unique, so leading with
+        // OrganizationId would weaken the uniqueness rather than scope it.
+        builder.HasIndex(assignment => new { assignment.RepeatOfAssignmentId, assignment.RepeatWaveIndex })
+            .IsUnique()
+            .HasFilter("\"RepeatOfAssignmentId\" IS NOT NULL");
     }
 }

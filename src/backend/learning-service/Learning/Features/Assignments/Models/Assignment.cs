@@ -23,11 +23,10 @@ namespace Sellevate.Learning.Features.Assignments.Models;
 /// </para>
 ///
 /// <para>
-/// <b>What this block does not do.</b> Nothing evaluates <see cref="CompletionRule"/> (40.22),
-/// nothing resolves <see cref="Audience"/> into people or notifies them (40.23), and nothing acts on
-/// <see cref="RepeatSchedule"/> (40.24). Those columns exist now because the schema is this block's
-/// deliverable and adding them later would mean a second migration over a live table; their contents
-/// are validated for shape and stored, never interpreted.
+/// <b>What 40.21 did not do, and who did it since.</b> 40.22 evaluates <see cref="CompletionRule"/>,
+/// 40.23 resolves <see cref="Audience"/> into people and notifies them, and 40.24 acts on
+/// <see cref="RepeatSchedule"/>. All four jsonb columns now have closed vocabularies; none of them
+/// did on the day the table shipped, which is why they are jsonb rather than columns.
 /// </para>
 /// </summary>
 public sealed class Assignment : ITenantScoped
@@ -112,11 +111,59 @@ public sealed class Assignment : ITenantScoped
     public string CompletionRule { get; set; } = "{}";
 
     /// <summary>
-    /// How the assignment re-issues itself, as <c>jsonb</c>, or null for one-shot. Validated for shape
-    /// (an object with a <c>kind</c>) and otherwise untouched: the schedule vocabulary and the
-    /// background job that walks it are 40.24.
+    /// How the assignment re-issues itself, as <c>jsonb</c>, or null for one-shot. Phase 40.24 gave
+    /// it a closed vocabulary — <c>{"kind":"fixed_offsets","offsetDays":[7,21]}</c>, read by
+    /// <c>AssignmentRepeatScheduleReader</c> — and a background sweep that acts on it.
+    ///
+    /// <para>
+    /// <b>Always null on a repeat.</b> A generated wave that carried a schedule of its own would
+    /// repeat itself, and two waves would each spawn two more; the constraint that says so lives in
+    /// the database rather than only here, because an exponential fan-out is not a defect anybody
+    /// gets to notice early.
+    /// </para>
     /// </summary>
     public string? RepeatSchedule { get; set; }
+
+    /// <summary>
+    /// Phase 40.24. The assignment this one is a repeat of, or null when a human created it
+    /// (docs/TENANCY/ASSIGNMENTS.md §2.1).
+    ///
+    /// <para>
+    /// <b>A repeat is a separate assignment row, and this column is what keeps that from fragmenting
+    /// the РОП's screen.</b> The alternative — a second round inside the same row — has nowhere to
+    /// put the second <c>BestScore</c>: <c>AssignmentProgressRecords</c> carries one, deliberately,
+    /// and a wave whose result overwrites the first wave's is a wave that destroys the only evidence
+    /// anybody had that the training decayed. A separate row keeps every wave's funnel intact and
+    /// leaves 40.25 free to present the series as one thing, which a foreign key can express and a
+    /// squashed score cannot.
+    /// </para>
+    ///
+    /// <para>
+    /// It always points at the <b>origin</b> — the assignment a person created — never at another
+    /// repeat, so the series is one level deep and "which wave is this" is a number rather than a
+    /// walk up a chain.
+    /// </para>
+    /// </summary>
+    public Guid? RepeatOfAssignmentId { get; set; }
+
+    /// <summary>
+    /// Phase 40.24. Which wave of <see cref="RepeatOfAssignmentId"/>'s schedule this is, 1-based, or
+    /// null when this assignment is not a repeat.
+    ///
+    /// <para>
+    /// <b>This is the idempotency key of the whole block</b>, together with the origin: a wave has
+    /// been issued exactly when a row with this pair exists, and the unique index enforces it. That
+    /// follows 40.22's rule — derive from state, never increment a counter — and it is what makes a
+    /// sweep that runs twice inside one window issue one repeat rather than two.
+    /// </para>
+    ///
+    /// <para>
+    /// It is the <b>ordinal</b> of the offset, not the offset itself, because the schedule stays
+    /// editable while the assignment is active: moving the second wave from +21 to +28 must move a
+    /// wave, and moving the first from +7 to +5 must not re-send one that has already gone out.
+    /// </para>
+    /// </summary>
+    public int? RepeatWaveIndex { get; set; }
 
     /// <summary>One of <see cref="AssignmentStatuses"/>.</summary>
     public string Status { get; set; } = AssignmentStatuses.Draft;
