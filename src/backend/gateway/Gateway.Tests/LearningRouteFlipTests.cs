@@ -6,6 +6,11 @@ using NUnit.Framework;
 
 namespace Sellevate.Gateway.Tests;
 
+/// <summary>
+/// Boots the gateway in-process and reads its live reverse-proxy configuration to prove every
+/// learning-owned prefix reaches the learning cluster, and that none of them swallows
+/// <c>/profile</c> (which belongs to identity).
+/// </summary>
 [TestFixture]
 public class LearningRouteFlipTests
 {
