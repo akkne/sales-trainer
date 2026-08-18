@@ -1,0 +1,52 @@
+name: tests
+
+# Added 2026-08-18. Until this file existed, no workflow ran `dotnet test` at all: 980 unit tests
+# were green on a developer's machine and never once in CI.
+on:
+  pull_request:
+    paths:
+      - "src/backend/**"
+      - ".github/workflows/tests.yml"
+  push:
+    branches:
+      - main
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build
+        run: dotnet build src/backend/Sellevate.sln --configuration Release
+
+      # Iterating over the projects is not a style preference. `dotnet test` against Sellevate.sln
+      # reports one project's tests and then stops — measured twice: once it reported 53 tests, once
+      # nothing at all. A solution-level run is therefore a green light earned on a fraction of the
+      # suite, which is worse than no run. See docs/DONT_FORGET.md.
+      #
+      # Integration tests are excluded: they need Postgres, Mongo and Redis, and each is written to
+      # skip in seconds when its store is unreachable rather than hang. Wiring service containers for
+      # them is a separate change.
+      - name: Unit tests, per project
+        run: |
+          set -euo pipefail
+          failed=0
+          for project in src/backend/*/*.Tests/*.csproj; do
+            echo "::group::$project"
+            if ! dotnet test "$project" \
+                --configuration Release \
+                --no-build \
+                --filter "TestCategory!=Integration" \
+                --logger "console;verbosity=normal"; then
+              failed=1
+              echo "::error::$project failed"
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
