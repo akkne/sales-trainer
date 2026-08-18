@@ -276,7 +276,15 @@ structuring.
 - **No second LLM call anywhere in 40.28.** The verdict rides the structuring completion; the free
   stage is arithmetic and a word list. The block adds no cost per run and removes cost on the runs it
   refuses before structuring.
-- **No promotion into the organization profile.** 40.29.
+- ~~**No promotion into the organization profile.** 40.29.~~ **Done in 40.29, and not here.** The
+  promotion is `POST /organizations/profile/draft/apply` in **organization-service**, which takes the
+  reviewed structure in its request body from a client that has just read it off
+  `GET /admin/content-generation/{jobId}`. Nothing in this pipeline changed: no state, no flag, no
+  «promoted» timestamp on the run. A run is disposable and a profile is not, and a run that recorded
+  what another service did with its output would be claiming an authority over that row it does not
+  have. The one thing worth knowing from this side is that **a run refused after structuring is still
+  a usable profile source** — the structure is on the row, and a profile needs less than a lesson does.
+  See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029).
 - **No file upload and no call recordings.** The material is pasted text. 40.30 owns recordings, and
   the consent and retention question it has to answer first.
 - **No per-item accept/reject of generated exercises.** 40.32. The lesson arrives archived precisely

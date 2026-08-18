@@ -349,6 +349,20 @@ answer is a sales asset.
   organization at once, so "the profile" is undefined and picking a row would render Sellevate staff a
   lesson with some customer's product name in it. The same rule §2.6's read resolution follows.
 
+**As implemented (40.29): the profile is filled in by interview, not by that form.** The paragraph
+above says «the customer fills in a form», and the form is thirty-odd inputs. The observation the block
+starts from is that it therefore stays empty, and an empty profile is not a degraded version of this
+section — it is this section not happening at all. What was added is four routes on the same row and
+no schema change: a capped, ordered list of what is still missing
+(`GET /organizations/profile/gaps`, three questions at a time), a per-field answer
+(`PATCH /organizations/profile`), and the promotion of the structure the 40.27 pipeline extracted from
+the customer's own deck and script (`POST /organizations/profile/draft`, `…/draft/apply`). The merge
+policy is *fill blanks, grow lists, never silently replace a human's words* — and `banned_claims` is
+union-only with no way to delete an entry through that path, which is what makes the guarantee two
+paragraphs above survive somebody pasting a marketing deck in June. Full description in
+[ORGANIZATION_SERVICE.md](../ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029), decisions
+in [DECISIONS.md](../DECISIONS.md) (2026-08-18).
+
 **This is the metric that decides whether the architecture worked** (repeated from
 [TENANCY.md §5](TENANCY.md#5-the-commercial-trap-this-architecture-has-to-defuse)): on the first
 pilot, measure the share of adaptation closed by profile substitution versus hand-editing lesson

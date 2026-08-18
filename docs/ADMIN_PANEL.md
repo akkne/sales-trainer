@@ -644,6 +644,48 @@ Three things the screen must not do, because the backend deliberately does not s
 - **Do not offer per-exercise accept/reject.** That is roadmap 40.32 and it has its own vocabulary to
   invent. The lesson arrives archived precisely because that gate does not exist yet; the way to
   accept it today is to un-archive it (`PUT /admin/lessons/{id}` with `isArchived: false`).
-- **Do not write the reviewed structure into the organization profile.** It looks like the same form —
-  it is the same field list — and it is deliberately a separate draft. Promoting one into the other is
-  roadmap 40.29, which has to answer the merge question first. See `docs/DECISIONS.md` (2026-08-18).
+- **Do not write the reviewed structure into the organization profile *yourself*.** It looks like the
+  same form — it is the same field list — and it is deliberately a separate draft. Since 40.29 there
+  is a route that does it properly, under a merge policy: `POST /organizations/profile/draft/apply`.
+  A client that instead assembled a `PUT /organizations/profile` out of the structure would overwrite
+  the customer's `bannedClaims` with whatever the deck happened to say, which is the exact failure the
+  separation exists to prevent. See below.
+
+## The profile interview — API only (Phase 40.29)
+
+**No screen for this either**, same reason: 40.20 is waiting on the owner's design. The backend is four
+routes on `/organizations/profile` ([API_CONTRACTS.md](API_CONTRACTS.md#organization-profile-as-an-interview-phase-4029),
+[ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029)).
+
+The thing the screen must get right is that **this is not a form with AI assistance; it is an
+interview**. What that means concretely:
+
+1. **Never render seven inputs.** `GET /organizations/profile/gaps` returns three questions at a time
+   and a `totalGapCount`. Show the three, show «осталось ещё N», and re-fetch after each answer. The
+   whole block exists because the seven-field version stays empty.
+2. **One answer, one `PATCH`.** Do not read the profile, splice a field in and `PUT` all seven back —
+   that loses whatever a colleague saved in between, in exactly the multi-person situation this flow
+   invites. `PATCH /organizations/profile` with a single field is the write.
+3. **The «заполнить по материалам» path is the 40.27 pipeline, not a new upload box.** The РОП starts
+   an ordinary content-generation run with their deck and their script, corrects the structure at the
+   checkpoint, and the screen then posts that `structure` to `POST /organizations/profile/draft` (to
+   look) and `…/draft/apply` (to commit). One reading of one document fills the profile *and* produces
+   a training.
+4. **Show the conflicts, and do not pre-tick them.** The preview's `fields[]` carries `decision` per
+   field. `fill` and `extend` happen anyway and need no consent — they destroy nothing. `conflict`
+   means «есть ваше значение и предложение ИИ», and the field is left alone unless its name is sent
+   back in `acceptedFields`. A screen that pre-selected every conflict would be the silent overwrite
+   with a checkbox drawn on it.
+5. **`isReadyForParameterization` is the progress indicator worth showing**, not «5 из 7 полей». It
+   goes true when `product`, `icp` and three objections exist — the point at which lessons stop
+   reading as «ваш продукт» and start reading as the customer's own.
+
+Two things this screen must not do:
+
+- **Do not offer a way to delete a banned claim from the draft flow.** There is no such route: apply
+  only ever adds to `bannedClaims`. Removing one is a deliberate act on the whole-profile form, by
+  somebody looking at the whole list.
+- **Do not treat the two «skippable» questions as unanswered work.** `banned_claims` and `glossary`
+  may honestly be «таких нет» and the profile has no marker for that, so they persist. They are
+  `important` and `optional`, they never appear while a `blocking` gap is open, and they must not hold
+  a completion badge hostage.

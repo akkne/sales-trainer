@@ -847,6 +847,22 @@ What belongs to this service, and why it is split the way it is:
   (`insufficient`) carrying a list of gaps, not an error, because it has to be arguable: `POST
   …/material` appends text and resumes the run, and `StructuredMaterialLength` is what keeps the
   resumed call from re-reading — and re-paying for — the deck that was already structured.
+- **The reviewed structure is also how the organization profile gets filled (40.29), and that costs
+  this service nothing.** `ContentGenerationJobs.Structure` is the profile's field list, field for
+  field — 40.27 shaped it that way on purpose. 40.29 added the promotion as
+  `POST /organizations/profile/draft/apply` in **organization-service**, taking the document in its
+  request body from a client that has just read it off `GET /admin/content-generation/{jobId}`. No
+  code here changed and none should: this service does not write another service's aggregate, and its
+  `OrganizationProfileReplicas` row stays read-only in both directions.
+  Two consequences worth knowing when reading a run:
+  - **A run refused by 40.28 *after* structuring is still a usable profile source.** The structure is
+    on the row, and a profile needs less than a lesson does — «нет ни одного возражения» blocks four
+    good exercises and does not block knowing what the company sells. Only a run refused *before*
+    structuring has nothing to promote.
+  - **Promotion does not change the run.** There is no «promoted» flag, no state, and no timestamp.
+    A run is disposable and a profile is not (docs/DECISIONS.md, 2026-08-18), and a run that recorded
+    what a different service did with its output would be claiming an authority over that row which
+    it deliberately does not have.
 
 ## Local dev
 

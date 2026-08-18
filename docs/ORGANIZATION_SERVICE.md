@@ -11,7 +11,10 @@
   with a lifecycle (`Active` / `Suspended`).
 - **Own** the per-organization content-substitution profile (`OrganizationProfile`) from
   [CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md#3-the-organization-profile--the-part-that-removes-most-forks) —
-  product, ICP, objections, script, tone, glossary, banned claims.
+  product, ICP, objections, script, tone, glossary, banned claims. Since 40.29 this service also owns
+  the **merge policy** by which a structure extracted from the customer's material is promoted into
+  that row, and the vocabulary of questions asked about whatever is still missing — see
+  "The profile as an interview" below. It remains the only writer of the row.
 - **Announce** organization lifecycle changes on Kafka (`organization.created` /
   `organization.updated` / `organization.suspended`) so other services can react once they have a
   reason to (none do yet — Stage C, 40.10+).
@@ -83,7 +86,7 @@ them into its `OrganizationReplicas` table so a suspended organization stops pro
 
 | Topic | Payload | When |
 |---|---|---|
-| `organization.profile.updated` | `{organizationId, product, icp, tone, objectionsJson, scriptJson, glossaryJson, bannedClaimsJson, updatedAt}` | `PUT /organizations/profile` succeeds |
+| `organization.profile.updated` | `{organizationId, product, icp, tone, objectionsJson, scriptJson, glossaryJson, bannedClaimsJson, updatedAt}` | any successful write of the profile row: `PUT /organizations/profile`, and since 40.29 `PATCH /organizations/profile` and `POST /organizations/profile/draft/apply` |
 
 Four properties of this event are decisions rather than details.
 
@@ -151,6 +154,102 @@ an organization is legitimately addressed by an id supplied in the route
 platform-staff-only. `OrganizationControllerAuthorizationTests` asserts both halves — the registry
 requires `RequireSuperAdmin`, and `OrganizationProfileController` deliberately does not (it belongs
 to the organization itself and is read by its own members).
+
+## The profile as an interview (Phase 40.29)
+
+The profile of 40.5 is a form with seven fields, three of which are lists and one of which is a
+dictionary — thirty-odd inputs in practice. **Nobody fills that in.** That is not a usability
+complaint: an empty profile is the state in which 40.19's `{{organization.*}}` substitution resolves
+to the neutral fallback everywhere, so the entire content-parameterization investment does nothing
+for that customer. Roadmap 40.29 exists to make the profile get filled, and its measure of success is
+a number — five minutes rather than an hour.
+
+Nothing in the schema changed. What was added is four routes on `OrganizationProfileController` and
+one merge policy.
+
+| Route | What it is for |
+|---|---|
+| `GET /organizations/profile/gaps` | the interview: the next few questions, hardest-hitting first |
+| `PATCH /organizations/profile` | one answer to one question; omitted fields keep their stored value |
+| `POST /organizations/profile/draft` | what promoting an extracted draft would do to each field — writes nothing |
+| `POST /organizations/profile/draft/apply` | the promotion itself, under the merge policy |
+
+Exact bodies: [API_CONTRACTS.md](API_CONTRACTS.md#organization-profile-as-an-interview-phase-4029).
+
+### There is no second extraction pipeline, and that was decided in 40.27
+
+The material a РОП would upload to fill their profile is the same material the 40.27 content pipeline
+already reads, and the structure it extracts is the profile's field list, field for field — 40.27
+shaped it that way deliberately, so that this block would be a copy rather than a translation. So
+this service does not talk to ai-service, does not gain a job table, does not gain a background
+worker, and does not gain a Kafka consumer (it is still produce-only). The flow is:
+
+1. The РОП starts an ordinary run: `POST /admin/content-generation` with the product deck and the
+   call script (learning-service). The pipeline structures it and stops at the 40.27 checkpoint.
+2. They correct what the model got wrong — the edit the checkpoint exists to make cheap.
+3. `GET /admin/content-generation/{jobId}` returns `structure`; the client posts that document to
+   `POST /organizations/profile/draft` to see what it would do, then to `…/draft/apply`.
+4. `GET /organizations/profile/gaps` asks about whatever is still missing.
+
+**The draft crosses the service boundary in the request body, carried by the client.** That is the
+block's cross-service decision and the reasoning is in [DECISIONS.md](DECISIONS.md) (2026-08-18): it
+keeps organization-service the only writer of the profile and the only publisher of
+`organization.profile.updated`, keeps learning-service's replica read-only, and adds no authority,
+because the same administrator can already `PUT` an arbitrary structure onto the run and an arbitrary
+profile onto this row.
+
+**A run refused by 40.28 is still a usable source.** A refusal after structuring leaves the structure
+on the row, and a profile needs less than a lesson does — «нет ни одного возражения» blocks four good
+exercises and does not block knowing what the company sells. Only a run refused *before* structuring
+(too short, off topic) has nothing to promote.
+
+### The merge policy — fill blanks, grow lists, never silently replace a human's words
+
+This is the question 40.27 refused to answer on this block's behalf, and the scenario it is built for
+is concrete: a compliance officer types `banned_claims` in March, a РОП pastes a new product deck in
+June, and the model reads the deck's marketing copy as the company's position. An overwrite there is
+not a lost edit — it is a persona that starts voicing a promise a lawyer forbade, discovered by the
+customer.
+
+- **`product`, `icp`, `tone`, `scriptStages`** each hold one value a suggestion would have to
+  displace. Empty → filled without asking (filling a blank destroys nothing). Non-empty and different
+  → reported as a `conflict` and **kept**, unless the caller names the field in `acceptedFields`.
+- **`scriptStages` is in that group although it is a list**, because it is an ordered sequence
+  describing one conversation, not a set: unioning a five-stage script with a seven-stage one produces
+  twelve stages in an order that describes no call anybody makes.
+- **`objections` and `glossary`** are collections that legitimately accumulate, so the merge is a
+  union and an existing entry always wins — which is what preserves the `frequency` an extraction
+  cannot know and the answer a manager wrote from experience rather than from a deck.
+- **`bannedClaims` is union-only and has no consent value at all.** There is no `acceptedFields`
+  string that deletes a banned claim, so no client bug and no stale second tab can produce one. The
+  safe direction is the one that forbids more; removing an entry stays a deliberate act on the
+  whole-profile form.
+
+### Which gaps, and how many at a time
+
+The vocabulary is `OrganizationProfileGapCodes` — seven codes, a fixed Russian question each, and a
+priority. **It is deliberately not 40.28's `ContentSufficiencyCodes`:** «хватит ли материала на четыре
+упражнения» and «заполнен ли профиль» disagree in both directions — `banned_claims` and the glossary
+block nothing in generation and matter a great deal here, while `too_short` and `off_topic` are facts
+about a document and say nothing about a row.
+
+The questions are fixed on the server, not authored by the model. That is 40.28's «коды на проводе,
+предложения на сервере» applied unchanged, and it matters more here, because a question is answered
+*into a database column* — «пришлите ваш прайс в PDF» is a question with no field behind it.
+
+- **`blocking`** — `product`, `icp`, `objections` (fewer than three). These are what 40.19 renders into
+  every lesson and every persona prompt; while one is missing, that customer reads the library exactly
+  as it read before 40.19 existed. `isReadyForParameterization` is exactly «none of these is open».
+- **`important`** — `scriptStages` (fewer than three), `tone`, `bannedClaims`.
+- **`optional`** — `glossary`.
+
+**Three questions per round, and the cap is the feature.** The roadmap's failure mode is «30 пустых
+полей никто не заполнит», which is about the size of what a person is shown. `totalGapCount` travels
+alongside so a screen can show three and still say «осталось ещё 4» — a capped list with no total is a
+progress bar that lies. Two of the questions («есть ли запрещённые обещания», «есть ли свои термины»)
+may honestly be answered «таких нет», and the profile has no marker for that; they can therefore
+persist forever, which is harmless because readiness is computed from the blocking tier only and the
+cap means they are never shown while a real gap is open.
 
 ## What 40.6 needs to know
 

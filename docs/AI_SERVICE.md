@@ -286,6 +286,16 @@ Five properties of the prompts are decisions rather than details.
 The same caps the render path uses apply here: at most ten objections and 2000 characters per
 substituted value, so a value that survives extraction survives being put in a prompt.
 
+**Phase 40.29 changed nothing in this service, and that is a decision rather than an oversight.**
+40.29 makes the organization profile fill itself in from the customer's material, and the obvious
+shape for it would have been a third route here — «прочитай презентацию и заполни профиль». There is
+no such route, because `POST /ai/content/structure` already is it: the structure it returns is the
+profile's field list, field for field, deliberately (40.27). What 40.29 added is a merge policy and a
+question vocabulary in organization-service, both of which are arithmetic and fixed sentences. In
+particular the interview's questions are **not** model-authored, for the reason this section already
+gives about refusal sentences, only sharper: an interview question is answered into a database column,
+and «пришлите ваш прайс в PDF» is a question with no field behind it.
+
 ## Routes (through the gateway, paths preserved)
 
 Phases 40.27–40.28 added no gateway route: `/ai/content/*` is internal, like `/ai/evaluate`. 40.28
