@@ -259,9 +259,9 @@ src/backend/
   `[TenantScoped]`.
 - **Postgres RLS infrastructure (Phase 40.4):** this is Layer 3 of TENANCY.md §1 — the layer that
   survives a forgotten EF filter, Dapper, or `ExecuteUpdate`/`ExecuteDelete`. Two new pieces in
-  `BuildingBlocks/Tenancy`, both provider-agnostic (no `Npgsql` package reference in
-  `Sellevate.BuildingBlocks` itself — only `Microsoft.EntityFrameworkCore.Relational` for the
-  migration-builder types):
+  `BuildingBlocks/Tenancy`, both provider-agnostic — they emit Postgres SQL as text and take no
+  dependency on the driver (the `Npgsql` package reference `Sellevate.BuildingBlocks` gained in
+  2026-08-18 belongs to `BuildingBlocks/Persistence`, described below, not to these two):
   - `TenantConnectionInterceptor : IDbTransactionInterceptor` hooks `TransactionStarted` /
     `TransactionStartedAsync` — which fires for every transaction, including EF's own implicit
     per-`SaveChangesAsync` transaction — and issues `SET LOCAL app.organization_id = '<guid>'`,
@@ -307,6 +307,28 @@ src/backend/
   - `docs/TENANCY/sql/create_sellevate_app_role.sql` is the (unexecuted) script for the real
     `sellevate_app` role; `scripts/tenancy-pool-lint.py` (CI: `tenancy-pool`) forbids
     `AddDbContextPool` anywhere in the backend, per the CODESTYLE.md rule it enforces.
+
+- **Two Postgres connections, one per privilege level (2026-08-18):** `BuildingBlocks/Persistence`
+  holds the piece that makes the `sellevate_app` move an operational change rather than a code
+  change. `PostgresConnectionStrings` resolves two keys — `ConnectionStrings:PostgresMigrations`
+  (the owning role: `CREATE DATABASE`, EF migrations, the Hangfire schema in gamification) and
+  `ConnectionStrings:Postgres` (the runtime role) — with the migration key **optional and falling
+  back** to the runtime one, so an installation that has not split its roles behaves exactly as it
+  did before. A blank value counts as absent: an unset compose variable arrives as `""`, not as a
+  missing key.
+
+  `DatabaseMigrator.MigrateAsync<TContext>` builds its own `DbContextOptions` on the migration
+  connection and constructs the context through `ActivatorUtilities` against the caller's scope,
+  rather than resolving the container's context — the container's is bound to the runtime
+  connection and carries the tenant interceptors, neither of which belongs on a DDL run. All seven
+  Postgres services call it, and it logs which connection it migrated on. The seven byte-identical
+  per-service `DatabaseBootstrapper` copies collapsed into one here at the same time, since this was
+  the edit that had to land in all seven at once.
+
+  What this does **not** solve: system mode deliberately emits no `app.organization_id`, so the
+  seven `Needs BYPASSRLS = Yes` jobs — and learning-service's startup lesson-version backfill, which
+  runs on the runtime connection — still need a `BYPASSRLS` role of their own on the day the runtime
+  moves. See docs/TENANCY/RUNBOOK.md step 12.
 
 ## `TenantTransactionScope` and `[TenantTransaction]` — why reads need a transaction
 
