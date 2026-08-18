@@ -7,6 +7,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Eventing;
@@ -147,12 +148,8 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString(ConfigurationKeys.ConnectionStringNames.Postgres)!,
-        startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<SocialDbContext>();
-    databaseContext.Database.Migrate();
+    await DatabaseMigrator.MigrateAsync<SocialDbContext>(
+        serviceScope.ServiceProvider, builder.Configuration, startupLogger);
 
     var objectStorage = serviceScope.ServiceProvider.GetRequiredService<IObjectStorage>();
     await objectStorage.EnsureBucketExistsAsync();

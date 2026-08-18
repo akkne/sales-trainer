@@ -19,6 +19,7 @@ using Sellevate.Ai.Infrastructure.Http;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
@@ -111,15 +112,15 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString(AiConfigurationKeys.PostgresConnectionStringName)!,
-        startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AiDbContext>();
-    databaseContext.Database.Migrate();
-
-    await CompanyCallModeSeeder.SeedAsync(databaseContext);
-    await CustomScenarioModeSeeder.SeedAsync(databaseContext);
+    await DatabaseMigrator.MigrateAsync<AiDbContext>(
+        serviceScope.ServiceProvider,
+        builder.Configuration,
+        startupLogger,
+        async (databaseContext, _) =>
+        {
+            await CompanyCallModeSeeder.SeedAsync(databaseContext);
+            await CustomScenarioModeSeeder.SeedAsync(databaseContext);
+        });
 }
 
 application.Run();

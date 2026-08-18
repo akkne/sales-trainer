@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.Features.Achievements;
@@ -36,13 +37,11 @@ internal static class GamificationStartupInitializer
 
         var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-        await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-            application.Configuration.GetConnectionString(ConfigurationKeys.PostgresConnectionName)!,
+        await DatabaseMigrator.MigrateAsync<GamificationDbContext>(
+            serviceScope.ServiceProvider,
+            application.Configuration,
             startupLogger,
-            cancellationToken);
-
-        var databaseContext = serviceScope.ServiceProvider.GetRequiredService<GamificationDbContext>();
-        databaseContext.Database.Migrate();
+            cancellationToken: cancellationToken);
 
         var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
         await achievementSeeder.SeedAsync(cancellationToken);

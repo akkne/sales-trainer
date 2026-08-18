@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.DependencyInjection;
 using Sellevate.Gamification.Infrastructure.Data;
@@ -49,7 +50,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddHangfire(hangfireConfiguration =>
     hangfireConfiguration.UsePostgreSqlStorage(storageOptions =>
         storageOptions.UseNpgsqlConnection(
-            builder.Configuration.GetConnectionString(ConfigurationKeys.PostgresConnectionName))));
+            PostgresConnectionStrings.Migrations(builder.Configuration))));
 builder.Services.AddHangfireServer();
 
 const int minimumJwtSigningKeyByteCount = 32;

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Common.Security;
@@ -139,12 +140,8 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString(ConfigurationKeys.PostgresConnectionName)!,
-        startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    databaseContext.Database.Migrate();
+    await DatabaseMigrator.MigrateAsync<IdentityDbContext>(
+        serviceScope.ServiceProvider, builder.Configuration, startupLogger);
 
     var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SuperAdminSeeder>();
     await superAdminSeeder.SeedAsync();

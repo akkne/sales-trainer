@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.Lessons.Services.Abstract;
 
@@ -24,8 +25,6 @@ namespace Sellevate.Learning.Infrastructure.Data;
 /// </summary>
 public static class LearningDatabaseStartupExtensions
 {
-    private const string PostgresConnectionStringName = "Postgres";
-
     public static async Task MigrateAndBackfillAsync(
         this WebApplication application,
         IConfiguration configuration,
@@ -37,11 +36,8 @@ public static class LearningDatabaseStartupExtensions
 
         var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-        await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-            configuration.GetConnectionString(PostgresConnectionStringName)!, startupLogger, cancellationToken);
-
-        var databaseContext = serviceScope.ServiceProvider.GetRequiredService<LearningDbContext>();
-        databaseContext.Database.Migrate();
+        await DatabaseMigrator.MigrateAsync<LearningDbContext>(
+            serviceScope.ServiceProvider, configuration, startupLogger, cancellationToken: cancellationToken);
 
         var lessonVersionBackfill = serviceScope.ServiceProvider.GetRequiredService<ILessonVersionBackfill>();
         await lessonVersionBackfill.BackfillMissingInitialVersionsAsync(cancellationToken);

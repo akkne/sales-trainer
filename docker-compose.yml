@@ -33,7 +33,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=identity;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Kafka__BootstrapServers=kafka:29092
@@ -194,7 +199,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=ai;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=ai;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=ai;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Mongo=mongodb://mongo:27017
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
@@ -317,7 +327,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=gamification;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
@@ -346,7 +361,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=social;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Mongo=mongodb://mongo:27017
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
@@ -383,7 +403,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=learning;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=learning;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=learning;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
       - AiService__BaseUrl=http://ai:8080
@@ -421,7 +446,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=company;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
@@ -452,7 +482,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=organization;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100

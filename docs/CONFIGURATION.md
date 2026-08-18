@@ -42,7 +42,8 @@ Double underscore maps to a section: `YandexTts__ApiKey` → `YandexTts:ApiKey`.
 
 | Variable | Used by | Maps to |
 |----------|---------|---------|
-| `POSTGRES_DB/USER/PASSWORD` | postgres, backend | `ConnectionStrings:Postgres` |
+| `POSTGRES_DB/USER/PASSWORD` | postgres, backend | `ConnectionStrings:PostgresMigrations`, and `ConnectionStrings:Postgres` when `APP_POSTGRES_*` is unset |
+| `APP_POSTGRES_USER/PASSWORD` | backend | `ConnectionStrings:Postgres` — the runtime role. Optional; see below |
 | `JWT_KEY` | backend | `Jwt:Key` |
 | `GOOGLE_CLIENT_ID` | backend, frontend build | `Google:ClientId`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
 | `SUPERADMIN_EMAIL/PASSWORD/DISPLAY_NAME` | backend | `SuperAdmin:*` |
@@ -51,6 +52,25 @@ Double underscore maps to a section: `YandexTts__ApiKey` → `YandexTts:ApiKey`.
 | `YANDEX_TTS_API_KEY` | backend | `YandexTts:ApiKey` |
 | `MAILERSEND_API_TOKEN/FROM_EMAIL/FROM_NAME` | backend | `MailerSend:*` |
 | `GRAFANA_ADMIN_USER/PASSWORD` | grafana | `GF_SECURITY_ADMIN_*` |
+
+### Two Postgres connections, one per privilege level
+
+Every service reads **two** connection strings, resolved in one place
+(`BuildingBlocks/Persistence/PostgresConnectionStrings.cs`):
+
+| Key | Role | Used for |
+|-----|------|----------|
+| `ConnectionStrings:Postgres` | the application role — `sellevate_app` once RLS is on | every request-time query and write |
+| `ConnectionStrings:PostgresMigrations` | the owning role, superuser or `BYPASSRLS` | `CREATE DATABASE`, EF migrations, the Hangfire schema |
+
+`PostgresMigrations` is **optional and falls back to `Postgres`**, so an installation that has not
+split its roles yet behaves exactly as it did before the split existed — one role for everything,
+RLS inert. A blank value counts as absent, because an unset compose variable arrives as `""`.
+
+The separation is what makes turning RLS on possible at all: before it, the runtime role and the
+DDL role were the same string, so pointing the services at a `NOBYPASSRLS` role would have broken
+the next deploy that carried a migration. Rollout procedure:
+[TENANCY/RUNBOOK.md](TENANCY/RUNBOOK.md) step 12.
 
 Non-secret email-verification tuning (`EmailVerification:CodeLength`, `CodeLifetimeMinutes`,
 `MaximumVerificationAttempts`, `ResendCooldownSeconds`) lives in `appsettings.json`. See

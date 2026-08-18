@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Organization.Common.Constants;
 using Sellevate.Organization.Features.Organizations;
@@ -124,11 +125,8 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<OrganizationDbContext>();
-    await databaseContext.Database.MigrateAsync();
+    await DatabaseMigrator.MigrateAsync<OrganizationDbContext>(
+        serviceScope.ServiceProvider, builder.Configuration, startupLogger);
 }
 
 application.Run();
