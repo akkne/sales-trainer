@@ -231,7 +231,47 @@ which is a learning-db row and the value that drives an assignment's threshold; 
   customer's compliance list to another customer's practice calls
   ([BACKGROUND_JOBS.md §4b](TENANCY/BACKGROUND_JOBS.md)).
 
+### The admin content pipeline's two calls (Phase 40.27)
+
+`ContentGenerationController` — `POST /ai/content/structure` and `POST /ai/content/generate`, both
+internal service-to-service routes behind `InternalServiceAuthFilter` and, like `POST /ai/evaluate`,
+deliberately **not** exposed through the gateway. Full description:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
+
+**Both are stateless: no organization, no database, no job.** The run's state, its approval and the
+lesson it produces belong to learning-service, which owns `Lessons`, `Exercises` and `LessonVersions`.
+The compute is here for the reason this service's bounded context exists — everything that talks to an
+LLM — and because roadmap 40.33 makes that single point the place per-organization spend is enforced.
+Generating a lesson is about to be the most expensive call in the product, and putting it outside the
+meter would make 40.33 a rewrite rather than a feature.
+
+Four properties of the prompts are decisions rather than details.
+
+- **Structuring leaves gaps rather than filling them.** `null` for a scalar it did not find, `[]` for
+  a list. A fabricated ICP is indistinguishable on the review screen from an extracted one, and the
+  checkpoint would then ratify a fabrication instead of catching it. Refusing thin material outright,
+  and saying what is missing, is roadmap 40.28.
+- **Generation never sees the material** — only the confirmed structure and the run's title. That is
+  the token saving (a deck is paid for once, during structuring) and, more importantly, what makes the
+  reviewer's deletion binding: a model that could still read the source would keep putting the deleted
+  objection back.
+- **`banned_claims` binds the answer key**, which is the third face of the rule the section above
+  states for the persona and the grader. No `is_correct: true` option, no theory card and no grading
+  criterion may contain one; a banned claim may appear only as a deliberately wrong option or as the
+  mistake in a `spot_mistake` dialogue. An exercise whose *correct* answer is a forbidden promise
+  teaches it and then rewards it. The block is appended last, after the whole system prompt, for the
+  reason given above.
+- **Four exercise types, not eleven** — `theory_card`, `choose_option`, `spot_mistake`, `free_text`.
+  Every schema has to be stated exactly in the prompt, and every one the model gets slightly wrong is
+  an exercise learning-service's `ExerciseContentValidator` drops on arrival: a paid call producing
+  nothing.
+
+The same caps the render path uses apply here: at most ten objections and 2000 characters per
+substituted value, so a value that survives extraction survives being put in a prompt.
+
 ## Routes (through the gateway, paths preserved)
+
+Phase 40.27 added no gateway route: `/ai/content/*` is internal, like `/ai/evaluate`.
 
 Phase 40.25 added `/admin/dialog-sessions` and `/admin/dialog-sessions/{**catch-all}` to the `ai`
 cluster — a separate gateway route from `/admin/dialog/*`, which does not match a different path

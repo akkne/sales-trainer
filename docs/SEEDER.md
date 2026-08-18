@@ -44,6 +44,30 @@ reads. **It cannot be pointed at a customer, and that is a hard rule rather than
 flag to point itself anywhere else. If per-organization seeding is ever needed, that is a change to
 the API contract and to this document, not a command-line switch.
 
+### The customer's own path is a different pipeline (Phase 40.27)
+
+A customer who wants content **out of their own material** does not get a seeder flag. They get the
+admin content pipeline — [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) — which is the product version of
+what `seed.py` does offline, with one difference that is the whole point: it **stops in the middle**
+and shows the extracted structure for confirmation before generating anything.
+
+The two paths are deliberately separate, and the table above gains a fourth row because of it:
+
+| Want | Mechanism | Cost |
+|---|---|---|
+| A lesson built from their own deck, script or training notes | `POST /admin/content-generation` → review the structure → approve (Phase 40.27) | One structuring call and one generation call. The lesson is theirs, `organization_id` set, archived until reviewed. It never joins the shared library and never reaches another customer |
+
+Three properties keep this from becoming a back door into the shared library:
+
+- **It writes `organization_id`, always.** There is no target field and no way to ask for a global
+  write. The seeder remains the one authoring path for `organization_id IS NULL`, and that has not
+  changed.
+- **It goes through the ordinary content tables**, so a generated lesson is versioned, overridable and
+  substitutable exactly like a seeded one — but it is *the organization's* lesson, outside the base
+  library's improvement path by construction rather than by an override marker.
+- **`seed.py` itself is untouched by 40.27.** It still seeds the global library, still sends
+  `target=global`, still has no per-organization flag.
+
 ---
 
 ## 1. Skills Seeder — `/admin/seeder/skills`

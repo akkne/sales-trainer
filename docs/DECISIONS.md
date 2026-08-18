@@ -3853,3 +3853,151 @@ owner on 2026-08-16) forbids writing new tests of any kind. The rule wins: the b
 `[~]` rather than quietly satisfied by something weaker, and the gap is listed under "Тесты,
 которых нет". Documentation is not tests, so the acceptance *checklist* in
 `docs/TESTING/TENANCY.md` was written and is the deliverable that shipped in its place.
+
+---
+
+## 2026-08-18 — Phase 40.27: the checkpoint between structuring and generation
+
+Roadmap block 40.27, the first of stage F. The product version of `.claude/local-seed/seed.py`'s
+structure-then-generate run, with a stop in the middle. Full description:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
+
+### The extracted structure is a draft of its own, not the organization profile row
+
+This is the fork the block was told to decide, because 40.29 («профиль компании как интервью, а не
+форма») depends on the answer.
+
+The extracted structure — product, ICP, tone, objections, script stages, glossary, banned claims — is
+the organization profile's field list (`CONTENT_MODEL.md` §3), field for field. So the tempting move
+is for the checkpoint to write straight into `organization_profile`: one document, one place, and
+40.29 arrives for free.
+
+It was rejected, on four counts.
+
+- **One upload would overwrite a standing decision.** The profile is what 40.19 renders into every
+  base lesson and every persona prompt for that customer, and `banned_claims` is a compliance list
+  somebody may have entered deliberately. A РОП pasting a product deck to make one training is not
+  asking to re-answer the company's compliance question, and a pipeline that silently did would be
+  discovered the first time a persona started voicing a claim legal had banned.
+- **It would make the checkpoint a checkpoint on nothing.** Generation reads the structure. If the
+  structure were the profile, the model's first draft would be live in the product *before* anybody
+  confirmed it — the review would be after the fact, which is the thing this block exists to stop.
+- **It is a cross-service write.** The profile belongs to organization-service, behind
+  `PUT /organizations/profile`, and reaches learning-service only as a read-only replica fed by
+  `organization.profile.updated` (40.19). Writing it from a learning-service worker would mean either
+  a second writer of another service's aggregate or a synchronous call in the middle of a background
+  step, and would put the profile's authority in two places.
+- **A run is disposable and a profile is not.** Ten runs a month, each about one training, each
+  correct only about the slice of the company its material covered. The profile is the company's
+  standing truth. Squashing the two would make «what does this organization sell» the answer from
+  whichever deck was uploaded most recently.
+
+What was kept from the tempting version is the part that costs nothing: **the shapes are identical**,
+and structuring is **seeded from the profile replica**. So a customer who already filled the form in
+is not asked the same seven questions again, the model is told to fill gaps rather than to contradict
+a human, and 40.29's promotion of a reviewed structure into the profile is a field-by-field copy with
+no translation layer to get wrong. The direction 40.29 has to add is one endpoint and a merge policy,
+not a second extraction pipeline.
+
+### The state lives in learning-service, the LLM calls live in ai-service
+
+`ContentGenerationJobs` is a learning-db table; `POST /ai/content/structure` and
+`POST /ai/content/generate` are internal ai-service routes, guarded and un-gatewayed exactly like
+`POST /ai/evaluate`.
+
+- **State goes where the output goes.** The run's product is a `Lesson`, its `Exercise` rows and a
+  `LessonVersion` — all learning-service's tables, all written in the same transaction that marks the
+  run complete. Holding the state in ai-service would have meant a cross-database two-phase story for
+  "the lesson exists and the run says so".
+- **LLM calls go where every other LLM call goes.** `AI_SERVICE.md`'s bounded context is "everything
+  that talks to an LLM or a speech API", and roadmap 40.33 makes that single point the place
+  per-organization spend is enforced. Generating fifteen exercises is about to be the most expensive
+  call in the product; putting it outside the meter would make 40.33 a rewrite rather than a feature.
+- **The honest wrinkle:** learning-service already holds a copy of `OpenAiChatService`, used by
+  `ExerciseDialogService` for `ai_dialogue` exercises. That is a monolith-era leftover and 40.27
+  deliberately did not extend it, nor clean it up — recorded in `DONT_FORGET.md` so 40.33 finds it.
+
+### The material is not sent to the generation call
+
+Generation receives the confirmed structure and the run's title, and nothing else.
+
+It is the token saving the roadmap asks for — a fifty-page deck is paid for once, during structuring,
+rather than again on every generation and every re-generation. But the sharper reason is behavioural:
+if the material travelled alongside the structure, the model would keep re-finding the objection the
+reviewer deleted and putting it back, and the checkpoint would be advisory instead of binding.
+
+### The checkpoint is a CHECK constraint, not only a service rule
+
+`CK_ContentGenerationJobs_Checkpoint` refuses a row in the `generating` state without both a
+structure and an `ApprovedAt`. The service enforces the same thing and would otherwise be the only
+thing enforcing it. This follows 40.21's call on the assignment freeze trigger and 40.17's on
+programme items: the invariant that defines a block belongs in the database, so that the second
+writer somebody adds in 40.31 inherits it instead of having to remember it.
+
+`CK_ContentGenerationJobs_Produced` is the same idea applied to cost: `ProducedLessonId` may not
+exist outside the `completed` state, which is what makes "a run holding a lesson id has been paid
+for" a fact rather than a convention.
+
+### The claim is one conditional UPDATE, committed before the call
+
+The alternative — load the row, check the lease, stamp it, save — is what every other sweep in this
+codebase does, and it is wrong here for a reason the others do not have: under READ COMMITTED two
+instances can both see a free lease and both stamp it, and here that means **both pay for the same
+generation**. The predicate therefore travels inside the `UPDATE`, so exactly one tick reports a row.
+
+Committing before the LLM call rather than wrapping the call is not a preference. A five-minute call
+inside a transaction is a five-minute idle-in-transaction connection, and rolling back would not
+un-bill the provider anyway. The consequence is stated rather than hidden: a process that dies
+mid-call leaves a claimed run, the lease (10 minutes, deliberately longer than the 300-second HTTP
+timeout) releases it, and the attempt it spent is already on the row — which is what stops a crash
+loop from buying a lesson per restart.
+
+### Generated content lands archived, and `PUT /admin/lessons/{id}` grew a way back out
+
+The checkpoint this block buys sits *before* generation. Whether the generated exercises themselves
+are good is a second question, and 40.32 owns answering it item by item. Dropping unreviewed model
+output straight into the team's live skill tree would break the block's promise from the other side —
+so the lesson is complete, addressable, versioned, and invisible to learners.
+
+That exposed a pre-existing hole: archiving a lesson was reachable from exactly one place (retiring
+an override) and there was no way to un-archive anything. A lesson that arrives archived with no way
+out is stranded content, so `CreateLessonRequestDto` gained an optional `isArchived` honoured on
+update only. Omitted, it leaves the flag alone, so every existing caller keeps meaning what it meant.
+
+The rejected alternative was a fourth pipeline verb, `POST …/accept`, that un-archives the produced
+lesson. It reads well and it is half of 40.32's accept/reject screen, built before the block that
+owns it and with a vocabulary 40.32 would then have to either adopt or migrate.
+
+### Four exercise types, not eleven
+
+`theory_card`, `choose_option`, `spot_mistake`, `free_text` — teach, recognise, diagnose, produce.
+
+Each type's content schema has to be stated exactly in the generation prompt, and every one the model
+gets slightly wrong is an exercise `ExerciseContentValidator` drops on arrival: a call that was paid
+for and produced nothing. Four schemas that fit in a prompt and are simple enough to get right beat
+eleven that do not. The remaining seven are reachable by hand in the editor, and widening the set is
+cheap once there is evidence about which ones survive validation.
+
+Exercises that fail validation are **dropped, never repaired** — the seeder's rule (`SEEDER.md` §3),
+for the same reason: a repaired exercise is a guess about what the author meant, and here there is no
+author to ask. A run where everything failed validation is recorded as a **failure**, not an empty
+success: a `completed` run pointing at a lesson with no exercises looks finished and teaches nothing.
+
+### `banned_claims` binds the answer key, which is its third and sharpest face
+
+40.19 made the persona refuse to voice a banned claim and made the grader refuse to reward one, and
+`AI_SERVICE.md` explains why enforcing only the first is worse than nothing. Generation adds the
+third: no `is_correct: true` option, no theory card and no grading criterion may contain one. An
+exercise whose *correct* answer is a forbidden promise does not merely permit the claim — it teaches
+it and then rewards it, which is the failure mode of all three combined.
+
+The block is appended after the whole system prompt and the customer's own words go below it, for the
+reason 40.19 recorded: a rule that a later block can qualify is not a rule.
+
+### A 200-character floor is all the input check there is
+
+40.28 is «порог достаточности входа» — the AI refusing to generate and saying what is missing. That
+needs the model's opinion, and inventing half of it here would put the vocabulary in the wrong block.
+What 40.27 does is refuse an empty textarea, which would otherwise buy a structuring call to learn
+nothing, and refuse to approve a structure with no product, no ICP, no objections and no script
+stages, which would otherwise buy a generation call to produce exercises about nothing.

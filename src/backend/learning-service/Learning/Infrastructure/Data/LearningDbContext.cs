@@ -3,6 +3,7 @@ using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Content.Models;
+using Sellevate.Learning.Features.ContentGeneration.Models;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.DialogReviews.Models;
 using Sellevate.Learning.Features.Exercises.Models;
@@ -49,6 +50,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<AssignmentProgress> AssignmentProgressRecords => Set<AssignmentProgress>();
     public DbSet<UserDialogScore> UserDialogScores => Set<UserDialogScore>();
     public DbSet<DialogReviewNote> DialogReviewNotes => Set<DialogReviewNote>();
+    public DbSet<ContentGenerationJob> ContentGenerationJobs => Set<ContentGenerationJob>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -105,6 +107,12 @@ public sealed class LearningDbContext : DbContext
         // to each other about one organization's conversation. Plain equality, no global branch.
         modelBuilder.Entity<DialogReviewNote>()
             .HasQueryFilter(note => _tenantContext.IsPlatformWide || note.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.27. A pipeline run holds one customer's uploaded material and their extracted
+        // objections, script and compliance list. Plain equality — a null owner here would mean one
+        // customer's product deck was readable by every other. The lesson it produces is content and
+        // is filtered by the content rule below, but it is always owned rather than global.
+        modelBuilder.Entity<ContentGenerationJob>()
+            .HasQueryFilter(job => _tenantContext.IsPlatformWide || job.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
         // is no global profile, and a null owner would read as "every organization's product name".
         modelBuilder.Entity<OrganizationProfileReplica>()

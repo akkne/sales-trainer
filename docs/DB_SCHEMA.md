@@ -1707,3 +1707,58 @@ Three things about this table are decisions, not defaults.
 The table is duplicated across two databases on purpose. Both services resolve placeholders on a hot
 path and neither can afford a hop into organization-service to do it; the alternative to duplication
 is a shared database, which is the thing the service split exists to prevent.
+
+---
+
+### Table: `ContentGenerationJobs` (learning-db — Phase 40.27, strict tenant data, RLS enabled)
+
+One run of the admin content pipeline: material in, a structure a human confirms, then a lesson.
+Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `OrganizationId` | uuid | **NOT NULL** — plain-equality RLS, never the content policy |
+| `CreatedBy` | uuid | nullable — the РОП who started it |
+| `Title` | varchar(200) | NOT NULL, non-blank; becomes the generated topic's title |
+| `SourceMaterial` | text | NOT NULL, non-blank; the pasted deck/script, verbatim. Bounded at 60 000 characters by the service, not by the column |
+| `Status` | varchar(20) | NOT NULL, DEFAULT `'structuring'`; one of `structuring` / `awaiting_review` / `generating` / `completed` / `failed` |
+| `Structure` | jsonb | nullable — the extracted structure, in the organization profile's shape |
+| `StructuredAt` | timestamptz | nullable |
+| `ApprovedAt` | timestamptz | nullable — **the checkpoint, recorded** |
+| `ApprovedBy` | uuid | nullable |
+| `ProducedLessonId` | uuid | nullable — **the idempotency key of the expensive half** |
+| `ProducedLessonVersionId` | uuid | nullable — the frozen snapshot of what was generated |
+| `ProducedExerciseCount` | integer | NOT NULL, ≥ 0 — how many survived validation |
+| `GeneratedAt` | timestamptz | nullable |
+| `FailureReason` | varchar(1000) | nullable |
+| `Attempts` | integer | NOT NULL, ≥ 0 — spent in the current half; reset on approve and on retry |
+| `ClaimedAt` | timestamptz | nullable — the worker's lease, stamped and committed **before** the LLM call |
+| `CreatedAt` / `UpdatedAt` | timestamptz | NOT NULL |
+
+Indexes: `(OrganizationId, Status, CreatedAt)` (the worker's query), `(OrganizationId, CreatedAt)`
+(the administrator's list), `(OrganizationId, ProducedLessonId)` («where did this lesson come from»,
+which 40.31 will ask).
+
+Constraints, and two of them are the block rather than hygiene:
+
+- **`CK_ContentGenerationJobs_Checkpoint`** — a row may not be in `generating` without both a
+  `Structure` and an `ApprovedAt`. **This is 40.27 stated in the database:** no lesson is ever
+  generated from a structure no human confirmed. The service enforces the same rule and would
+  otherwise be the only thing enforcing it.
+- **`CK_ContentGenerationJobs_Produced`** — `ProducedLessonId` may not exist outside the `completed`
+  state. That is what makes "a run holding a lesson id has already been paid for" a fact the cost
+  guard can rely on rather than a convention.
+- `CK_ContentGenerationJobs_Status` (the vocabulary), `CK_ContentGenerationJobs_Structure` (a run at
+  the checkpoint has something to review; an approval names a structure),
+  `CK_ContentGenerationJobs_Counters` (non-negative), `CK_ContentGenerationJobs_Input` (non-blank
+  title and material — an empty one can only fail, and would fail after paying for a call).
+
+**`ProducedLessonId` is not a foreign key and never can be.** `Lessons` is a content table under an
+`IS NULL OR = current` policy and this is strict tenant data under plain equality; 40.16 already
+refused to join those two with a constraint validated with the writer's privileges. What makes the
+value trustworthy is that only one code path writes it, in the same transaction that creates the
+lesson.
+
+Migration: `AddContentGenerationJobs` (2026-08-18). Creates the table empty — no backfill, no
+maintenance window, no concurrent-index script, for the sixth block in a row and for the same reason.

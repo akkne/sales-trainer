@@ -111,6 +111,14 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
         lesson.Title = requestDto.Title;
         lesson.OrderInTopic = requestDto.OrderInTopic;
 
+        // Phase 40.27: an omitted flag leaves the lesson's visibility alone. This is the way back for
+        // a generated lesson, which lands archived so unreviewed model output never appears in the
+        // team's tree before somebody has looked at it.
+        if (requestDto.IsArchived is { } isArchived)
+        {
+            lesson.IsArchived = isArchived;
+        }
+
         await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Lesson updated LessonId={LessonId} Title={Title} Slug={Slug} by ActorId={ActorId}",

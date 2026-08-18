@@ -24,6 +24,23 @@ public static class AiEvaluationServiceCollectionExtensions
                 httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);
         });
 
+        // Phase 40.27. The content pipeline's own client, registered here because it shares the
+        // configuration section and the internal-secret header with the evaluation client. It gets a
+        // timeout of its own: generating a lesson takes minutes, and HttpClient's 100-second default
+        // would abandon a call the provider has already been paid for.
+        var aiServiceConfiguration = configuration.GetSection(AiServiceConfiguration.SectionName);
+        var contentPipelineTimeout = TimeSpan.FromSeconds(Math.Clamp(
+            aiServiceConfiguration.GetValue("ContentPipelineTimeoutSeconds", 300), 30, 900));
+
+        services.AddHttpClient<IAiContentPipelineClient, AiContentPipelineClient>(httpClient =>
+        {
+            httpClient.Timeout = contentPipelineTimeout;
+
+            var internalServiceSecret = configuration["InternalAuth:ServiceSecret"];
+            if (!string.IsNullOrWhiteSpace(internalServiceSecret))
+                httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);
+        });
+
         return services;
     }
 }

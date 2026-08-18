@@ -9,6 +9,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Companies;
+using Sellevate.Ai.Features.ContentGeneration;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Evaluation;
@@ -128,7 +129,8 @@ builder.Services
     .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration)
     .AddEvaluationFeatureServices()
-    .AddCompanyAiFeatureServices();
+    .AddCompanyAiFeatureServices()
+    .AddContentGenerationFeatureServices();
 
 // AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
 // HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.

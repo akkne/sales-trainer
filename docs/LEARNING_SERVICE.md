@@ -810,6 +810,36 @@ user aggregate but never took these admin routes. Phase 9 must move `/admin/user
   own explicit switch — but wiring the learner's existing screens onto the pinned programme belongs
   with the screens that render a programme, which is 40.20. Recorded in `docs/DONT_FORGET.md`.
 
+## The admin content pipeline (Phase 40.27)
+
+The РОП pastes their material and gets a lesson, with a **stop in the middle**: the extracted
+structure — product, ICP, objections, script stages, tone, glossary, banned claims — is shown back for
+confirmation before a single exercise is generated. Full description:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md); routes in
+[API_CONTRACTS.md](API_CONTRACTS.md); the table in [DB_SCHEMA.md](DB_SCHEMA.md).
+
+What belongs to this service, and why it is split the way it is:
+
+- **The state.** `ContentGenerationJobs` is strict tenant data in learning-db — the material, the
+  structure, the approval, and the lesson the run produced. It lives here because the run's *output*
+  is a `Lesson`, its `Exercise` rows and a `LessonVersion`, all of them this service's tables, all
+  written in the same transaction that marks the run complete.
+- **Not the LLM calls.** Those are ai-service's `POST /ai/content/structure` and
+  `/ai/content/generate`, internal and un-gatewayed like `POST /ai/evaluate`. The second synchronous
+  learning → ai seam, and the reason it goes there is roadmap 40.33: per-organization LLM spend is
+  enforced at the one point every call passes through, and generating a lesson is about to be the
+  most expensive call in the product.
+- **`ContentGenerationSweepService`** is the eighth entry in
+  [BACKGROUND_JOBS.md §2.1](TENANCY/BACKGROUND_JOBS.md), per-organization iteration over a system
+  enumeration. Both halves are minutes long, so neither runs inside the request that asks for it.
+- **Generated content is ordinary content.** A `Lesson` with `OrganizationId` set (never global — the
+  shared library's one authoring path is the seeder), `Exercise` rows, and a published `LessonVersion`
+  snapshot. The eleven existing renderers play it and 40.18's override machinery applies to it, with
+  no new code. It arrives **archived**: reviewing the generated exercises item by item is 40.32, and
+  unreviewed model output must not appear in the team's live tree before then.
+- **`PUT /admin/lessons/{id}` gained an optional `isArchived`** in the same block, because archiving
+  had no reverse and an archived-on-arrival lesson would otherwise be stranded.
+
 ## Local dev
 
 `scripts/dev-learning.sh` (host port **5008**, db `learning` on the shared Postgres).

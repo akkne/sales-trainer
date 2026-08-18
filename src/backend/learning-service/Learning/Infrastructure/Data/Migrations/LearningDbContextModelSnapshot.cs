@@ -283,6 +283,85 @@ namespace Sellevate.Learning.Infrastructure.Data.Migrations
                     b.ToTable("OrganizationProfileReplicas", (string)null);
                 });
 
+            modelBuilder.Entity("Sellevate.Learning.Features.ContentGeneration.Models.ContentGenerationJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ProducedExerciseCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ProducedLessonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ProducedLessonVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceMaterial")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("structuring");
+
+                    b.Property<string>("Structure")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("StructuredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "CreatedAt");
+
+                    b.HasIndex("OrganizationId", "ProducedLessonId");
+
+                    b.HasIndex("OrganizationId", "Status", "CreatedAt");
+
+                    b.ToTable("ContentGenerationJobs", (string)null);
+                });
+
             modelBuilder.Entity("Sellevate.Learning.Features.DailyQuotes.Models.DailyQuote", b =>
                 {
                     b.Property<Guid>("Id")
