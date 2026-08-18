@@ -9,6 +9,7 @@ using Sellevate.Learning.Features.Reference;
 using Sellevate.Learning.Features.SkillTree;
 using Sellevate.Learning.Features.Techniques;
 using Sellevate.Learning.Infrastructure.Ai;
+using Sellevate.Learning.Infrastructure.Identity;
 
 namespace Sellevate.Learning.DependencyInjection;
 
@@ -24,12 +25,13 @@ public static class LearningServiceCollectionExtensions
         services.AddHostedService<OutboxRelayBackgroundService>();
 
         services.AddAiEvaluationClient(configuration);
+        services.AddIdentityDirectoryClient(configuration);
 
         services.AddContentOverrideServices();
         services.AddSkillTreeFeatureServices();
         services.AddLessonFeatureServices();
         services.AddProgramFeatureServices();
-        services.AddAssignmentFeatureServices();
+        services.AddAssignmentFeatureServices(configuration);
         services.AddExerciseFeatureServices();
         services.AddExerciseDialogServices(configuration);
         services.AddReferenceFeatureServices();

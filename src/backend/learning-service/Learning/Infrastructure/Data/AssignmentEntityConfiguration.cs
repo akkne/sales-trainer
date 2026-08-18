@@ -57,6 +57,7 @@ public sealed class AssignmentEntityConfiguration : IEntityTypeConfiguration<Ass
         builder.Property(assignment => assignment.UpdatedAt).IsRequired();
         builder.Property(assignment => assignment.ActivatedAt);
         builder.Property(assignment => assignment.ClosedAt);
+        builder.Property(assignment => assignment.DeadlineNoticeSentAt);
 
         builder.HasMany(assignment => assignment.ProgressRecords)
             .WithOne(record => record.Assignment)

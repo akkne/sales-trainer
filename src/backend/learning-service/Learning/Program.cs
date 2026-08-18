@@ -6,6 +6,7 @@ using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Common.Security;
 using Sellevate.Learning.DependencyInjection;
 using Sellevate.Learning.Features.Lessons.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -96,6 +97,9 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()));
+
+// Phase 40.23. Guards internal/* — the service-to-service routes that carry no JWT.
+builder.Services.AddScoped<InternalServiceAuthFilter>();
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

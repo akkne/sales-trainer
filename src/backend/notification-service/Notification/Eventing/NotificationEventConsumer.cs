@@ -42,6 +42,9 @@ internal sealed class NotificationEventConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.ChatMessageRead,
         BuildingBlocks.Eventing.Topics.DiscussReplyCreated,
         BuildingBlocks.Eventing.Topics.CompanyFollowUpDue,
+        BuildingBlocks.Eventing.Topics.AssignmentIssued,
+        BuildingBlocks.Eventing.Topics.AssignmentDeadlineApproaching,
+        BuildingBlocks.Eventing.Topics.AssignmentReminder,
     ];
 
     /// <summary>

@@ -19,6 +19,12 @@ In-app notification system with a bell dropdown in the top app bar.
 | `ChatMessageReceived`   | `ChatService.SendMessageAsync`                      | `/friends/chat/{conversationId}`          |
 | `AchievementUnlocked`   | `AchievementService.EvaluateAchievementsForUserAsync` | `/profile`                              |
 | `StreakMilestone`       | `ExerciseService.AwardStreakBonusExperiencePointsIfMilestoneAsync` | `/profile`                  |
+| `DiscussReplyReceived`  | social-service, `discuss.reply.created`              | `/discuss/{threadId}`                     |
+| `UserWelcome`           | notification-service, on `user.registered`           | `/`                                       |
+| `CompanyFollowUpDue`    | company-service follow-up poll, `company.followup.due` | `/companies/{companyId}`                |
+| `AssignmentIssued`      | learning-service, `assignment.issued` (40.23)       | `/tree?assignment={assignmentId}`         |
+| `AssignmentDeadlineApproaching` | learning-service deadline sweep, `assignment.deadline.approaching` (40.23) | `/tree?assignment={assignmentId}` |
+| `AssignmentReminder`    | learning-service, `assignment.reminder` — a РОП pressed "remind" (40.23) | `/tree?assignment={assignmentId}` |
 
 Streak milestones fire on 3, 7, 14, 30, 60, 90, 180, 365 days.
 
@@ -34,6 +40,17 @@ Domain enum values (stored as integers):
 - `3` — ChatMessageReceived
 - `4` — AchievementUnlocked
 - `5` — StreakMilestone
+- `6` — DiscussReplyReceived
+- `7` — **retired** (was `LeagueUpdated`; league notifications were removed and the value is never reused, so pre-existing stored notifications still deserialize)
+- `8` — UserWelcome
+- `9` — CompanyFollowUpDue
+- `10` — AssignmentIssued *(Phase 40.23)*
+- `11` — AssignmentDeadlineApproaching *(Phase 40.23)*
+- `12` — AssignmentReminder *(Phase 40.23)*
+
+The three assignment values are separate rather than one type carrying a sub-kind: a single type
+with a discriminator in the body would make the reminder — the escalation that exists because the
+first two notices were ignored — indistinguishable in the inbox from the thing it escalates.
 
 ## Backend
 

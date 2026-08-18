@@ -64,6 +64,10 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         await _sessionRepository.AppendMessagesAsync(sessionId, userId, [userMsg], ct);
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        // Phase 40.23. Voice practice on an assignment is graded by the same completion path and
+        // counts towards the same threshold, so it has to meet the same character. The context was
+        // resolved when the session started; this path only reads it.
+        chatSystemPrompt = AssignmentPracticePromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.AssignmentPracticeContext);
 
         var replyParser = new StreamingChatReplyParser();
         var sentenceChunker = new SentenceChunker();

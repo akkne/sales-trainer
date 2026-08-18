@@ -39,8 +39,21 @@ public interface IAssignmentService
         UpdateAssignmentRequestDto requestDto,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Issues the assignment: <c>draft → active</c>. Refuses an assignment with no content.</summary>
+    /// <summary>
+    /// Issues the assignment: <c>draft → active</c>. Refuses an assignment with no content, and
+    /// (40.23) resolves its audience into people, writes their progress rows and stages their
+    /// notices in the same transaction. Raises <c>AssignmentAudienceUnavailableException</c> when
+    /// the roster cannot be read — nothing is written in that case.
+    /// </summary>
     Task<AssignmentWriteResult> ActivateAsync(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.23. Nudges everybody on an active assignment who has not completed it. Returns
+    /// <see langword="null"/> when there is no such assignment in the caller's organization.
+    /// </summary>
+    Task<AssignmentReminderResultDto?> RemindAsync(
         Guid assignmentId,
         CancellationToken cancellationToken = default);
 

@@ -20,6 +20,7 @@ using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
 using Sellevate.Identity.Common.Constants;
+using Sellevate.Identity.Common.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -125,6 +126,9 @@ builder.Services
     .AddOnboardingFeatureServices()
     .AddPlatformAdminFeatureServices(builder.Configuration)
     .AddProfileFeatureServices();
+
+// Phase 40.23. Guards internal/* — the service-to-service routes that carry no JWT.
+builder.Services.AddScoped<InternalServiceAuthFilter>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

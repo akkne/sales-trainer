@@ -56,6 +56,14 @@ public sealed class DialogSession : ITenantScoped
     [BsonElement("customScenarioContext")]
     public CustomScenarioContext? CustomScenarioContext { get; set; }
 
+    /// <summary>
+    /// Phase 40.23. Set when this conversation is a piece of work somebody was assigned. Resolved
+    /// from learning-service at session start and frozen there: an assignment edited or closed
+    /// mid-conversation must not change the character the person is already talking to.
+    /// </summary>
+    [BsonElement("assignmentPracticeContext")]
+    public AssignmentPracticeContext? AssignmentPracticeContext { get; set; }
+
     [BsonElement("voiceSeconds")]
     public int VoiceSeconds { get; set; }
 

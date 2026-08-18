@@ -57,6 +57,9 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.ChatMessageSent => MapChatMessageSent(envelope),
             Topics.DiscussReplyCreated => MapDiscussReplyCreated(envelope),
             Topics.CompanyFollowUpDue => MapCompanyFollowUpDue(envelope),
+            Topics.AssignmentIssued => MapAssignmentIssued(envelope),
+            Topics.AssignmentDeadlineApproaching => MapAssignmentDeadlineApproaching(envelope),
+            Topics.AssignmentReminder => MapAssignmentReminder(envelope),
             _ => null
         };
     }
@@ -201,6 +204,99 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             // Dedupe on the reply id — a Kafka replay of the same reply is collapsed, while
             // distinct replies (even from the same author) remain separate notifications.
             payload.ReplyId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.23. The three assignment families all address one person about one assignment, so
+    /// they share a body shape and differ only in what they are trying to make happen.
+    ///
+    /// <para>
+    /// The deadline is rendered <c>dd.MM.yyyy</c> rather than through a Russian long-date format on
+    /// purpose: the container's culture data is not something this service controls, and a date the
+    /// recipient cannot parse is worse than a plain one.
+    /// </para>
+    /// </summary>
+    private const string DeadlineFormat = "dd.MM.yyyy";
+
+    private static CreateNotificationRequest? MapAssignmentIssued(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentIssuedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var goal = payload.Goal?.Trim();
+        var body = payload.Deadline is { } deadline
+            ? $"«{title}» — до {deadline.ToString(DeadlineFormat)}."
+            : $"«{title}» — без срока.";
+
+        if (!string.IsNullOrEmpty(goal))
+        {
+            body += $" {goal}";
+        }
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentIssued,
+            NotificationTitles.AssignmentIssued,
+            body,
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // The assignment alone. A person is issued an assignment once — 40.23's fan-out only
+            // ever adds recipients, never re-adds one — so a second event with this key is a Kafka
+            // redelivery and collapsing it is correct.
+            payload.AssignmentId.ToString(),
+            SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapAssignmentDeadlineApproaching(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentDeadlineApproachingEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentDeadlineApproaching,
+            NotificationTitles.AssignmentDeadlineApproaching,
+            $"«{title}» нужно завершить до {payload.Deadline.ToString(DeadlineFormat)}.",
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // Assignment plus the exact due instant, for the same reason the follow-up reminder
+            // below keys on the due date: extending a deadline has to arm a fresh notice rather
+            // than be swallowed by the notice for the date that no longer applies.
+            $"{payload.AssignmentId}:{payload.Deadline:O}",
+            SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapAssignmentReminder(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentReminderEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var body = payload.Deadline is { } deadline
+            ? $"Задание «{title}» ещё не завершено. Срок — {deadline.ToString(DeadlineFormat)}."
+            : $"Задание «{title}» ещё не завершено.";
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentReminder,
+            NotificationTitles.AssignmentReminder,
+            body,
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // Keyed on the moment the РОП pressed the button, so a second press tomorrow is a
+            // second reminder while a redelivery of today's is not. A reminder that could only ever
+            // be sent once would defeat the point of the button.
+            $"{payload.AssignmentId}:{payload.RequestedAt:O}",
             SendEmail: true);
     }
 

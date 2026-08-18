@@ -12,6 +12,7 @@ using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
+using Sellevate.Ai.Infrastructure.Learning;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.Ai.Tests.Helpers;
 
@@ -111,6 +112,10 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
+            // Phase 40.23: DialogService now asks learning-service whether the session it is
+            // starting is somebody's assignment. A default substitute answers "no", which is what
+            // every case in this file is about.
+            Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
         var bundles = await dialogService.GetActiveBundlesAsync();
@@ -411,6 +416,10 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
+            // Phase 40.23: DialogService now asks learning-service whether the session it is
+            // starting is somebody's assignment. A default substitute answers "no", which is what
+            // every case in this file is about.
+            Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
         var companyCallContext = new CompanyCallContext
@@ -439,6 +448,10 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
+            // Phase 40.23: DialogService now asks learning-service whether the session it is
+            // starting is somebody's assignment. A default substitute answers "no", which is what
+            // every case in this file is about.
+            Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();
@@ -462,6 +475,10 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
             new StubOrganizationProfileProvider(),
+            // Phase 40.23: DialogService now asks learning-service whether the session it is
+            // starting is somebody's assignment. A default substitute answers "no", which is what
+            // every case in this file is about.
+            Substitute.For<IAssignmentPracticeContextClient>(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();

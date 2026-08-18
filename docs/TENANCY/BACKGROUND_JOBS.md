@@ -58,6 +58,7 @@ superuser onto the `NOBYPASSRLS` role `sellevate_app`
 | identity | `ExpiredRefreshTokenCleanupService` | Deletes expired/revoked refresh tokens | **System** | `EnterSystemMode` at [:56](../../src/backend/identity-service/Identity/Features/Auth/ExpiredRefreshTokenCleanupService.cs) | No — `RefreshTokens` is platform-global, not tenant-scoped |
 | identity | `ExpiredEmailVerificationCleanupService` | Deletes expired verification tokens | **System** | `EnterSystemMode` at [:50](../../src/backend/identity-service/Identity/Features/Auth/ExpiredEmailVerificationCleanupService.cs) | No — same, platform-global table |
 | identity, learning, gamification | `OutboxRelayBackgroundService` | Reads pending outbox rows of every tenant and forwards them to Kafka | **System** — the one legitimate cross-tenant reader in the system | `EnterSystemMode` at [:56](../../src/backend/building-blocks/BuildingBlocks/Outbox/OutboxRelayBackgroundService.cs) | No — `OutboxMessages` carries no RLS policy (it is plumbing, §3 below) |
+| learning | `AssignmentDeadlineSweepService` (40.23) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
 | learning | `LessonVersionBackfill` (startup, once) | Mints a published "version 1" for lessons that have never been published, so 40.16's progress backfill has something to bind to | **System** | `EnterSystemMode` in the startup scope of [Program.cs](../../src/backend/learning-service/Learning/Program.cs), the same shape gamification's seeders use | No — it sees the **global** library only, and the content RLS policy admits `OrganizationId IS NULL` rows with no session variable set. An organization's own lessons (40.18) are deliberately out of its reach: their first version comes from their own admin or their own learners, inside that organization's context |
 
 ### 2.2 Kafka consumers — tenant from the envelope
@@ -252,6 +253,57 @@ re-evaluated when the evidence arrives, and an assignment nobody touches keeps t
 one case that needs a clock is the deadline — "at the deadline, everybody still `in_progress` is a
 person who did not finish" — and that belongs with the notification 40.26 has to send anyway. Until
 then a passed deadline changes no status, the same honest gap §4c recorded for closing.
+
+---
+
+## 4e. Phase 40.23 added one worker, no consumer, and two service-to-service calls
+
+`AssignmentDeadlineSweepService` is the job §4c said 40.26 would owe and 40.23 turned out to need
+first: the "your deadline is close" notice has to reach the person who owes the work, and that is a
+clock, not an event. It is the sixth entry in §2.1 and carries the same shape and the same
+footnote as the five above it — per-organization iteration over a system enumeration, `BYPASSRLS`
+required for the enumeration only.
+
+**The enumeration is the one query in learning-service that does not lead with `OrganizationId`.**
+It asks "which organizations have an unannounced deadline coming" across all of them, reads a single
+column, and never touches row content; everything after it runs in a fresh scope with a concrete
+organization set. The list comes from `Assignments` rather than from a replicated tenant registry,
+for the reason 40.12 recorded for company-service: a registry-driven loop visits every customer who
+has never written an assignment and silently skips one whose registry row has not replicated yet,
+turning replication lag into a dropped notice.
+
+**Sent-ness is a column, and that is what makes the sweep idempotent.**
+`Assignments."DeadlineNoticeSentAt"` is stamped in the same transaction as the notices it describes,
+so a crash mid-tick re-announces rather than losing, and a successful tick never re-announces.
+Moving the deadline clears the stamp — the notice names a date, and an extended deadline that
+announced itself to nobody would be worse than no notice at all. The assignment is stamped **even
+when nobody needed warning**, otherwise an assignment everybody had finished would be re-examined
+every half hour until its deadline passed.
+
+**The roster is consulted before anybody is warned, and a failure to read it skips the
+organization.** A progress row outlives the person's employment on purpose — it is the record that
+they were asked — so "still has work outstanding" and "should hear about it" are different sets, and
+skipping the check would mail an ex-employee their former employer's homework deadline. When
+identity-service cannot be reached the tick marks nothing and warns nobody for that organization;
+the next tick picks it up, because sent-ness was never stamped.
+
+**Two synchronous service-to-service calls entered the system in this block**, which is worth naming
+because this registry is otherwise a registry of Kafka and clocks:
+
+- **learning → identity**, `GET /internal/memberships/active`, from the fan-out and from this sweep.
+  Chosen over a membership replica specifically because a lagging replica issues an assignment to a
+  subset of the team and reports success ([DECISIONS.md](../DECISIONS.md), 2026-08-18).
+- **ai → learning**, `GET /internal/assignments/practice-context`, when a dialog session starts, so
+  the assignment's persona reaches the prompt without passing through the browser of the person
+  being graded. It **degrades to "no assignment"** on any failure rather than blocking practice.
+
+Neither is a background job, and neither belongs in §2.1 — but both are places where an organization
+travels between services as a header rather than inside a Kafka envelope, and that is the fact this
+registry exists to keep visible.
+
+**No consumer was added.** The three notification topics are produced here and consumed by
+notification-service's existing `NotificationEventConsumer` (§2.2), which keeps its inherited
+`RequiresOrganization = true`: a notification with no organization has no inbox to land in.
 
 ---
 

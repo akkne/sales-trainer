@@ -91,6 +91,9 @@ namespace Sellevate.Learning.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("Deadline")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeadlineNoticeSentAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Goal")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");

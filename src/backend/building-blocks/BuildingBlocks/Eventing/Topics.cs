@@ -24,6 +24,27 @@ public static class Topics
     public const string LessonCompleted = "lesson.completed";
     public const string SkillCompleted = "skill.completed";
 
+    /// <summary>
+    /// Phase 40.23. An assignment was issued to one named person — one event per resolved
+    /// recipient, published in the same transaction that writes their progress row, so "this
+    /// person was asked" and "this person was told" cannot diverge.
+    /// </summary>
+    public const string AssignmentIssued = "assignment.issued";
+
+    /// <summary>
+    /// Phase 40.23. The deadline of an assignment this person has not finished is close. Published
+    /// once per assignment per recipient by <c>AssignmentDeadlineNoticeService</c>; extending the
+    /// deadline re-arms it, because the notice names a date.
+    /// </summary>
+    public const string AssignmentDeadlineApproaching = "assignment.deadline.approaching";
+
+    /// <summary>
+    /// Phase 40.23. A human — the РОП — asked this person to get on with it. Distinct from
+    /// <see cref="AssignmentDeadlineApproaching"/> on purpose: one is a clock, the other is a
+    /// person, and collapsing them would make the second one ignorable.
+    /// </summary>
+    public const string AssignmentReminder = "assignment.reminder";
+
     // ── AI Engine (produces) ───────────────────────────────────────────────
     public const string DialogEvaluated = "dialog.evaluated";
 
