@@ -667,9 +667,12 @@ Three things the screen must not do, because the backend deliberately does not s
   every path back through it is re-inspected. A bypass would hand the customer the fifteen bland
   exercises this block exists to not sell them.
 
-- **Do not offer per-exercise accept/reject.** That is roadmap 40.32 and it has its own vocabulary to
-  invent. The lesson arrives archived precisely because that gate does not exist yet; the way to
-  accept it today is to un-archive it (`PUT /admin/lessons/{id}` with `isArchived: false`).
+- ~~**Do not offer per-exercise accept/reject.** That is roadmap 40.32.~~ **40.32 shipped it, and it
+  is a separate screen rather than a step of this one** — see below. A generated lesson still arrives
+  archived and un-archiving it is still `PUT /admin/lessons/{id}` with `isArchived: false`; what
+  changed is that any stage of any content can now be sent through a proposal queue answered item by
+  item. Do not fold that queue into the pipeline's result step: the two have different lifetimes, and
+  a run that is `completed` has nothing left to review.
 - **Do not write the reviewed structure into the organization profile *yourself*.** It looks like the
   same form — it is the same field list — and it is deliberately a separate draft. Since 40.29 there
   is a route that does it properly, under a merge policy: `POST /organizations/profile/draft/apply`.
@@ -715,3 +718,53 @@ Two things this screen must not do:
   may honestly be «таких нет» and the profile has no marker for that, so they persist. They are
   `important` and `optional`, they never appear while a `blocking` gap is open, and they must not hold
   a completion badge hostage.
+
+
+---
+
+## Batch adaptation and content review — API only (Phase 40.32)
+
+**No screen for this either**, same reason: 40.20 waits on the owner's design. The backend is seven
+routes under `/admin/content/adaptations`
+([API_CONTRACTS.md](API_CONTRACTS.md), [CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md)).
+
+Two screens, sharing everything but the middle column:
+
+- **`mode: "tone_rewrite"`** — «перепиши все упражнения этапа "закрытие" под наш продукт и тон».
+- **`mode: "quality_review"`** — «что не так с тем, что мы написали руками».
+
+What the screens have to do, in the order that matters:
+
+1. **Pick a stage, press once.** `POST /admin/content/adaptations {mode, stageKey}` returns
+   immediately with the batch and its items, all `pending`. Nothing has been spent yet — the scope is
+   a database query. A stage above the per-batch ceiling is a **400 carrying the count**, and the
+   right response on screen is «в этапе 412 упражнений, это дорого — сузьте выбор», not a retry.
+2. **A progress bar with a poll.** `preparing` means items still owe an AI call; `GET
+   …/adaptations/{jobId}` gives `pendingCount` against `itemCount`. Minutes, not seconds: it is one
+   call per exercise.
+3. **The queue, which is the whole screen.** `awaitingReviewCount` is the number the header should
+   show — a batch is not done when the model finishes, it is done when a person has answered every
+   proposal. Order by lesson and position, so a reviewer reads a lesson the way it plays.
+4. **One item at a time.** `GET …/items/{itemId}` returns the current body, the proposed body and
+   `changes` — the list of JSON leaves that differ. Render `changeSummary` (the model's sentence about
+   what it changed) **first**: it is what lets somebody answer in five seconds, and the leaf list is
+   what they check it against. In review mode the middle column is `findings`, and
+   `hasBlockingFinding` is what must sort or badge the list — a queue of sixty advisory notes must not
+   bury the one saying the correct answer teaches a forbidden promise.
+5. **Accept, reject, next.** Both take an item id. `isStale: true` means the exercise was edited after
+   the proposal was computed: disable accept and say so, because the server will 409 anyway and the
+   honest fix is a re-run, not a merge.
+
+Four things the screens must not do, because the backend deliberately does not support them:
+
+- **Do not build an «применить всё» button.** There is no route for it, and adding one would be
+  auto-apply with the reviewer's name attached — the one thing this block exists to prevent. If the
+  queue feels too long, the answer is a narrower stage.
+- **Do not offer accept in review mode.** A finding is a diagnosis, not a patch; the route returns
+  409. Link to the ordinary exercise editor instead, and to a tone rewrite of the same stage.
+- **Do not render a diff you computed yourself.** The server already enumerates which leaves differ,
+  and it deliberately never merges the two documents. A client-side three-way merge of prose and
+  grading criteria is the exact thing 40.18 refused to build.
+- **Do not expect the change to be live.** Accepting edits the draft exercise. Learners see it when
+  somebody publishes a new lesson version on the existing 40.15 route — the screen should say so, or
+  a РОП will accept forty rewrites and wonder why the team still reads the old wording.
