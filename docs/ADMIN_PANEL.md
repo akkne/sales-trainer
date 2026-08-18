@@ -275,6 +275,7 @@ reach that are not part of the platform library. Full contracts in
 | GET | /admin/dialog-reviews?kind=&status=&sessionId= | learning-service | the review queue (open disputes, notes sent) |
 | POST | /admin/dialog-reviews | learning-service | send a quoted fragment with a comment to the manager |
 | POST | /admin/dialog-reviews/:noteId/resolve | learning-service | rule on a disputed AI score |
+| POST | /admin/assignments/:id/remind?scope=unfinished\|not_started | learning-service | **(40.26)** the one-click nudge the deadline digest links to |
 | GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | ai-service | the team's graded conversations |
 | GET | /admin/dialog-sessions/:sessionId | ai-service | one transcript, with per-message indexes |
 
@@ -295,6 +296,21 @@ Three notes for whoever builds the screen:
 - **`accuracyPercent` is `null` below `minimumAttemptsForAccuracy` attempts** and must render as a
   blank cell with an explanation, never as 0%. Two right answers out of two is 100% and is a fact
   about nobody.
+
+**Phase 40.26 added a fourth note, and it is a hard requirement rather than advice.** The РОП now
+receives two notifications, and both link into this unbuilt panel:
+
+- `AssignmentDeadlineDigest` → `/admin/assignments/{id}?action=remind&scope=not_started`
+- `DialogReviewDisputed` → `/admin/dialog-reviews?note={noteId}`
+
+**Read the action out of the link; do not invent one.** `action=remind` means "open this assignment
+with the reminder confirmation already up", and `scope=not_started` means "the recipients are exactly
+the people the notification just listed by name" — the notice says «ещё не начали: Иванов, Петров»,
+and a button that then messages everybody who has not *finished* is the screen contradicting the
+notice that opened it. The endpoint in the table above already answers with that scope, so the screen
+is the only missing piece. The link deliberately does **not** perform the reminder on load: a URL that
+messages a team the moment it is fetched is a URL a mail scanner fires. Until the screen exists both
+links 404 — recorded in [DONT_FORGET.md](DONT_FORGET.md).
 
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |
