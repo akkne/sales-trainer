@@ -60,6 +60,7 @@ superuser onto the `NOBYPASSRLS` role `sellevate_app`
 | identity, learning, gamification | `OutboxRelayBackgroundService` | Reads pending outbox rows of every tenant and forwards them to Kafka | **System** — the one legitimate cross-tenant reader in the system | `EnterSystemMode` at [:56](../../src/backend/building-blocks/BuildingBlocks/Outbox/OutboxRelayBackgroundService.cs) | No — `OutboxMessages` carries no RLS policy (it is plumbing, §3 below) |
 | learning | `AssignmentDeadlineSweepService` (40.23, digest 40.26) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, tells the organization's administrators who has not **started** it, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
 | learning | `AssignmentRepeatSweepService` (40.24) | Re-issues a shortened version of an assignment at the offsets its `repeat_schedule` names (+7 and +21 days by default), as a new assignment linked to its origin | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:87](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs); `EnterSystemMode` at [:134](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs) | **Yes** — the enumeration only |
+| learning | `ContentGenerationSweepService` (40.27) | Advances the admin content pipeline one step per run: the structuring call, then — only after a human approved the structure — the generation call that writes a lesson | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:86](../../src/backend/learning-service/Learning/Features/ContentGeneration/ContentGenerationSweepService.cs); `EnterSystemMode` at [:125](../../src/backend/learning-service/Learning/Features/ContentGeneration/ContentGenerationSweepService.cs) | **Yes** — the enumeration only |
 | learning | `LessonVersionBackfill` (startup, once) | Mints a published "version 1" for lessons that have never been published, so 40.16's progress backfill has something to bind to | **System** | `EnterSystemMode` in the startup scope of [Program.cs](../../src/backend/learning-service/Learning/Program.cs), the same shape gamification's seeders use | No — it sees the **global** library only, and the content RLS policy admits `OrganizationId IS NULL` rows with no session variable set. An organization's own lessons (40.18) are deliberately out of its reach: their first version comes from their own admin or their own learners, inside that organization's context |
 
 ### 2.2 Kafka consumers — tenant from the envelope
@@ -414,6 +415,56 @@ organization's `org:{orgId}:` inbox.
 
 ---
 
+## 4h. Phase 40.27 added the eighth worker, and it is the first one a person is waiting on
+
+`ContentGenerationSweepService` advances the admin content pipeline
+([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md)): the structuring call, then — only after a human has
+approved what structuring produced — the generation call that writes a lesson. It is §2.1's eighth
+row, in the shape the seven above it established: per-organization iteration over a system
+enumeration, `BYPASSRLS` required for the enumeration only.
+
+Four things about it differ from every job already in this registry, and all four are consequences of
+the same fact — **somebody is watching this one.**
+
+- **The tick is seconds, not minutes.** Twenty by default, against thirty minutes for the deadline
+  sweep and sixty for the repeat sweep. Those two are about dates days away; this one is about a
+  spinner on an administrator's screen.
+- **Its `BYPASSRLS` footnote fails loudly rather than quietly.** §4f said the repeat sweep is the job
+  whose silence nobody would notice. This is the opposite end: under `sellevate_app` the enumeration
+  returns nothing, every run sits at «структурируем…» forever, and the first administrator to try it
+  files a bug within the hour. It is still in `docs/DONT_FORGET.md` with the other seven, because
+  "somebody will notice" is not a design.
+- **The enumeration reads one column of a table whose rows are customer documents.** Every system-mode
+  enumeration in this registry selects only `OrganizationId`; here the rule stops being hygiene, since
+  the row content is an uploaded product deck and a compliance list read out of it.
+- **The claim is a conditional `UPDATE`, not a read-then-write, and it commits before the LLM call.**
+  Two instances that both read a free lease would both stamp it and both pay for the same generation.
+  The predicate travels inside the `UPDATE`, so exactly one tick wins. Committing first is what lets a
+  five-minute call happen without an idle-in-transaction connection behind it — and a rollback would
+  not un-bill the provider anyway. The lease (10 minutes) is deliberately longer than the HTTP timeout
+  (300 seconds), because a lease expiring mid-call would hand the run to a second worker and buy the
+  lesson twice.
+
+**Idempotency does not rest on the dedupe store or on a counter.** A run has produced a lesson exactly
+when `ProducedLessonId` is non-null, and `CK_ContentGenerationJobs_Produced` refuses to let that column
+exist outside the `completed` state. The worker re-reads it after the call and before the write, which
+is where a worker whose lease expired mid-call finds out it lost. Same rule as 40.22 and 40.24: derive
+from state, never increment — and here the counter would have been denominated in money.
+
+**One synchronous call entered the system**, the second learning → ai seam after `POST /ai/evaluate`:
+`POST /ai/content/structure` and `POST /ai/content/generate`, both internal, both behind
+`InternalServiceAuthFilter`, neither exposed through the gateway. They are **fail-closed** in the sense
+that matters here — a failure spends an attempt and, after three, hands the run back to a person with
+the reason on the row. Nothing degrades to a partial lesson: a generation where every exercise failed
+validation is recorded as a failure, because a `completed` run pointing at an empty lesson looks
+finished and teaches nothing.
+
+**No consumer was added and no Kafka topic.** The pipeline's state lives in one row that the screen
+polls; there is nothing to tell another service about, and nothing that decays while nothing runs
+except a lease, which is what the lease is for.
+
+---
+
 ## 5. How to keep this registry true
 
 The registry rots the moment someone adds a hosted service. Three cheap checks:
@@ -436,17 +487,19 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
    ```
 
 3. **`IgnoreQueryFilters()` in production code must be an organization enumeration and nothing
-   else.** As of 40.24 there are exactly **five** call sites outside tests — the enumeration steps of
+   else.** As of 40.27 there are exactly **six** call sites outside tests — the enumeration steps of
    `FollowUpReminderBackgroundService`, `StreakResetJob`, `WeeklyLeagueClosureJob`,
-   `AssignmentDeadlineSweepService` (40.23) and `AssignmentRepeatSweepService` (40.24). All five sit
-   inside an explicit system-mode scope and `Select` the organization id column only; not one of
-   them reads row content.
+   `AssignmentDeadlineSweepService` (40.23), `AssignmentRepeatSweepService` (40.24) and
+   `ContentGenerationSweepService` (40.27). All six sit inside an explicit system-mode scope and
+   `Select` the organization id column only; not one of them reads row content — which matters more
+   for the sixth than for the five before it, because a row on `ContentGenerationJobs` holds a
+   customer's uploaded product deck.
 
    ```bash
    grep -rn --include=*.cs "IgnoreQueryFilters" src/backend | grep -v /obj/ | grep -v Tests
    ```
 
-   A sixth call site is a finding until proven otherwise.
+   A seventh call site is a finding until proven otherwise.
 
 ### 40.25 added no job and no consumer, and that is worth stating
 
