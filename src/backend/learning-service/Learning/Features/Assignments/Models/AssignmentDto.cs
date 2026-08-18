@@ -11,6 +11,13 @@ namespace Sellevate.Learning.Features.Assignments.Models;
 /// exactly what was stored keeps this block from inventing a shape those blocks would then have to
 /// break.
 /// </para>
+///
+/// <para>
+/// Phase 40.24. <see cref="RepeatOfAssignmentId"/> and <see cref="RepeatWaveIndex"/> are set only on
+/// a generated repeat and say which wave of which origin it is. An admin panel that shows them can
+/// tell "the +7 refresher of last Tuesday's training" from a second assignment that happens to have
+/// a similar name — and one that ignores them still reads a complete assignment.
+/// </para>
 /// </summary>
 public sealed record AssignmentDto(
     Guid Id,
@@ -24,6 +31,8 @@ public sealed record AssignmentDto(
     DateTime? Deadline,
     JsonElement CompletionRule,
     JsonElement? RepeatSchedule,
+    Guid? RepeatOfAssignmentId,
+    int? RepeatWaveIndex,
     string Status,
     Guid? CreatedBy,
     DateTime CreatedAt,

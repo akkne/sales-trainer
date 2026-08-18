@@ -4,6 +4,233 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.24 — automatic repeats (2026-08-18)
+
+Eleven forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no
+questions, no new tests, nothing executed against any database).
+
+The frame: an internal training's effect decays in two to three weeks, and a one-shot assignment
+reproduces precisely that failure. `repeat_schedule` has existed since 40.21, stored and deliberately
+uninterpreted. This block interprets it. The test every fork below is answered against is: **does the
+second wave produce a number you can put next to the first wave's and learn something from?** A
+repeat that cannot be compared to the thing it repeats is a second assignment, not a repeat.
+
+### A repeat is a new `Assignments` row that points at its origin
+
+**Chosen: one new row per wave**, carrying `RepeatOfAssignmentId` (always the assignment a human
+created, never another repeat) and `RepeatWaveIndex` (1-based position in the schedule). The 40.21
+freeze trigger already said this in its own comment — "the answer to 'we want that practice again' is
+a new assignment, which is also exactly what 40.24's repeats will create" — and `Assignment.CreatedBy`
+was made nullable in that block for this row and no other.
+
+**Rejected: a second round inside the same assignment.** It looks cheaper and it is the variant that
+keeps "one assignment, one funnel" literally true on 40.25's dashboard. It has nowhere to put the
+result. `AssignmentProgressRecords` carries exactly one `BestScore` and one `AttemptCount` per person,
+and that single pair is deliberate — 40.22 spent a block arguing that two numbers are what the РОП
+acts on. A second round therefore either overwrites the first round's score, which destroys the only
+evidence anybody had that the training decayed, or adds a second pair of columns, at which point the
+third wave needs a third pair. Widening the row into a rounds table is the same fan-out as a new
+assignment row, with a new table, a new RLS policy and no reuse of anything.
+
+**Rejected: new progress rows against the same assignment, discriminated by a round column.** Same
+idea one layer down, and it breaks the unique index `(OrganizationId, AssignmentId, UserId)` that
+40.21 built as a correctness constraint and 40.23's fan-out relies on to be re-runnable. Everything
+that reads progress — the manager's strip, the threshold evaluator, the deadline sweep, the funnel —
+would have to learn what "current round" means, and each of them would be a place to get it wrong.
+
+**The cost is real and is paid rather than hidden.** A series shows up as two or three rows in the
+РОП's assignment list. That is what `RepeatOfAssignmentId` and `RepeatWaveIndex` are on
+`AssignmentSummaryDto` for: 40.25 can group the waves back into one series and show the comparison,
+which is a presentation problem with a foreign key behind it. The squashed alternative is a data-loss
+problem with nothing behind it.
+
+### +7 and +21 are measured from the origin's issue moment, and the whole cohort moves together
+
+**Chosen: the anchor is the origin's `ActivatedAt`**, and every offset is absolute from it. Wave 2 is
+anchor + 21 days whether or not wave 1 fired on time.
+
+**Rejected: anchoring per person, at the moment each of them cleared the threshold.** This is the
+textbook spaced-repetition answer and it is the one a learning app would pick. It cannot be built on
+this schema without making a repeat *per person*, because a repeat is an assignment and an assignment
+has one deadline: forty people who passed on six different days need six waves, which is six
+assignments, six funnels, and a dashboard that has lost the ability to say anything about the team.
+It is also the wrong product. The unit the РОП acts on is a team meeting — «на планёрке в понедельник»
+is the roadmap's own phrase for what the dashboard is for — and a cohort that drifts apart by a week
+has no Monday.
+
+**Rejected: anchoring on the deadline.** An assignment may have none, and then the feature silently
+does not exist for it. Worse, the deadline is editable while the assignment is active, so extending it
+by two days would move a wave that may already have gone out.
+
+**Rejected: chaining each wave off the previous one.** A wave that fires late — a service restart, an
+organization skipped for a tick — would push every later wave later with it, so the spacing that is
+the entire content of "spaced repetition" would drift for exactly the installations that had trouble.
+
+### The repeat goes to the origin's recipients, not to a fresh resolution of its audience rule
+
+**Chosen: the cohort is the origin's `AssignmentProgressRecords` rows, intersected with the live
+roster**, and the repeat stores that as its own audience — `{"kind":"users","userIds":[…]}`.
+
+**Rejected: re-resolving the stored rule.** `whole_team` re-resolved three weeks later includes
+everybody hired since, and hands them a *shortened refresher* of a training session they never
+attended: the theory has been stripped out, so they get the practice without the material it is
+practice for. It also changes the denominator between waves, which is the one comparison the series
+exists to support — "26 of 40 completed" next to "31 of 46 completed" answers nothing.
+
+**Retained from 40.23: the live roster is still consulted**, because a progress row outlives
+employment on purpose (it is the record that somebody was asked) and mailing an ex-employee their
+former employer's homework is the failure that check was added for.
+
+### Everybody who was asked is asked again, including the people who failed and the people who never started
+
+**Chosen: outcome does not filter the cohort.**
+
+**Rejected: repeating only to those who completed** — the reading that follows from "spaced repetition
+is for knowledge you acquired". It inverts 40.22's central argument. That block separated
+`failed_threshold` from `not_started` precisely so the person who tried four times and stayed under
+the bar would be visible, calling them "the most valuable row on the screen"; a repeat that skips them
+means the product stops asking exactly the person who most needs to practise, and stops asking them
+*silently*.
+
+**Rejected: repeating only to those who failed**, i.e. treating the wave as remediation. Then the
+repeat measures a self-selected group and the series comparison is meaningless — a completion rate
+computed over the people who already failed once cannot be read next to one computed over everybody.
+It would also make the repeat a punishment with a name on it, which is a different product.
+
+The honest cost: somebody still working through the original at +7 receives a second, shorter
+assignment. That is tolerable because the shortened wave is genuinely smaller work, and the
+alternative — suppressing the wave for anybody mid-flight — makes the cohort outcome-dependent again.
+
+### Idempotency is the existence of the row, and there is no "wave sent" flag anywhere
+
+**Chosen: a wave has been issued exactly when a row with `(RepeatOfAssignmentId, RepeatWaveIndex)`
+exists**, guarded by a partial unique index. The sweep derives what is due from the schedule, the
+anchor and the rows that exist; nothing is incremented and nothing is stamped.
+
+This is 40.22's rule applied to a different table, and the reason it matters here is specific rather
+than stylistic: **the obvious alternative is impossible.** A `LastRepeatWaveIssued` column on the
+origin would have to be written by the sweep — and the origin may be `closed`, which the 40.21 trigger
+freezes *whole*, refusing any update at all. A stamp-based design would therefore have thrown on
+every closed origin, and the natural "fix" for that (skip closed origins) is the next fork, which is
+worse.
+
+**Rejected: a Redis marker keyed by assignment and wave.** The dedupe stores in this system have
+TTLs, so a marker either outlives the assignment or expires before it — and an expired marker means
+the whole team gets the +7 refresher a second time. Idempotency that depends on a clock is not
+idempotency.
+
+### A closed assignment still repeats
+
+**Chosen: `closed` origins generate their remaining waves.** The sweep skips only `draft` — an
+assignment nobody was ever issued has no cohort and no anchor.
+
+**Rejected: closing suppresses repeats**, which reads naturally from `closed` meaning "this is history
+now". It makes the feature fail in the worst possible direction: a five-day assignment is *supposed*
+to be closed by day 7, so tidying up would silently cancel the +7 and +21 waves. The РОП configured
+repeats once, on purpose, and would find out that they never came by not noticing anything at all.
+
+**The cost, recorded rather than papered over:** the only way to cancel a series is to edit
+`repeat_schedule` while the assignment is still `active` (which 40.21 deliberately left editable — it
+is not in the freeze set, and 40.24 keeps it out). Once closed, the schedule is frozen with everything
+else and the remaining waves will fire. There is no "cancel repeats" button, because there is no
+admin panel yet at all (40.20); it is in `docs/DONT_FORGET.md`.
+
+**Consequence worth stating:** removing the schedule from an active assignment cancels every wave that
+has not gone out, and shortening `offsetDays` from `[7,21]` to `[7]` cancels only the second. Both work
+because the wave ordinal, not the day, is the identity — see the next fork.
+
+### The wave is identified by its ordinal, not by its day
+
+**Chosen: `RepeatWaveIndex` is the 1-based position in `offsetDays` at the moment the wave is
+generated.**
+
+**Rejected: keying on the offset value.** The schedule stays editable on an active assignment. Moving
+the first wave from +7 to +5, a day after it went out, would leave no row with offset 5 — so the sweep
+would compute a wave due two days ago and fire it, sending the same refresher to the same people
+twice. With ordinals, editing a schedule can only ever change waves that have not happened.
+
+### "Shortened" means less repetition and less theory — never a lower bar
+
+**Chosen:** the repeat drops `reference_material` items (keeping them only when they are all the
+assignment has), and halves `dialog_score.requiredCount`, rounded up, minimum one.
+`minimumScore` and `exercise_accuracy.minimumAccuracyPercent` are copied untouched.
+
+**Rejected: lowering the quality bar to make the repeat easy.** It would turn the refresher into the
+four-minute completion 40.22 exists to make unreachable, and — more quietly fatal — it would make the
+two waves' scores incomparable, destroying the only thing the series is for.
+
+**Rejected: trimming the exercise set or the conversation.** The completion rule measures exactly
+those, and an issued assignment's rule and content are frozen together for the reason 40.21 gives.
+Theory is the one part that is safe to drop automatically: it was read a fortnight ago by everybody
+who did the original, and re-reading it is the part of a refresher nobody does.
+
+### The repeat is created already `active`
+
+**Chosen: the sweep inserts the row with `Status = active`, `ActivatedAt = now`, and fans out in the
+same transaction** — the same pair of writes a human pressing "issue" performs, through the same
+extracted helper.
+
+**Rejected: creating it as a draft for the РОП to approve.** "Настраивается один раз, потом
+автоматически" is the roadmap's requirement in six words, and a draft waiting for a press is a to-do
+item — which is precisely what the roadmap says internal trainings die of. The approval the РОП gives
+is configuring the schedule; asking for it twice is asking for it at the moment they have stopped
+thinking about that training.
+
+The deadline is the origin's *duration* re-based on now (floor of one day), not its absolute date,
+which would arrive already overdue. An origin with no deadline repeats with none.
+
+### A wave more than three days late is dropped, not delivered
+
+**Chosen: `RepeatCatchUpDays` (default 3).** A wave whose moment has passed by more than that is
+skipped permanently and logged.
+
+**Rejected: firing every overdue wave on the next tick**, the usual catch-up behaviour. Two things go
+wrong at once. A service down over a long weekend would deliver a "+7 day" refresher at +16, which is
+not the feature arriving late — the entire value of spaced repetition is the spacing. And on the day
+40.24 first deploys, every assignment already carrying a schedule would fire *both* waves within the
+same hour, because both their moments are in the past.
+
+**Rejected: recording skipped waves.** The skip is recomputed from the clock every tick and stays
+stable, so a row saying "skipped" would add a second source of truth and no information.
+
+### `fixed_offsets` is the entire vocabulary, and no new notification type was added
+
+**Chosen: one kind**, `{"kind":"fixed_offsets","offsetDays":[7,21]}`, with `offsetDays` optional and
+defaulting to the roadmap's two values; 1–4 offsets, each 1–180 days, strictly ascending. Unknown
+kinds are refused on write and unreadable on read, exactly as 40.22 did for `completion_rule` — a
+schedule nobody can parse means an assignment that silently never repeats, which is indistinguishable
+on every screen from an assignment nobody configured repeats for.
+
+**Rejected: a cron expression.** It can express "every second Tuesday", which is a rhythm the thing
+being scheduled does not have: what is being tracked is the decay curve of one training session, which
+starts on the day it was issued and has no weekly alignment. A vocabulary that can say more than the
+domain means is a vocabulary of ways to be wrong.
+
+**Rejected: a new `assignment.repeat.issued` event family.** 40.23 justified three notification types
+by how differently the recipient reads them; a repeat reads exactly like an issue ("you have new
+practice"), so it reuses `assignment.issued`. The dedupe key is the assignment id, and a repeat *is* a
+new assignment id, so notification-service needed no change at all.
+
+### The unique index does not lead with `OrganizationId`, and there is no long rebuild
+
+**Chosen: `IX_Assignments_RepeatOfAssignmentId_RepeatWaveIndex`, partial on
+`RepeatOfAssignmentId IS NOT NULL`** — the second deliberate exception to the tenant-leading
+convention inside this feature, after `IX_AssignmentProgressRecords_AssignmentId_Status` in 40.21, and
+for the same two reasons. It is the only index covering the new self-referencing foreign key, so
+without it Postgres scans the whole table on every attempt to delete an assignment; and an origin id
+is globally unique already, so putting the organization in front would weaken the uniqueness rather
+than scope it. Isolation is decided by the row-level-security policy, never by an index.
+
+**No `40.24_*_indexes_concurrently.sql`, and that is a decision rather than an omission.**
+`Assignments` is empty in every deployed database — nothing could create one before 40.21, and the
+РОП's admin panel is still 40.20 — so both columns and the index land over zero rows and there is no
+long rebuild to schedule. The index is also a *correctness* constraint, and deferring one of those to
+a script somebody has to remember to run is how a unique column ends up not being unique. What ships
+instead is the read-only `docs/TENANCY/sql/40.24_assignment_repeats_verify.sql`, never executed by
+this run.
+
+---
+
 ## Phase 40.23 — issuing, the manager's screen, and three notices (2026-08-18)
 
 Seven forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no

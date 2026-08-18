@@ -59,6 +59,7 @@ superuser onto the `NOBYPASSRLS` role `sellevate_app`
 | identity | `ExpiredEmailVerificationCleanupService` | Deletes expired verification tokens | **System** | `EnterSystemMode` at [:50](../../src/backend/identity-service/Identity/Features/Auth/ExpiredEmailVerificationCleanupService.cs) | No — same, platform-global table |
 | identity, learning, gamification | `OutboxRelayBackgroundService` | Reads pending outbox rows of every tenant and forwards them to Kafka | **System** — the one legitimate cross-tenant reader in the system | `EnterSystemMode` at [:56](../../src/backend/building-blocks/BuildingBlocks/Outbox/OutboxRelayBackgroundService.cs) | No — `OutboxMessages` carries no RLS policy (it is plumbing, §3 below) |
 | learning | `AssignmentDeadlineSweepService` (40.23) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
+| learning | `AssignmentRepeatSweepService` (40.24) | Re-issues a shortened version of an assignment at the offsets its `repeat_schedule` names (+7 and +21 days by default), as a new assignment linked to its origin | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:87](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs); `EnterSystemMode` at [:134](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs) | **Yes** — the enumeration only |
 | learning | `LessonVersionBackfill` (startup, once) | Mints a published "version 1" for lessons that have never been published, so 40.16's progress backfill has something to bind to | **System** | `EnterSystemMode` in the startup scope of [Program.cs](../../src/backend/learning-service/Learning/Program.cs), the same shape gamification's seeders use | No — it sees the **global** library only, and the content RLS policy admits `OrganizationId IS NULL` rows with no session variable set. An organization's own lessons (40.18) are deliberately out of its reach: their first version comes from their own admin or their own learners, inside that organization's context |
 
 ### 2.2 Kafka consumers — tenant from the envelope
@@ -198,7 +199,7 @@ published, so it must be re-saved once by hand.
 
 ---
 
-## 4c. Phase 40.21 added no background job, and 40.24 will add exactly one
+## 4c. Phase 40.21 added no background job, and 40.24 added exactly the one it predicted
 
 Recorded here rather than left as an absence, because 40.21 ships two columns — `repeat_schedule` and
 `deadline` — that both read like an invitation to write a sweep, and the next person will look for the
@@ -208,7 +209,8 @@ entry.
   +21 days is 40.24, and when it arrives it belongs in §2.1: a worker touching a tenant-scoped table,
   in explicit system mode, iterating organizations one at a time, carrying the same `BYPASSRLS`
   footnote as the five jobs already listed there. Writing it in 40.21 would have meant inventing the
-  schedule vocabulary before the block that owns it.
+  schedule vocabulary before the block that owns it. *(It arrived as
+  `AssignmentRepeatSweepService`, in exactly that shape — §4f.)*
 - **`deadline` likewise.** "Notify the РОП the day before the deadline with the list of who has not
   started" is 40.26, and it cannot be written before 40.23 exists, because until an audience is
   resolved into `AssignmentProgressRecords` rows there is no list to send.
@@ -307,6 +309,60 @@ notification-service's existing `NotificationEventConsumer` (§2.2), which keeps
 
 ---
 
+## 4f. Phase 40.24 added one worker, no consumer, and the one job whose silence nobody would notice
+
+`AssignmentRepeatSweepService` is the seventh entry in §2.1 and the job §4c predicted three blocks
+ago, in the shape §4c predicted: per-organization iteration over a system enumeration, `BYPASSRLS`
+required for the enumeration only. What it does is turn one training into recurring practice — a
+shortened re-issue at +7 and +21 days — which is the mechanism `docs/TENANCY/ASSIGNMENTS.md` §2.1
+calls the difference between the product's central claim and a slogan.
+
+**This is the job whose `BYPASSRLS` footnote matters most, and the reason is about visibility rather
+than about severity.** Every job in §2.1 goes quiet without erroring the day learning-service moves
+onto the `NOBYPASSRLS` role `sellevate_app`, because a system-mode enumeration emits no
+`SET LOCAL app.organization_id` and comes back empty. For the deadline sweep somebody eventually
+notices: the notices stop and people miss deadlines they were warned about last month. For this one
+there is nothing to notice — an assignment that was never created leaves no row, no notification and
+no gap in anything a person looks at. The product would simply stop having the feature. It is in
+`docs/DONT_FORGET.md` alongside the other six.
+
+**The idempotency story is a unique index and nothing else, and that is not a stylistic choice.** A
+wave has been issued exactly when an `Assignments` row with `(RepeatOfAssignmentId, RepeatWaveIndex)`
+exists; the sweep derives what is due from the schedule, the origin's `ActivatedAt` and the rows that
+exist. The alternative every other sweep in this registry uses — a sent-ness column on the row being
+swept, as `DeadlineNoticeSentAt` is for §4e — **cannot be built here**: the origin may be `closed`,
+and the 40.21 freeze trigger refuses *any* update to a closed assignment. A stamp-based design would
+have thrown on every closed origin, and the natural repair for that (skip closed origins) would mean
+that tidying up a finished five-day assignment silently cancels its refreshers.
+
+**The enumeration is coarser than §4e's, deliberately.** It asks "which organizations have an
+assignment that repeats and was issued recently enough for a wave to still be pending", not "which
+organizations have a wave due right now": the offsets live inside a jsonb document, and computing
+them in SQL would put the schedule vocabulary in two places, one of which nobody would remember to
+update. The date bound is the catch-up window plus the longest offset the vocabulary allows, so an
+organization drops out of the enumeration once none of its assignments can have a wave left. The
+per-organization step then computes the exact answer, usually to nothing.
+
+**A late wave is dropped, not delivered.** Past `Assignments__RepeatCatchUpDays` (default 3) a wave is
+skipped permanently and logged, because the value of spaced repetition is the spacing — a "+7 day"
+refresher arriving at +16 is not the feature arriving late. It is also what stops the first tick after
+a deploy from firing every historical wave at once. The skip is recomputed from the clock rather than
+recorded, so there is no row to find afterwards; the log line is "too long ago to issue now".
+
+**Two synchronous calls, both inherited.** The sweep asks identity-service for the live roster
+(`GET /internal/memberships/active`, §4e) before issuing anything, because a progress row outlives
+employment and an ex-employee must not be mailed their former employer's homework. A failure to read
+it skips the organization for the tick and nothing is recorded, so the next tick retries — which is
+the background-worker version of the trade 40.23 had to defend on an admin route. The repeat's own
+practice conversation reaches ai-service through the same `GET /internal/assignments/practice-context`
+seam, unchanged.
+
+**No consumer was added and no new notification topic.** A repeat stages `assignment.issued` per
+recipient, exactly as a human-pressed issue does; notification-service's dedupe key is the assignment
+id and a repeat *is* a new assignment id, so nothing there needed to change.
+
+---
+
 ## 5. How to keep this registry true
 
 The registry rots the moment someone adds a hosted service. Three cheap checks:
@@ -329,8 +385,9 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
    ```
 
 3. **`IgnoreQueryFilters()` in production code must be an organization enumeration and nothing
-   else.** As of 40.14 there are exactly three call sites outside tests — the enumeration steps of
-   `FollowUpReminderBackgroundService`, `StreakResetJob` and `WeeklyLeagueClosureJob`. All three sit
+   else.** As of 40.24 there are exactly **five** call sites outside tests — the enumeration steps of
+   `FollowUpReminderBackgroundService`, `StreakResetJob`, `WeeklyLeagueClosureJob`,
+   `AssignmentDeadlineSweepService` (40.23) and `AssignmentRepeatSweepService` (40.24). All five sit
    inside an explicit system-mode scope and `Select` the organization id column only; not one of
    them reads row content.
 
@@ -338,7 +395,7 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
    grep -rn --include=*.cs "IgnoreQueryFilters" src/backend | grep -v /obj/ | grep -v Tests
    ```
 
-   A fourth call site is a finding until proven otherwise.
+   A sixth call site is a finding until proven otherwise.
 
 There is no automated gate for any of this yet — `scripts/tenancy-boundary-lint.py` guards the HTTP
 boundary (no `organizationId` in DTOs, routes or query strings) and `scripts/tenancy-pool-lint.py`

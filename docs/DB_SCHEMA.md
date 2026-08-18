@@ -498,7 +498,7 @@ before — see [DECISIONS.md](DECISIONS.md), 2026-08-17.
 
 ### `Assignments`, `AssignmentProgressRecords`
 
-Phase 40.21 (thresholds and their evaluation: 40.22; issuing and the deadline notice: 40.23), the first tables of Stage E. What the РОП asks their team to practise after an internal
+Phase 40.21 (thresholds and their evaluation: 40.22; issuing and the deadline notice: 40.23; automatic repeats: 40.24), the first tables of Stage E. What the РОП asks their team to practise after an internal
 training, and where each person stands on it (docs/TENANCY/ASSIGNMENTS.md §1).
 
 Both are **strict tenant data**, like the programme tables above and unlike the content tables: there
@@ -528,15 +528,47 @@ equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner 
 | `OpensAt` | `timestamptz` | NULL | Null means "as soon as it is active" |
 | `Deadline` | `timestamptz` | NULL | `CK_Assignments_Schedule`: strictly after `OpensAt` when both are present |
 | `CompletionRule` | `jsonb` | NOT NULL | **No default.** `CK_Assignments_CompletionRule`: an object carrying a `kind`. Since 40.22 the service also refuses anything outside the vocabulary below |
-| `RepeatSchedule` | `jsonb` | NULL | Null = one-shot; otherwise an object carrying a `kind` (`CK_Assignments_RepeatSchedule`) |
+| `RepeatSchedule` | `jsonb` | NULL | Null = one-shot; otherwise an object carrying a `kind` (`CK_Assignments_RepeatSchedule`). Since 40.24 the service also refuses anything outside the vocabulary below. `CK_Assignments_RepeatNoCascade`: always null on a repeat |
 | `Status` | `varchar(16)` | NOT NULL | `draft` \| `active` \| `closed`; default `draft`; `CK_Assignments_Status` |
 | `CreatedAt` | `timestamptz` | NOT NULL | |
 | `UpdatedAt` | `timestamptz` | NOT NULL | |
 | `ActivatedAt` | `timestamptz` | NULL | `CK_Assignments_ActivatedAt`: NOT NULL whenever the status is not `draft` |
 | `ClosedAt` | `timestamptz` | NULL | `CK_Assignments_ClosedAt`: NOT NULL whenever the status is `closed` |
 | `DeadlineNoticeSentAt` | `timestamptz` | NULL | **Phase 40.23.** When the "deadline is close" notice went out for the deadline this row *currently* has. Cleared whenever `Deadline` changes. No constraint: an assignment with no deadline simply never gets stamped |
+| `RepeatOfAssignmentId` | `uuid` | NULL | **Phase 40.24.** The assignment this row is a repeat of; null on anything a human created. FK → `Assignments.Id` **`ON DELETE RESTRICT`** (self-referencing). Always the *origin*, never another repeat |
+| `RepeatWaveIndex` | `int` | NULL | **Phase 40.24.** Which wave of the origin's schedule this is, 1-based. `CK_Assignments_RepeatWave`: null exactly when `RepeatOfAssignmentId` is, and ≥ 1 otherwise |
 
-Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_OrganizationId_CreatedAt`.
+Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_OrganizationId_CreatedAt`,
+`IX_Assignments_RepeatOfAssignmentId_RepeatWaveIndex` (**unique**, partial on
+`RepeatOfAssignmentId IS NOT NULL`, 40.24).
+
+> **The 40.24 unique index is the repeat sweep's entire idempotency story.** A wave has been issued
+> exactly when its row exists — nothing is incremented, nothing is stamped — so two ticks racing inside
+> one window collide on this index rather than issuing the same shortened work to the same team twice.
+> The sent-ness column every other sweep in this feature uses (`DeadlineNoticeSentAt` two rows up) is
+> not merely unnecessary here but **impossible**: the origin may be `closed`, and the freeze trigger
+> refuses any update at all to a closed row, so a stamp-based design would throw on every closed
+> origin — and skipping closed origins would mean that tidying up a finished five-day assignment
+> silently cancels its refreshers.
+
+> **It deliberately does not lead with `OrganizationId`**, the second such exception in this feature
+> after `IX_AssignmentProgressRecords_AssignmentId_Status` below, and for the same two reasons: it is
+> the only index covering the new self-referencing foreign key, so without it Postgres scans the whole
+> table on every attempt to delete an assignment; and an origin id is globally unique already, so
+> putting the organization in front would weaken the uniqueness rather than scope it. Isolation is
+> decided by the RLS policy, never by an index.
+
+> **Three 40.24 check constraints, and the middle one is load-bearing.**
+> `CK_Assignments_RepeatWave` (both series columns or neither, wave ≥ 1),
+> `CK_Assignments_RepeatNoCascade` (**a repeat carries no schedule of its own** — otherwise a repeat
+> repeats itself and two waves each spawn two more, an exponential fan-out of progress rows and
+> notifications in which every individual step looks exactly like the feature working), and
+> `CK_Assignments_RepeatNotSelf`.
+
+> **The freeze trigger gained the two series columns in 40.24** — which series a row belongs to and
+> which wave it is are identity, and every recorded score is read through them. `RepeatSchedule` stays
+> **out** of the frozen set on purpose: editing it on an active assignment is the only way a РОП can
+> cancel waves that have not gone out yet.
 
 > **`DeadlineNoticeSentAt` got no index of its own, and that is a decision.** The deadline sweep's
 > enumeration is the one query in learning-service that filters without leading on `OrganizationId` —
@@ -637,26 +669,32 @@ per assignment), `IX_AssignmentProgressRecords_OrganizationId_UserId_Status` (th
 > bar" are the same status and call for opposite reactions.
 
 **Frozen after issue, in the database.** `Assignments_reject_frozen_change` (`BEFORE UPDATE`) refuses
-any change to `SourceType`, `SourceRef`, `Content`, `CompletionRule`, `OrganizationId` or `ActivatedAt`
-once the row has left `draft` — those are what every recorded score was measured against — refuses
-`active → draft`, and freezes a `closed` row whole. `Title`, `Goal`, `Audience`, `OpensAt`, `Deadline`
-and `RepeatSchedule` stay writable on purpose: adding three people to a running assignment and
-extending a deadline are ordinary acts of running a team, and a trigger that forbade them would be one
-40.23 and 40.24 have to break.
+any change to `SourceType`, `SourceRef`, `Content`, `CompletionRule`, `OrganizationId`, `ActivatedAt`
+or — since 40.24 — `RepeatOfAssignmentId` and `RepeatWaveIndex`, once the row has left `draft`; those
+are what every recorded score was measured against and read through. It also refuses `active → draft`,
+and freezes a `closed` row whole. `Title`, `Goal`, `Audience`, `OpensAt`, `Deadline` and
+`RepeatSchedule` stay writable on purpose: adding three people to a running assignment and extending a
+deadline are ordinary acts of running a team, and a trigger that forbade them would be one 40.23 and
+40.24 have to break — 40.24 in particular needs `RepeatSchedule` writable, because editing it on an
+active assignment is the only way to cancel waves that have not gone out yet.
 
 **No backfill, and no maintenance window.** Both tables are created empty by the migration, nothing
 else filters on them, and no existing row anywhere gains a meaning it did not have. The same holds for
-40.23's single added column: `Assignments` is empty in every deployed database, so it is added over
-zero rows.
+40.23's single added column and 40.24's two: `Assignments` is empty in every deployed database, so
+they are added over zero rows — which is also why 40.24's unique index needs no
+`CREATE INDEX CONCURRENTLY` script.
 
-**Who writes `AssignmentProgressRecords`, as of 40.23 — two writers, disjoint by column.**
+**Who writes `AssignmentProgressRecords`, as of 40.24 — still two writers, disjoint by column.**
 
 - **40.23 creates rows and never updates one.** Issuing an assignment (and re-saving an active one's
   audience) resolves the audience rule into people by asking identity-service who currently works
   here, then inserts a `not_started` row per recipient and stages one `assignment.issued` outbox event
   per recipient in the same transaction. It only ever *adds*: somebody removed from the audience keeps
   their row, because the row is the record that they were asked and deleting it would rewrite what
-  happened — the same argument that made the foreign key `RESTRICT`.
+  happened — the same argument that made the foreign key `RESTRICT`. **40.24's repeat sweep is not a
+  third writer**: it creates a new `Assignments` row and then runs the very same fan-out
+  (`AssignmentFanOut`, extracted for exactly this reason), so the rows it writes are that new
+  assignment's, one per recipient, and the idempotency story is unchanged.
 - **40.22 updates rows and never creates one.** `AssignmentThresholdEvaluator` moves `Status`,
   `BestScore`, `AttemptCount`, `FirstOpenedAt` and `CompletedAt`, recomputed from attempt rows rather
   than incremented.
@@ -667,8 +705,9 @@ same numbers. Nothing on the learner's read path writes at all — there is deli
 opened" route, which would be a third writer with a different idea of what "started" means.
 
 Verification scripts: `docs/TENANCY/sql/40.21_assignments_verify.sql`,
-`docs/TENANCY/sql/40.22_completion_threshold_verify.sql` and
-`docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (all read-only, never executed).
+`docs/TENANCY/sql/40.22_completion_threshold_verify.sql`,
+`docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` and
+`docs/TENANCY/sql/40.24_assignment_repeats_verify.sql` (all read-only, never executed).
 
 **Who writes the four progress columns (40.22).** `AssignmentThresholdConsumer` in learning-service,
 reacting to `dialog.evaluated` and `exercise.completed`. `Status`, `BestScore`, `AttemptCount`,
@@ -1348,6 +1387,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddAssignments` (learning-service) | 2026-08-17 | Phase 40.21, **Stage E opens**. Two new **strict tenant** tables — `Assignments`, `AssignmentProgressRecords` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global assignment), fifteen check constraints, one `ON DELETE RESTRICT` foreign key and the `Assignments_reject_frozen_change` trigger. **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15/40.17/40.18 made: both tables are created empty by this very migration, so every index is built over zero rows, and one of them (one progress row per person per assignment) is a correctness constraint that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: nothing filters on the new tables and no existing row gains a meaning. The one constraint worth naming is `CK_Assignments_CompletionRule` — the column has no default and the API cannot omit it, so "completion means opening everything" has no resting place in the schema (docs/TENANCY/ASSIGNMENTS.md §1.1); its vocabulary stays 40.22's. `AssignmentProgressRecords` has **no writer at all** until 40.23 resolves an audience. Verification script: `docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed). |
 | `AddAssignmentThresholdEvaluation` (learning-service) | 2026-08-17 | Phase 40.22. One new **strict tenant** table, `UserDialogScores` — one row per graded practice conversation, unique on `(OrganizationId, UserId, SessionId)` — plus three check constraints. That uniqueness is the idempotency guarantee, not a performance choice: without it a redelivered `dialog.evaluated` writes a second row, `AttemptCount` climbs while nobody practised, and the line the РОП acts on ("tried 4 times and did not reach the bar") becomes a lie. No backfill is possible, let alone needed: `dialog.evaluated` carried no grade before this block, so conversations graded earlier are invisible to every assignment, permanently. Verification script: `docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (read-only, never executed). *(Recorded retroactively in 40.23 — the row was missing from this ledger.)* |
 | `AddAssignmentDeadlineNotice` (learning-service) | 2026-08-17 | Phase 40.23. **One nullable column**, `Assignments."DeadlineNoticeSentAt"` — when the "deadline is close" notice went out for the deadline the row currently has; cleared whenever the deadline changes. No index, no backfill, no `_indexes_concurrently.sql`, no maintenance window: `Assignments` is empty in every deployed database (nothing could create one before 40.21, and 40.21 shipped without a screen), so the column is added over zero rows and no existing row changes meaning. The index is omitted deliberately rather than forgotten — see the note in the `Assignments` section above. This is the migration behind the block that finally gives `AssignmentProgressRecords` a row **creator**: the audience fan-out. Verification script: `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (read-only, never executed). |
+| `AddAssignmentRepeats` (learning-service) | 2026-08-18 | Phase 40.24. **Two nullable columns** — `Assignments."RepeatOfAssignmentId"` (self-referencing FK, `ON DELETE RESTRICT`) and `"RepeatWaveIndex"` — one **unique partial index** over them, three check constraints, and a `CREATE OR REPLACE` of the 40.21 freeze trigger that adds both columns to its frozen set. The index is created here rather than deferred to a `_indexes_concurrently.sql` because it is a *correctness* constraint, not a performance one: a wave has been issued exactly when its row exists, so this index is the only thing standing between two sweep ticks racing inside one window and the same shortened assignment landing on the same team twice. A sent-ness column of the kind 40.23 added was **impossible** here — the origin may be `closed`, and the freeze trigger refuses any update to a closed row. `CK_Assignments_RepeatNoCascade` (a repeat carries no schedule of its own) is what stops the fan-out from becoming exponential. No backfill, no maintenance window: `Assignments` is empty in every deployed database. Verification script: `docs/TENANCY/sql/40.24_assignment_repeats_verify.sql` (read-only, never executed). |
 | `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
 
 ---

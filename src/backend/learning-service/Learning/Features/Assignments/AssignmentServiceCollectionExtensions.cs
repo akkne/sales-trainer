@@ -16,7 +16,9 @@ public static class AssignmentServiceCollectionExtensions
         services.AddScoped<IAssignmentAudienceResolver, AssignmentAudienceResolver>();
         services.AddScoped<IMyAssignmentService, MyAssignmentService>();
         services.AddScoped<IAssignmentDeadlineNoticeService, AssignmentDeadlineNoticeService>();
+        services.AddScoped<IAssignmentRepeatIssueService, AssignmentRepeatIssueService>();
         services.AddHostedService<AssignmentDeadlineSweepService>();
+        services.AddHostedService<AssignmentRepeatSweepService>();
 
         return services;
     }

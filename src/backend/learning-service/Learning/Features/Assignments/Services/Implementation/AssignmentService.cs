@@ -21,11 +21,12 @@ namespace Sellevate.Learning.Features.Assignments.Services.Implementation;
 /// </para>
 ///
 /// <para>
-/// <b>What is not here, and is not an oversight.</b> Nothing evaluates the completion rule (40.22),
-/// nothing resolves the audience into people, writes their progress rows or notifies them (40.23),
-/// and nothing acts on the repeat schedule (40.24). Consequently <c>AssignmentProgressRecords</c> has
-/// no writer in this block and every funnel count reads zero — the honest answer, recorded in
-/// docs/DONT_FORGET.md rather than papered over with a lazily-created row on first open.
+/// <b>What is not here, and is not an oversight.</b> The completion rule is evaluated by
+/// <c>AssignmentThresholdEvaluator</c> (40.22) and the repeat schedule is acted on by
+/// <c>AssignmentRepeatIssueService</c> (40.24) — this file owns only what a human does by hand.
+/// A repeat therefore never passes through <see cref="CreateAsync"/> or <see cref="ActivateAsync"/>:
+/// it is created already active by the sweep, because "configured once, then automatic" is the
+/// entire feature and a draft waiting for somebody to press activate is not automatic.
 /// </para>
 /// </summary>
 internal sealed class AssignmentService(
@@ -34,20 +35,6 @@ internal sealed class AssignmentService(
     ILearningEventPublisher eventPublisher,
     ILogger<AssignmentService> logger) : IAssignmentService
 {
-    /// <summary>
-    /// Phase 40.23. The largest fan-out one issue may perform in a single transaction.
-    ///
-    /// <para>
-    /// A ceiling rather than paging, because the number it guards against is not a big customer —
-    /// it is a mistake. Two thousand rows plus two thousand outbox rows is a transaction that
-    /// commits comfortably; twenty thousand is one that holds locks long enough to be noticed, and
-    /// an organization with twenty thousand people on one five-day assignment has a product problem
-    /// rather than a database one. Refusing says so while the administrator is still there to read
-    /// it.
-    /// </para>
-    /// </summary>
-    private const int MaximumFanOutSize = 2000;
-
     public async Task<IReadOnlyList<AssignmentSummaryDto>> GetAssignmentsAsync(
         string? status = null,
         CancellationToken cancellationToken = default)
@@ -81,6 +68,8 @@ internal sealed class AssignmentService(
                 assignment.OpensAt,
                 assignment.Deadline,
                 assignment.RepeatSchedule,
+                assignment.RepeatOfAssignmentId,
+                assignment.RepeatWaveIndex,
                 assignment.CreatedBy,
                 assignment.CreatedAt,
                 assignment.UpdatedAt,
@@ -108,6 +97,8 @@ internal sealed class AssignmentService(
                 row.OpensAt,
                 row.Deadline,
                 row.RepeatSchedule is not null,
+                row.RepeatOfAssignmentId,
+                row.RepeatWaveIndex,
                 AssignmentDocumentSerializer.DeserializeContent(row.Content).Count,
                 row.AssignedCount,
                 row.StartedCount,
@@ -158,8 +149,7 @@ internal sealed class AssignmentService(
             OpensAt = requestDto.OpensAt,
             Deadline = requestDto.Deadline,
             CompletionRule = AssignmentDocumentSerializer.SerializeCompletionRule(requestDto.CompletionRule),
-            RepeatSchedule = AssignmentDocumentSerializer.SerializeOptionalRule(
-                requestDto.RepeatSchedule, "repeatSchedule"),
+            RepeatSchedule = AssignmentDocumentSerializer.SerializeRepeatSchedule(requestDto.RepeatSchedule),
             Status = AssignmentStatuses.Draft,
             CreatedAt = now,
             UpdatedAt = now,
@@ -192,8 +182,7 @@ internal sealed class AssignmentService(
         var content = AssignmentDocumentSerializer.SerializeContent(requestDto.Content);
         var audience = AssignmentDocumentSerializer.SerializeAudience(requestDto.Audience);
         var completionRule = AssignmentDocumentSerializer.SerializeCompletionRule(requestDto.CompletionRule);
-        var repeatSchedule = AssignmentDocumentSerializer.SerializeOptionalRule(
-            requestDto.RepeatSchedule, "repeatSchedule");
+        var repeatSchedule = AssignmentDocumentSerializer.SerializeRepeatSchedule(requestDto.RepeatSchedule);
 
         // Phase 40.23. Editing an issued assignment's audience is an ordinary act the 40.21 freeze
         // deliberately allows, so an update has to be able to fan out. Resolving the roster needs a
@@ -265,7 +254,8 @@ internal sealed class AssignmentService(
         // which is the only answer this block has for people who arrive after the issue.
         if (recipientIds is not null && assignment.Status == AssignmentStatuses.Active)
         {
-            var addedCount = await IssueToAsync(assignment, recipientIds, cancellationToken);
+            var addedCount = await AssignmentFanOut.IssueAsync(
+                databaseContext, eventPublisher, assignment, recipientIds, cancellationToken);
             if (addedCount > 0)
             {
                 logger.LogInformation(
@@ -349,7 +339,8 @@ internal sealed class AssignmentService(
         assignment.ActivatedAt = now;
         assignment.UpdatedAt = now;
 
-        var issuedCount = await IssueToAsync(assignment, recipientIds, cancellationToken);
+        var issuedCount = await AssignmentFanOut.IssueAsync(
+            databaseContext, eventPublisher, assignment, recipientIds, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
         await tenantScope.CommitAsync(cancellationToken);
@@ -534,77 +525,14 @@ internal sealed class AssignmentService(
     {
         var recipientIds = await audienceResolver.ResolveAsync(audience, cancellationToken);
 
-        if (recipientIds.Count > MaximumFanOutSize)
+        if (recipientIds.Count > AssignmentFanOut.MaximumFanOutSize)
         {
             throw new AssignmentValidationException(
-                $"This audience resolves to {recipientIds.Count} people, more than the {MaximumFanOutSize} "
-                + "one assignment can be issued to at once. Split it.");
+                $"This audience resolves to {recipientIds.Count} people, more than the "
+                + $"{AssignmentFanOut.MaximumFanOutSize} one assignment can be issued to at once. Split it.");
         }
 
         return recipientIds;
-    }
-
-    /// <summary>
-    /// Phase 40.23. Adds a <c>not_started</c> row for every recipient who does not have one and
-    /// stages their <c>assignment.issued</c> notice. Returns how many were added.
-    ///
-    /// <para>
-    /// <b>Additive by construction, which is what makes it safe to call twice.</b> Issuing runs it
-    /// once and an audience edit runs it again; both skip whoever already has a row. Nothing here
-    /// writes a status either, so a re-run cannot walk somebody who is halfway through back to
-    /// <c>not_started</c> — the only writer of a progress status stays
-    /// <c>AssignmentThresholdEvaluator</c> (40.22), and one writer per column is the property that
-    /// keeps the two numbers on the row trustworthy.
-    /// </para>
-    ///
-    /// <para>
-    /// The row and the event are staged in the same transaction on purpose: an outbox row is what
-    /// makes "asked" and "told" atomic, so a crash between them is impossible rather than merely
-    /// unlikely.
-    /// </para>
-    /// </summary>
-    private async Task<int> IssueToAsync(
-        Assignment assignment,
-        IReadOnlyList<Guid> recipientIds,
-        CancellationToken cancellationToken)
-    {
-        var alreadyIssuedTo = (await databaseContext.AssignmentProgressRecords
-                .AsNoTracking()
-                .Where(record => record.AssignmentId == assignment.Id)
-                .Select(record => record.UserId)
-                .ToListAsync(cancellationToken))
-            .ToHashSet();
-
-        var addedCount = 0;
-
-        foreach (var userId in recipientIds)
-        {
-            if (userId == Guid.Empty || !alreadyIssuedTo.Add(userId))
-            {
-                continue;
-            }
-
-            // OrganizationId is stamped by the tenant save interceptor, like every other
-            // ITenantScoped insert in this service — never assigned here, so there is no second
-            // place for it to be assigned wrongly.
-            databaseContext.AssignmentProgressRecords.Add(new AssignmentProgress
-            {
-                Id = Guid.NewGuid(),
-                AssignmentId = assignment.Id,
-                UserId = userId,
-                Status = AssignmentProgressStatuses.NotStarted,
-                AttemptCount = 0,
-            });
-
-            await eventPublisher.PublishAssignmentIssuedAsync(
-                new AssignmentIssuedEvent(
-                    assignment.Id, userId, assignment.Title, assignment.Goal, assignment.Deadline),
-                cancellationToken);
-
-            addedCount++;
-        }
-
-        return addedCount;
     }
 
     /// <summary>
@@ -709,6 +637,8 @@ internal sealed class AssignmentService(
             assignment.Deadline,
             AssignmentDocumentSerializer.DeserializeRule(assignment.CompletionRule),
             AssignmentDocumentSerializer.DeserializeOptionalRule(assignment.RepeatSchedule),
+            assignment.RepeatOfAssignmentId,
+            assignment.RepeatWaveIndex,
             assignment.Status,
             assignment.CreatedBy,
             assignment.CreatedAt,
