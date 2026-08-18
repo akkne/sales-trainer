@@ -26,6 +26,12 @@ namespace Sellevate.Learning.Features.DialogReviews.Services.Implementation;
 /// from values that can still move is a dataset of unprovable claims — 40.16's argument, in a table
 /// whose entire second purpose is to be that dataset.
 /// </para>
+///
+/// <para>
+/// <b><c>OrganizationId</c> is stamped by the tenant save interceptor</b> on every insert here, like
+/// every other <c>ITenantScoped</c> write in this service. It is never assigned in this file, so there
+/// is no second place for it to be assigned wrongly.
+/// </para>
 /// </summary>
 internal sealed class DialogReviewService(
     LearningDbContext databaseContext,
@@ -74,8 +80,6 @@ internal sealed class DialogReviewService(
             UpdatedAt = DateTime.UtcNow,
         };
 
-        // OrganizationId is stamped by the tenant save interceptor, like every other ITenantScoped
-        // insert in this service — never assigned here.
         databaseContext.DialogReviewNotes.Add(note);
 
         await eventPublisher.PublishDialogReviewCommentedAsync(
@@ -92,6 +96,27 @@ internal sealed class DialogReviewService(
         return ToDto(note, subjectDisplayName: null, authorDisplayName: null);
     }
 
+    /// <summary>
+    /// Phase 40.25. Files a manager's objection to an AI grade.
+    ///
+    /// <para>
+    /// <b>Disputing somebody else's conversation is refused with the same sentence as "no such
+    /// conversation".</b> Whether another person's conversation exists is not this caller's business,
+    /// and a distinguishable refusal would turn the endpoint into a probe for other people's session
+    /// ids.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One open dispute per conversation.</b> Not a nicety: a queue that can be filled with
+    /// duplicates of one complaint is a queue the РОП stops opening, and the mechanism only works while
+    /// they do.
+    /// </para>
+    ///
+    /// <para>
+    /// Phase 40.26 closes the gap 40.25 left open here: administrators are now enumerable, so a filed
+    /// dispute pushes rather than only queuing — see <see cref="PublishDisputeNoticesAsync"/>.
+    /// </para>
+    /// </summary>
     public async Task<DialogReviewNoteDto> CreateScoreDisputeAsync(
         Guid authorUserId,
         CreateScoreDisputeRequestDto requestDto,
@@ -110,9 +135,6 @@ internal sealed class DialogReviewService(
 
         if (score.UserId != authorUserId)
         {
-            // Deliberately the same sentence as "no such conversation". Whether somebody else's
-            // conversation exists is not this caller's business, and a distinguishable refusal would
-            // turn the endpoint into a probe for other people's session ids.
             throw new DialogReviewValidationException(
                 "There is no graded conversation of yours with that identifier.");
         }
@@ -127,9 +149,6 @@ internal sealed class DialogReviewService(
 
         if (alreadyOpen)
         {
-            // One open dispute per conversation. Not a nicety: a queue that can be filled with
-            // duplicates of one complaint is a queue the РОП stops opening, and the mechanism only
-            // works while they do.
             throw new DialogReviewValidationException(
                 "You have already disputed the score for this conversation and it has not been reviewed yet.");
         }
@@ -154,8 +173,6 @@ internal sealed class DialogReviewService(
 
         databaseContext.DialogReviewNotes.Add(note);
 
-        // Phase 40.26 closes the gap 40.25 left open here: administrators are now enumerable, so a
-        // filed dispute pushes rather than only queuing.
         await PublishDisputeNoticesAsync(note, authorUserId, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -310,6 +327,14 @@ internal sealed class DialogReviewService(
         return ToDto(note, subjectDisplayName: null, authorDisplayName: null);
     }
 
+    /// <summary>
+    /// Phase 40.25. Marks a coaching note as read by the manager it was addressed to.
+    ///
+    /// <para>
+    /// Idempotent rather than a conflict: the button is on a screen that can be opened twice, and "I
+    /// have read this" is not a fact that can be true differently the second time.
+    /// </para>
+    /// </summary>
     public async Task<DialogReviewNoteDto?> AcknowledgeCoachingNoteAsync(
         Guid actorUserId,
         Guid noteId,
@@ -331,8 +356,6 @@ internal sealed class DialogReviewService(
 
         if (note.Status == DialogReviewStatuses.Acknowledged)
         {
-            // Idempotent rather than a conflict: the button is on a screen that can be opened twice,
-            // and "I have read this" is not a fact that can be true differently the second time.
             return ToDto(note, subjectDisplayName: null, authorDisplayName: null);
         }
 
@@ -388,15 +411,17 @@ internal sealed class DialogReviewService(
         return await ProjectAsync(query, cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.25. Everything on one person's review screen: notes addressed to them as the subject
+    /// and disputes they filed as the author. Both belong on the same screen because both are "the
+    /// conversation about my conversations".
+    /// </summary>
     public async Task<IReadOnlyList<DialogReviewNoteDto>> GetForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        // Subject or author: a coaching note reaches them as its subject, a dispute is theirs as its
-        // author, and both belong on the same screen because both are "the conversation about my
-        // conversations".
         var query = databaseContext.DialogReviewNotes
             .AsNoTracking()
             .Where(note => note.SubjectUserId == userId || note.AuthorUserId == userId);

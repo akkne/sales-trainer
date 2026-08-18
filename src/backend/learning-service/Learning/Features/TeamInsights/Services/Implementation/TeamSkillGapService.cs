@@ -118,6 +118,12 @@ internal sealed class TeamSkillGapService(
     private const int MaximumWeakestSkills = 5;
 
     /// <summary>
+    /// How much a РОП may write on a refusal. Long enough for «мы это знаем, у нас в мае был тренинг»
+    /// and short enough that the column stays a note rather than a document.
+    /// </summary>
+    private const int MaximumDismissalNoteLength = 500;
+
+    /// <summary>
     /// The states in which a run is still somebody's live work on that gap — including 40.28's
     /// <c>insufficient</c>, which is a question waiting on the РОП's desk and not a dead end.
     /// A second run started beside it would be a second identical question and a second bill.
@@ -135,6 +141,30 @@ internal sealed class TeamSkillGapService(
         CancellationToken cancellationToken = default)
         => (await ComputeAsync(windowDays, cancellationToken)).Gaps;
 
+    /// <summary>
+    /// Phase 40.31. Starts the 40.27 content pipeline on one failing stage, or returns the run that is
+    /// already working on it.
+    ///
+    /// <para>
+    /// <b>Pressing the button while a run for this stage is alive returns that run.</b> Double-submitting
+    /// a form must not buy two lessons about the same weakness — the same protection 40.27 built into
+    /// approve, at the only other door into the expensive half of the pipeline.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A dismissal and a recent run both suppress the offer; neither forbids the act.</b> An
+    /// administrator who presses the button anyway has overruled both on purpose, and refusing them
+    /// would make the panel's opinion binding on its own reader. A stage that is not failing at all is
+    /// still refused.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The composed material is bounded here rather than left to fail the run's own validation.</b> A
+    /// customer with a thirty-term glossary would otherwise turn a button press into a 400 about a
+    /// string they never typed. A material trimmed at the cap still carries the measurement and the
+    /// product, which are the first things written.
+    /// </para>
+    /// </summary>
     public async Task<ContentGenerationJobDto> StartContentAsync(
         string stageKey,
         Guid? actorId,
@@ -144,10 +174,6 @@ internal sealed class TeamSkillGapService(
 
         var (gaps, candidates) = await ComputeAsync(0, cancellationToken);
 
-        // Pressing the button while a run for this stage is alive returns that run rather than
-        // starting a second one. Double-submitting a form must not buy two lessons about the same
-        // weakness — the same protection 40.27 built into approve, at the only other door into the
-        // expensive half of the pipeline.
         var liveRunId = gaps.Suppressed
             .FirstOrDefault(suppressed =>
                 suppressed.StageKey == normalizedStageKey
@@ -163,9 +189,6 @@ internal sealed class TeamSkillGapService(
             }
         }
 
-        // A dismissal and a recent run both suppress the offer; neither forbids the act. An
-        // administrator who presses the button anyway has overruled both on purpose, and refusing
-        // them would make the panel's opinion binding on its own reader.
         var gap = FindGap(candidates, gaps.WindowStart, normalizedStageKey)
                   ?? throw new TeamSkillGapStateException(
                       $"The team is not currently failing the '{normalizedStageKey}' funnel stage: a gap needs at least "
@@ -174,10 +197,6 @@ internal sealed class TeamSkillGapService(
 
         var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
 
-        // Bounded to what the pipeline accepts rather than left to fail the run's own validation: a
-        // customer with a thirty-term glossary would otherwise turn a button press into a 400 about
-        // a string they never typed. A material trimmed at the cap still carries the measurement and
-        // the product, which are the first things written.
         var material = TeamSkillGapMaterialComposer.Compose(
             gap, profile, ContentGenerationJobService.MaximumMaterialLength);
 
@@ -197,6 +216,17 @@ internal sealed class TeamSkillGapService(
         return job;
     }
 
+    /// <summary>
+    /// Phase 40.31. Records that an administrator said no to one stage's suggestion, and returns the
+    /// panel as it now reads.
+    ///
+    /// <para>
+    /// <b>Neither the stage's accuracy nor its attempt count comes from the request body.</b> The row
+    /// records what the team actually scored at the moment of the refusal, because that number is what
+    /// later decides whether the refusal still applies — the same property 40.25 gave
+    /// <c>DialogReviewNotes</c> by reading the disputed score from the row rather than from the caller.
+    /// </para>
+    /// </summary>
     public async Task<TeamSkillGapsDto> DismissAsync(
         string stageKey,
         DismissTeamSkillGapRequestDto requestDto,
@@ -211,18 +241,15 @@ internal sealed class TeamSkillGapService(
 
         var (gaps, candidates) = await ComputeAsync(0, cancellationToken);
 
-        // Neither the stage's accuracy nor its attempt count comes from the request body. The row
-        // records what the team actually scored at the moment of the refusal, because that number is
-        // what later decides whether the refusal still applies — the same property 40.25 gave
-        // DialogReviewNotes by reading the score from the row rather than from the caller.
         var gap = FindGap(candidates, gaps.WindowStart, normalizedStageKey)
                   ?? throw new TeamSkillGapStateException(
                       $"The team is not currently failing the '{normalizedStageKey}' funnel stage, so there is nothing to dismiss.");
 
         var note = (requestDto.Note ?? string.Empty).Trim();
-        if (note.Length > 500)
+        if (note.Length > MaximumDismissalNoteLength)
         {
-            throw new TeamSkillGapStateException("A dismissal note may hold at most 500 characters.");
+            throw new TeamSkillGapStateException(
+                $"A dismissal note may hold at most {MaximumDismissalNoteLength} characters.");
         }
 
         var now = DateTime.UtcNow;
@@ -282,6 +309,16 @@ internal sealed class TeamSkillGapService(
         return true;
     }
 
+    /// <summary>
+    /// The panel and the candidate list behind it, from one pass over the heat map.
+    ///
+    /// <para>
+    /// The gap runs are fetched as "every run this organization ever started from a gap that is either
+    /// still alive or finished recently", then filtered in memory by stage rather than with a
+    /// <c>LIKE</c> per candidate: the set is one administrator's runs from the last month, and a prefix
+    /// predicate per stage would be a query per red cell.
+    /// </para>
+    /// </summary>
     private async Task<ComputedGaps> ComputeAsync(int windowDays, CancellationToken cancellationToken)
     {
         var skillMap = await teamSkillMapService.GetSkillMapAsync(windowDays, cancellationToken);
@@ -313,10 +350,6 @@ internal sealed class TeamSkillGapService(
 
         var recentCutoff = now.AddDays(-RecentlyAddressedDays);
 
-        // Every run this organization ever started from a gap that is either still alive or finished
-        // recently. Filtered in memory by stage afterwards rather than with a LIKE per candidate: the
-        // set is one administrator's runs from the last month, and a prefix predicate per stage would
-        // be a query per red cell.
         var gapRuns = await databaseContext.ContentGenerationJobs
             .AsNoTracking()
             .Where(job => job.GapSourceRef != null
@@ -386,6 +419,10 @@ internal sealed class TeamSkillGapService(
     /// The three conditions, applied to the matrix 40.25 already computed. A stage qualifies when the
     /// team has practised it enough for the number to mean something, the number is bad, and it is
     /// bad for more than one person.
+    ///
+    /// <para>
+    /// Ordered worst first, because a list of five equal-looking suggestions is a list nobody acts on.
+    /// </para>
     /// </summary>
     private static List<GapCandidate> DetectCandidates(TeamSkillMapDto skillMap)
     {
@@ -433,8 +470,6 @@ internal sealed class TeamSkillGapService(
                 weakestSkills));
         }
 
-        // Worst first. The panel shows the stage the team is furthest behind on at the top, because a
-        // list of five equal-looking suggestions is a list nobody acts on.
         return candidates
             .OrderBy(candidate => candidate.AccuracyPercent)
             .ThenByDescending(candidate => candidate.StrugglingManagerCount)

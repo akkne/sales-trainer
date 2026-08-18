@@ -55,6 +55,31 @@ internal sealed class AssignmentRepeatIssueService(
     IOptions<AssignmentOptions> options,
     ILogger<AssignmentRepeatIssueService> logger) : IAssignmentRepeatIssueService
 {
+    /// <summary>
+    /// The floor on a repeat's own deadline. It only ever applies to an origin that was activated
+    /// after its own deadline had already passed, where copying the original span would hand somebody
+    /// a wave that is late the instant it is issued.
+    /// </summary>
+    private static readonly TimeSpan MinimumRepeatDeadlineSpan = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// Issues every wave this organization owes right now and returns how many were created.
+    ///
+    /// <para>
+    /// <b>An unreadable roster skips the tick rather than guessing at it.</b> Nothing has been
+    /// recorded as issued when that happens, so the next tick tries again — which is the whole reason
+    /// a background worker can afford the synchronous roster call 40.23 had to justify on an admin
+    /// route.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One transaction per wave, and one <c>catch</c> per wave around it.</b> A wave that cannot be
+    /// built must not roll back a wave that can, and the unique index that catches a racing tick
+    /// should fail one insert rather than the tick. The transaction boundary alone did not deliver
+    /// that: without the per-wave catch a collision unwound the whole method and abandoned every
+    /// remaining due wave for the organization (review, 40.34).
+    /// </para>
+    /// </summary>
     public async Task<int> IssueDueRepeatsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -71,9 +96,6 @@ internal sealed class AssignmentRepeatIssueService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Skipped, not guessed. Nothing has been recorded as issued, so the next tick tries
-            // again — the whole reason a background worker can afford the synchronous roster call
-            // that 40.23 had to justify on an admin route.
             logger.LogWarning(
                 exception,
                 "Assignment repeats were skipped this tick: the organization roster could not be read.");
@@ -86,11 +108,6 @@ internal sealed class AssignmentRepeatIssueService(
 
         foreach (var wave in dueWaves)
         {
-            // One transaction per wave rather than one per organization: a wave that cannot be built
-            // must not roll back a wave that can, and the unique index that catches a racing tick
-            // should fail one insert rather than the tick. The transaction boundary alone did not
-            // deliver that — without the catch below, a collision unwound the whole method and
-            // abandoned every remaining due wave for the organization. Review, 40.34.
             try
             {
                 if (await TryIssueWaveAsync(wave, roster, now, cancellationToken))
@@ -122,26 +139,37 @@ internal sealed class AssignmentRepeatIssueService(
     /// a series in the same minute. Skipping is recomputed rather than recorded, so a skipped wave
     /// stays skipped without a row to say so.
     /// </para>
+    ///
+    /// <para>
+    /// <b>Which origins qualify.</b> Only an assignment a human created carries a schedule and the
+    /// database enforces it; the predicate says so again so the series stays one level deep even if
+    /// that constraint is ever relaxed. A draft is excluded because a repeat of it would be the first
+    /// time anybody heard of it, while a <b>closed</b> origin still repeats — see the class summary.
+    /// The origin ids are collected as a typed nullable list so the generated SQL compares the column
+    /// itself rather than an unwrapped projection of it: the same list, one less thing for the
+    /// provider to translate.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A schedule this service cannot read makes its assignment not repeat, loudly.</b> 40.24
+    /// validates every schedule on the way in, so an unreadable one can only be a row written by
+    /// another version of this service or by hand — and the safe reading of it is "does not repeat",
+    /// never "repeats by default".
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<DueRepeatWave>> FindDueWavesAsync(
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var catchUpWindow = TimeSpan.FromDays(Math.Clamp(options.Value.RepeatCatchUpDays, 1, 90));
+        var catchUpWindow = TimeSpan.FromDays(options.Value.EffectiveRepeatCatchUpDays);
 
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         var origins = await databaseContext.Assignments
             .AsNoTracking()
             .Where(assignment => assignment.RepeatSchedule != null
-                                 // Only an assignment a human created carries a schedule, and the
-                                 // database enforces it. Reading it here as well keeps the series one
-                                 // level deep even if the constraint is ever relaxed.
                                  && assignment.RepeatOfAssignmentId == null
                                  && assignment.ActivatedAt != null
-                                 // A draft was never issued to anybody, so a repeat of it would be
-                                 // the first time anybody heard of it. A closed one still repeats —
-                                 // see the class summary.
                                  && assignment.Status != AssignmentStatuses.Draft)
             .ToListAsync(cancellationToken);
 
@@ -150,8 +178,6 @@ internal sealed class AssignmentRepeatIssueService(
             return [];
         }
 
-        // Typed nullable so the generated SQL compares the column itself rather than an unwrapped
-        // projection of it — the same list, one less thing for the provider to translate.
         var originIds = origins.Select(origin => (Guid?)origin.Id).ToList();
 
         var issuedWaves = (await databaseContext.Assignments
@@ -170,9 +196,6 @@ internal sealed class AssignmentRepeatIssueService(
             var schedule = AssignmentRepeatScheduleReader.TryRead(origin.RepeatSchedule);
             if (schedule is null)
             {
-                // Loud and harmless. 40.24 validates every schedule on the way in, so this can only
-                // be a row written by another version of this service or by hand — and the safe
-                // reading of an unreadable schedule is "does not repeat", never "repeats by default".
                 logger.LogWarning(
                     "Assignment {AssignmentId} has a repeat schedule this service cannot read; it will not repeat.",
                     origin.Id);
@@ -215,6 +238,29 @@ internal sealed class AssignmentRepeatIssueService(
     /// <summary>
     /// Builds and issues one wave. Returns whether it was created; every refusal is logged and left
     /// for the next tick or, when it cannot ever succeed, for the catch-up window to retire.
+    ///
+    /// <para>
+    /// <b>The cohort is everybody the origin was issued to, whatever became of them</b> (intersected
+    /// with the live roster). Somebody who never started and somebody who tried four times and stayed
+    /// under the bar both belong: excluding them would mean the person the РОП most needs to reach is
+    /// the one the product stops asking, which inverts 40.22's whole argument for making
+    /// <c>failed_threshold</c> visible.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Four fields on the new row say something the schema alone does not.</b>
+    /// <c>CreatedBy</c> is null because no human pressed anything, which is exactly what the nullable
+    /// column 40.21 shipped is for — attributing the row to the РОП who wrote the origin would put
+    /// their name on an act they did not perform on a day they may no longer work here.
+    /// <c>Audience</c> is the resolved cohort written as the rule it now is, because storing the
+    /// origin's rule verbatim would be a lie in the one column that is supposed to say who this is
+    /// for: a repeat of "the whole team" goes to the people the training happened to, not to the team
+    /// as it stands today. <c>RepeatSchedule</c> is null, and the database says so too — a repeat that
+    /// carried a schedule would repeat itself, and two waves would each spawn two more. <c>Status</c>
+    /// is <c>active</c> on creation, because "configured once, then automatic" is the feature and a
+    /// draft waiting for somebody to press activate is a to-do item for the РОП, which is the thing
+    /// the roadmap says trainings die of.
+    /// </para>
     /// </summary>
     private async Task<bool> TryIssueWaveAsync(
         DueRepeatWave wave,
@@ -232,10 +278,6 @@ internal sealed class AssignmentRepeatIssueService(
             .Select(record => record.UserId)
             .ToListAsync(cancellationToken);
 
-        // Everybody the origin was issued to, whatever became of them. Somebody who never started
-        // and somebody who tried four times and stayed under the bar both belong here: excluding
-        // them would mean the person the РОП most needs to reach is the one the product stops
-        // asking, which inverts 40.22's whole argument for making failed_threshold visible.
         var recipientIds = cohort.Where(roster.Contains).Distinct().ToList();
 
         if (recipientIds.Count == 0)
@@ -270,32 +312,20 @@ internal sealed class AssignmentRepeatIssueService(
         var repeat = new Assignment
         {
             Id = Guid.NewGuid(),
-            // No human pressed anything, which is exactly what the nullable column 40.21 shipped is
-            // for. Attributing the row to the РОП who wrote the origin would put their name on an act
-            // they did not perform on a day they may no longer work here.
             CreatedBy = null,
             Title = BuildTitle(origin.Title, wave.WaveIndex),
             Goal = origin.Goal,
             SourceType = origin.SourceType,
             SourceRef = origin.SourceRef,
             Content = AssignmentDocumentSerializer.SerializeContent(content),
-            // The resolved cohort, written as the rule it now is. Storing the origin's rule verbatim
-            // would be a lie in the one column that is supposed to say who this is for: a repeat of
-            // "the whole team" goes to the people the training happened to, not to the team as it
-            // stands today.
             Audience = AssignmentDocumentSerializer.SerializeAudience(
                 new AssignmentAudienceDto(AssignmentAudienceKinds.Users, recipientIds)),
             OpensAt = null,
             Deadline = BuildDeadline(origin, now),
             CompletionRule = ShortenCompletionRule(origin.CompletionRule),
-            // Null, and the database says so too. A repeat that carried a schedule would repeat
-            // itself, and two waves would each spawn two more.
             RepeatSchedule = null,
             RepeatOfAssignmentId = origin.Id,
             RepeatWaveIndex = wave.WaveIndex,
-            // Issued on creation. "Configured once, then automatic" is the feature; a draft waiting
-            // for somebody to press activate is a to-do item for the РОП, which is the thing the
-            // roadmap says trainings die of.
             Status = AssignmentStatuses.Active,
             ActivatedAt = now,
             CreatedAt = now,
@@ -367,11 +397,11 @@ internal sealed class AssignmentRepeatIssueService(
 
         var shortenedCount = (rule.RequiredCount + 1) / 2;
 
-        return JsonSerializer.Serialize(new
+        return JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            kind = rule.Kind,
-            minimumScore = rule.Threshold,
-            requiredCount = shortenedCount,
+            [AssignmentCompletionRuleReader.KindProperty] = rule.Kind,
+            [AssignmentCompletionRuleReader.MinimumScoreProperty] = rule.Threshold,
+            [AssignmentCompletionRuleReader.RequiredCountProperty] = shortenedCount,
         });
     }
 
@@ -395,7 +425,7 @@ internal sealed class AssignmentRepeatIssueService(
 
         var originalSpan = originDeadline - activatedAt;
 
-        return now + (originalSpan < TimeSpan.FromDays(1) ? TimeSpan.FromDays(1) : originalSpan);
+        return now + (originalSpan < MinimumRepeatDeadlineSpan ? MinimumRepeatDeadlineSpan : originalSpan);
     }
 
     /// <summary>

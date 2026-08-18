@@ -27,6 +27,16 @@ namespace Sellevate.Learning.Features.Assignments.Services.Implementation;
 /// </summary>
 internal sealed class MyAssignmentService(LearningDbContext databaseContext) : IMyAssignmentService
 {
+    /// <summary>
+    /// Phase 40.23. The manager's home-screen strip: what they currently owe, most urgent first.
+    ///
+    /// <para>
+    /// <b>Soonest deadline first, and an open-ended assignment last rather than first.</b> Null sorts
+    /// before every date in Postgres' default ordering, which would put the one assignment with no
+    /// urgency at the top of a screen whose entire job is urgency. Sorted in memory because the set is
+    /// one person's open assignments — single digits.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<ActiveAssignmentDto>> GetActiveForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -52,10 +62,6 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
         var titles = await ResolveItemTitlesAsync(contentByAssignment.Values, cancellationToken);
 
         return rows
-            // Soonest deadline first, and an open-ended assignment last rather than first: null
-            // sorts before every date in Postgres' default ordering, which would put the one
-            // assignment with no urgency at the top of a screen whose entire job is urgency. Done
-            // in memory because the set is one person's open assignments — single digits.
             .OrderBy(row => row.Assignment.Deadline ?? DateTime.MaxValue)
             .ThenByDescending(row => row.Assignment.ActivatedAt ?? row.Assignment.CreatedAt)
             .Select(row => new ActiveAssignmentDto(
@@ -94,6 +100,11 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
     /// starts is a rehearsal against a known script, and a persona the learner can send is one they
     /// can rewrite.
     /// </para>
+    ///
+    /// <para>
+    /// Nearest deadline first, so when a repeat (40.24) and its original both name the same mode, the
+    /// one they are closest to being late for wins.
+    /// </para>
     /// </summary>
     public async Task<AssignmentPracticeContextDto?> GetPracticeContextAsync(
         Guid userId,
@@ -110,8 +121,6 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
 
         var rows = await ReadOpenRowsAsync(userId, cancellationToken);
 
-        // Nearest deadline first, so when a repeat (40.24) and its original both name the same mode
-        // the one they are closest to being late for wins.
         foreach (var row in rows.OrderBy(row => row.Assignment.Deadline ?? DateTime.MaxValue))
         {
             var item = AssignmentDocumentSerializer
@@ -141,6 +150,14 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
     /// <summary>
     /// Phase 40.23. The one definition of "an assignment this person currently owes", shared by
     /// both public methods so the two can never drift apart.
+    ///
+    /// <para>
+    /// Three parts of that definition are easy to get wrong. «Пока не выполнено» means a
+    /// <c>completed</c> assignment stops taking the top of the screen, while <c>failed_threshold</c>
+    /// stays — the work is finished and the bar was not met, and hiding it would leave the person who
+    /// most needs another attempt with no way back to it. And an assignment scheduled to open later is
+    /// not yet this person's problem.
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<OpenAssignmentRow>> ReadOpenRowsAsync(
         Guid userId,
@@ -154,12 +171,7 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
                     on record.AssignmentId equals assignment.Id
                 where record.UserId == userId
                       && assignment.Status == AssignmentStatuses.Active
-                      // "пока не выполнено": a completed assignment stops taking the top of the
-                      // screen. failed_threshold stays — the work is finished and the bar was not
-                      // met, and hiding it would leave the person who most needs another attempt
-                      // with no way back to it.
                       && record.Status != AssignmentProgressStatuses.Completed
-                      // An assignment scheduled to open later is not yet this person's problem.
                       && (assignment.OpensAt == null || assignment.OpensAt <= now)
                 select new OpenAssignmentRow(record, assignment))
             .ToListAsync(cancellationToken);

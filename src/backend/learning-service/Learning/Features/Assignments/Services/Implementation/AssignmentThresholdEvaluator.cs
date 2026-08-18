@@ -43,6 +43,16 @@ internal sealed class AssignmentThresholdEvaluator(
     ILearningEventPublisher eventPublisher,
     ILogger<AssignmentThresholdEvaluator> logger) : IAssignmentThresholdEvaluator
 {
+    /// <summary>
+    /// Re-judges every open assignment this person is on and returns how many progress rows moved.
+    ///
+    /// <para>
+    /// <b>Completed rows are excluded on purpose.</b> A threshold cleared once is cleared, and a later
+    /// weaker attempt is practice rather than a demotion (<c>AssignmentProgress.BestScore</c>).
+    /// Excluding them also means the common case — a learner with no assignments — costs one indexed
+    /// lookup on <c>IX_AssignmentProgressRecords_OrganizationId_UserId_Status</c> and nothing else.
+    /// </para>
+    /// </summary>
     public async Task<int> EvaluateForUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         if (userId == Guid.Empty)
@@ -52,10 +62,6 @@ internal sealed class AssignmentThresholdEvaluator(
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
-        // Completed rows are left alone on purpose: a threshold cleared once is cleared, and a later
-        // weaker attempt is practice rather than a demotion (AssignmentProgress.BestScore). Excluding
-        // them also means the common case — a learner with no assignments — costs one indexed lookup
-        // on IX_AssignmentProgressRecords_OrganizationId_UserId_Status and nothing else.
         var openAssignments = await (
                 from record in databaseContext.AssignmentProgressRecords
                 join assignment in databaseContext.Assignments on record.AssignmentId equals assignment.Id
@@ -91,6 +97,28 @@ internal sealed class AssignmentThresholdEvaluator(
         return changedCount;
     }
 
+    /// <summary>
+    /// Judges one person against one assignment's rule and returns whether anything on the row changed.
+    ///
+    /// <para>
+    /// <b>An unreadable completion rule fails closed and says so.</b> The row keeps whatever status it
+    /// had, which means somebody stays short of the threshold rather than being handed a completion
+    /// nobody measured.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Nothing done since the assignment was issued leaves the row alone</b> rather than writing
+    /// <c>in_progress</c>: a row that has never been touched is exactly the "who has not started" the
+    /// РОП asks about, and moving it would erase that answer.
+    /// </para>
+    ///
+    /// <para>
+    /// Phase 40.25. <b>Only a state change is published, not every re-derivation.</b> An attempt count
+    /// ticking from three to four is not a funnel movement, and a counter that also counted those would
+    /// answer a different question than the one it is named after. The event is staged in the caller's
+    /// transaction like every other outbox write here, so the counter cannot drift from the rows.
+    /// </para>
+    /// </summary>
     private async Task<bool> ApplyVerdictAsync(
         AssignmentProgress record,
         Assignment assignment,
@@ -99,8 +127,6 @@ internal sealed class AssignmentThresholdEvaluator(
         var rule = AssignmentCompletionRuleReader.TryRead(assignment.CompletionRule);
         if (rule is null)
         {
-            // Fails closed and says so. The row keeps whatever status it had, which means somebody
-            // stays short of the threshold rather than being handed a completion nobody measured.
             logger.LogWarning(
                 "Assignment {AssignmentId} has a completion rule this service cannot read; its progress is not being judged.",
                 assignment.Id);
@@ -131,9 +157,6 @@ internal sealed class AssignmentThresholdEvaluator(
 
         if (measurement.AttemptCount == 0)
         {
-            // Nothing done since the assignment was issued. Deliberately not written as
-            // "in_progress": a row that has never been touched is exactly the "who has not started"
-            // the РОП asks about, and moving it would erase that answer.
             return false;
         }
 
@@ -169,10 +192,6 @@ internal sealed class AssignmentThresholdEvaluator(
         record.FirstOpenedAt = nextFirstOpenedAt;
         record.CompletedAt = nextCompletedAt;
 
-        // Phase 40.25. Only a state change is published, not every re-derivation: an attempt count
-        // ticking from three to four is not a funnel movement, and a counter that also counted those
-        // would answer a different question than the one it is named after. Staged in the caller's
-        // transaction like every other outbox write here, so the counter cannot drift from the rows.
         if (nextStatus != previousStatus)
         {
             await eventPublisher.PublishAssignmentProgressChangedAsync(
@@ -268,6 +287,12 @@ internal sealed class AssignmentThresholdEvaluator(
     /// the moment its lesson is republished mid-flight, which is a worse failure than counting an
     /// attempt on a slightly newer wording of the same exercise.
     /// </para>
+    ///
+    /// <para>
+    /// A pinned version that is gone or unreadable yields no exercises, and refusing to judge is then
+    /// the only safe answer: an empty set would make accuracy undefined, and "0 of 0 correct" is not a
+    /// failure.
+    /// </para>
     /// </summary>
     private async Task<ThresholdMeasurement?> MeasureExerciseAccuracyAsync(
         Guid userId,
@@ -301,8 +326,6 @@ internal sealed class AssignmentThresholdEvaluator(
 
         if (exerciseIds.Count == 0)
         {
-            // The pinned version is gone or unreadable. Refusing to judge is the only safe answer:
-            // an empty set would make accuracy undefined and "0 of 0 correct" is not a failure.
             return null;
         }
 

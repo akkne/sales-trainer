@@ -30,14 +30,36 @@ internal static class AssignmentCompletionRuleReader
 {
     public const int MaximumRequiredCount = 20;
 
-    private const string KindProperty = "kind";
-    private const string MinimumScoreProperty = "minimumScore";
-    private const string RequiredCountProperty = "requiredCount";
+    /// <summary>The lowest quality bar the vocabulary accepts. One, because zero is not a threshold.</summary>
+    private const int MinimumBar = 1;
+
+    /// <summary>The highest. Both bars this vocabulary carries — a dialog score and an accuracy percentage — are 0–100 scales.</summary>
+    private const int MaximumBar = 100;
+
+    /// <summary>
+    /// The property names of the vocabulary. Public because <c>AssignmentRepeatIssueService</c> writes
+    /// a shortened <c>dialog_score</c> rule back out and has to spell them exactly as this class reads
+    /// them: a rule written with a name this reader does not know parses as "no threshold", which is
+    /// the one failure the whole 40.22 block exists to prevent.
+    /// </summary>
+    public const string KindProperty = "kind";
+
+    /// <inheritdoc cref="KindProperty"/>
+    public const string MinimumScoreProperty = "minimumScore";
+
+    /// <inheritdoc cref="KindProperty"/>
+    public const string RequiredCountProperty = "requiredCount";
+
     private const string MinimumAccuracyPercentProperty = "minimumAccuracyPercent";
 
     /// <summary>
     /// Parses a rule an administrator just supplied, throwing
     /// <see cref="AssignmentValidationException"/> on anything the vocabulary does not cover.
+    ///
+    /// <para>
+    /// An unknown kind is refused rather than stored: a rule nothing can evaluate completes nobody, and
+    /// an assignment nobody can complete looks identical on the dashboard to one nobody tried.
+    /// </para>
     /// </summary>
     public static AssignmentCompletionRule Require(JsonElement rule)
     {
@@ -69,8 +91,6 @@ internal static class AssignmentCompletionRuleReader
                 RequireBar(rule, MinimumAccuracyPercentProperty),
                 1),
 
-            // Refused rather than stored. A rule nothing can evaluate completes nobody, and an
-            // assignment nobody can complete looks identical on the dashboard to one nobody tried.
             _ => throw new AssignmentValidationException(
                 $"'{kind}' is not a known completion rule kind. Known kinds: "
                 + $"{AssignmentCompletionRuleKinds.DialogScore}, "
@@ -106,16 +126,18 @@ internal static class AssignmentCompletionRuleReader
         }
     }
 
+    /// <summary>
+    /// A 1-to-100 quality bar. Zero is refused explicitly, and it is the only refusal in this class that
+    /// is about product rather than about types: "score at least 0" is a threshold every click clears.
+    /// </summary>
     private static int RequireBar(JsonElement rule, string propertyName)
     {
         var value = ReadInteger(rule, propertyName);
 
-        // Zero is refused explicitly, and it is the only refusal here that is about product rather
-        // than about types: "score at least 0" is a threshold that every click clears.
-        if (value is null or < 1 or > 100)
+        if (value is null or < MinimumBar or > MaximumBar)
         {
             throw new AssignmentValidationException(
-                $"completionRule.{propertyName} must be a whole number from 1 to 100. "
+                $"completionRule.{propertyName} must be a whole number from {MinimumBar} to {MaximumBar}. "
                 + "A bar of zero would mean the assignment completes on a click.");
         }
 

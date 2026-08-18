@@ -52,6 +52,12 @@ internal static class AssignmentFanOut
     /// Adds a <c>not_started</c> row for every recipient who does not have one and stages their
     /// <c>assignment.issued</c> notice. Returns how many were added. Does not save or commit —
     /// the caller owns the transaction, which is the whole point.
+    ///
+    /// <para>
+    /// <c>OrganizationId</c> is stamped by the tenant save interceptor, like every other
+    /// <c>ITenantScoped</c> insert in this service — never assigned here, so there is no second place for
+    /// it to be assigned wrongly.
+    /// </para>
     /// </summary>
     public static async Task<int> IssueAsync(
         LearningDbContext databaseContext,
@@ -76,9 +82,6 @@ internal static class AssignmentFanOut
                 continue;
             }
 
-            // OrganizationId is stamped by the tenant save interceptor, like every other
-            // ITenantScoped insert in this service — never assigned here, so there is no second
-            // place for it to be assigned wrongly.
             databaseContext.AssignmentProgressRecords.Add(new AssignmentProgress
             {
                 Id = Guid.NewGuid(),

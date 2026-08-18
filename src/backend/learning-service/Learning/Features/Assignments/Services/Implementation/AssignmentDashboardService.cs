@@ -32,6 +32,15 @@ internal sealed class AssignmentDashboardService(
     IOrganizationMemberDirectory memberDirectory,
     ILogger<AssignmentDashboardService> logger) : IAssignmentDashboardService
 {
+    /// <summary>
+    /// The whole screen for one assignment, or <see langword="null"/> when there is no such assignment in
+    /// the caller's organization.
+    ///
+    /// <para>
+    /// A repeat points at the origin and never at another repeat (40.24), so the whole series is one
+    /// predicate rather than a walk up a chain.
+    /// </para>
+    /// </summary>
     public async Task<AssignmentDashboardDto?> GetDashboardAsync(
         Guid assignmentId,
         CancellationToken cancellationToken = default)
@@ -47,8 +56,6 @@ internal sealed class AssignmentDashboardService(
             return null;
         }
 
-        // A repeat points at the origin and never at another repeat (40.24), so the whole series is
-        // one predicate rather than a walk up a chain.
         var originId = assignment.RepeatOfAssignmentId ?? assignment.Id;
 
         var series = await databaseContext.Assignments
@@ -106,9 +113,11 @@ internal sealed class AssignmentDashboardService(
                 BuildFunnel(progressRows.Where(row => row.AssignmentId == wave.Id), roster)))
             .ToList();
 
+        var funnel = BuildFunnel(thisAssignmentRows, roster);
+
         return new AssignmentDashboardDto(
-            BuildSummary(assignment, thisAssignmentRows),
-            BuildFunnel(thisAssignmentRows, roster),
+            BuildSummary(assignment, funnel),
+            funnel,
             dashboardRows,
             waves,
             roster is not null);
@@ -129,6 +138,15 @@ internal sealed class AssignmentDashboardService(
         _ => 3,
     };
 
+    /// <summary>
+    /// The five-stage funnel over one wave's progress rows, plus the two roster-dependent counts.
+    ///
+    /// <para>
+    /// <c>StartedCount</c> is "everybody who has done at least one piece of graded work", derived by
+    /// <b>subtraction</b> rather than by listing the three "has started" statuses, so a status added later
+    /// cannot silently fall out of the funnel. Do not turn it into an enumeration.
+    /// </para>
+    /// </summary>
     private static AssignmentFunnelDto BuildFunnel(IEnumerable<ProgressRow> rows, IReadOnlySet<Guid>? roster)
     {
         var materialized = rows as IReadOnlyList<ProgressRow> ?? rows.ToList();
@@ -144,9 +162,6 @@ internal sealed class AssignmentDashboardService(
         return new AssignmentFunnelDto(
             AssignedCount: materialized.Count,
             NotStartedCount: notStarted,
-            // Everybody who has done at least one piece of graded work. Derived by subtraction rather
-            // than by listing the three "has started" statuses, so a status added later cannot
-            // silently fall out of the funnel.
             StartedCount: materialized.Count - notStarted,
             CompletedCount: completed,
             FailedThresholdCount: failed,
@@ -157,8 +172,14 @@ internal sealed class AssignmentDashboardService(
     /// <summary>
     /// The same summary shape the list route returns, so the screen's header and its list row are
     /// the same object rather than two that can disagree.
+    ///
+    /// <para>
+    /// The four counts are taken from the funnel this screen already computed rather than counted again:
+    /// two sets of predicates over the same rows are two places for one of them to drift, and the header
+    /// disagreeing with the funnel directly underneath it is the most visible way for that to show up.
+    /// </para>
     /// </summary>
-    private static AssignmentSummaryDto BuildSummary(Assignment assignment, IReadOnlyList<ProgressRow> rows)
+    private static AssignmentSummaryDto BuildSummary(Assignment assignment, AssignmentFunnelDto funnel)
         => new(
             assignment.Id,
             assignment.Title,
@@ -171,10 +192,10 @@ internal sealed class AssignmentDashboardService(
             assignment.RepeatOfAssignmentId,
             assignment.RepeatWaveIndex,
             AssignmentDocumentSerializer.DeserializeContent(assignment.Content).Count,
-            rows.Count,
-            rows.Count(row => row.Status != AssignmentProgressStatuses.NotStarted),
-            rows.Count(row => row.Status == AssignmentProgressStatuses.Completed),
-            rows.Count(row => row.Status == AssignmentProgressStatuses.FailedThreshold),
+            funnel.AssignedCount,
+            funnel.StartedCount,
+            funnel.CompletedCount,
+            funnel.FailedThresholdCount,
             assignment.CreatedBy,
             assignment.CreatedAt,
             assignment.UpdatedAt);

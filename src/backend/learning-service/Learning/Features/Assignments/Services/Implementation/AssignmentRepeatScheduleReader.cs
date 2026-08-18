@@ -95,6 +95,13 @@ internal static class AssignmentRepeatScheduleReader
     /// lives here rather than in the schema so that a stored schedule always means today what it
     /// meant the day it was written — a database default would silently re-point every existing row
     /// at a changed constant.
+    ///
+    /// <para>
+    /// Ascending and distinct are checked as one thing. Two waves on the same day are two fan-outs of
+    /// the same shortened work to the same people on the same morning, and an out-of-order list would
+    /// make the wave ordinal — the thing that identifies a wave for the rest of its life — depend on how
+    /// the administrator happened to type it.
+    /// </para>
     /// </summary>
     private static IReadOnlyList<int> ReadOffsetDays(JsonElement schedule)
     {
@@ -125,10 +132,6 @@ internal static class AssignmentRepeatScheduleReader
                     + "the assignment the moment it was issued.");
             }
 
-            // Ascending and distinct, checked as one thing. Two waves on the same day are two
-            // fan-outs of the same shortened work to the same people on the same morning, and an
-            // out-of-order list would make the wave ordinal — the thing that identifies a wave for
-            // the rest of its life — depend on how the administrator happened to type it.
             if (offsetDays.Count > 0 && offsetDay <= offsetDays[^1])
             {
                 throw new AssignmentValidationException(
