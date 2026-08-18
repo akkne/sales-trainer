@@ -290,6 +290,68 @@ An attempt is spent per claim; three of them and the run is `failed` and waits f
 resumes the half that failed rather than starting over — a failed generation must not re-pay for
 structuring.
 
+## 6a. Batch adaptation and content review (Phase 40.32)
+
+The pipeline above builds a lesson out of a document. 40.32 is the other direction: take content that
+already exists — the base library, a lesson generated here and un-archived, one the РОП wrote by hand
+— and either **rewrite it into the customer's voice** or **say what is methodically wrong with it**.
+
+Both are the same machine, distinguished by `ContentAdaptationJobs.Mode`:
+
+| | `tone_rewrite` | `quality_review` |
+|---|---|---|
+| Question | «Перепиши под наш продукт и тон» | «Что не так с этим упражнением» |
+| Item carries | a proposed body + the model's sentence about what changed | a list of codes from a closed vocabulary of seven |
+| Can be applied | **yes**, one item at a time, by a person | **no** — a finding is a diagnosis, not a patch |
+| ai-service route | `POST /ai/content/rewrite` | `POST /ai/content/review` |
+
+**A batch is a stage.** `POST /admin/content/adaptations {mode, stageKey}` collects every exercise of
+that `Skill.Stage` **through 40.18's read resolution** — the organization's own copy where they have
+forked a lesson, the global library row where they have not, never both — writes one
+`ContentAdaptationItems` row per exercise, and returns immediately. Nothing has been spent yet: the
+scope is one database query.
+
+**One LLM call per exercise, and the item is the idempotency key.** 40.27 could put the lease and the
+"already paid for" fact on the same row, because a run makes two calls. A batch makes up to sixty, so
+they separate: the batch carries the lease, the item carries the answer, and an item carrying an
+answer is never queued again. A batch interrupted at item forty resumes at forty-one and the
+interruption costs exactly the one call that was in flight. Each item is committed on its own, and the
+attempt budget is per item — one exercise the model chokes on must not exhaust a budget protecting
+fifty-nine good proposals.
+
+**The queue is the product, and it is walked one item at a time.** `GET
+…/adaptations/{jobId}/items/{itemId}` returns three things and merges none of them: the body as it
+stands, the body as proposed, and the list of JSON leaves that differ. The model's own sentence
+travels beside them, because a leaf list can say `options[1].text` moved and can never say why.
+40.18's refusal to three-way-merge prose and grading criteria holds here one level down: nothing on
+the server produces a third document.
+
+**Accepting is the only thing in the block that writes an `Exercise`, and it is an HTTP request.**
+`ContentAdaptationSweepService` — the ninth entry in
+[BACKGROUND_JOBS.md §2.1](TENANCY/BACKGROUND_JOBS.md) — writes proposals and nothing else. There is no
+bulk verb: «применить всё» is auto-apply with a person's name attached.
+
+Two guards sit on the accept path:
+
+- **Staleness.** The item carries the SHA-256 of the body the model was shown, and accept recomputes
+  it against the row about to be written. A mismatch means somebody edited that exercise after the
+  model read it, and the answer is a 409 and a re-run — never a merge.
+- **Copy-on-write.** Accepting a rewrite of a **global** exercise forks the lesson first, exactly as
+  pressing "edit" would (40.18), and writes the body into the organization's own copy. This is not
+  politeness: RLS cannot protect the global library, because "global" is a null and the content policy
+  admits `OrganizationId IS NULL` in its `WITH CHECK` clause. Writing the base row would apply one
+  customer's tone edit to every other customer's curriculum.
+
+**No version is published.** Accepting writes the draft row, exactly as `PUT /admin/exercises/{id}`
+does; minting a `LessonVersion` per accepted sentence would produce a history nobody can read.
+Publishing stays the separate human act on the 40.15 route — which also means **the change reaches
+learners only when somebody publishes**, and that is the intended shape.
+
+**A rewrite that changed nothing resolves as `unchanged` and never reaches the queue**, and the prompt
+tells the model twice that «ничего не меняю» is a permitted answer. The same is true of a review that
+found nothing, which is the expected answer. Both exist for the same reason: sixty cosmetic diffs is
+how a person learns to accept everything without reading it.
+
 ---
 
 ## 7. What these blocks deliberately did not do
@@ -314,7 +376,11 @@ structuring.
 - **No file upload and no call recordings.** The material is pasted text — or, since 40.31, text
   composed by the server from a measured gap and the organization profile (§3a). 40.30 owns
   recordings, and the consent and retention question it has to answer first.
-- **No per-item accept/reject of generated exercises.** 40.32. The lesson arrives archived precisely
-  because that gate does not exist yet.
+- ~~**No per-item accept/reject of generated exercises.** 40.32.~~ **Done in 40.32, and as a general
+  mechanism rather than a gate bolted onto generation** (§6a). A generated lesson still arrives
+  archived, and un-archiving it is still `PUT /admin/lessons/{id}`; what 40.32 adds is that any stage
+  of any content — generated, base, or hand-written — can be sent through a proposal queue a person
+  answers item by item. The gate the roadmap asked for turned out to be the same gate the tone rewrite
+  needed, so there is one.
 - **No tests.** Rule №3 in [DONT_FORGET.md](DONT_FORGET.md) — what is missing and why it matters is
   listed there under «Тесты, которых нет».

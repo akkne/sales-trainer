@@ -433,3 +433,49 @@ deck. Two things about it belong in this document:
   the run (`ContentGenerationJobs.GapSourceRef`) and on the assignment eventually made from it
   (`source_type = gap_detected`) — provenance, not content. A block that had needed a fifth kind of
   content for the dashboard's button would have been a block that got §5 wrong.
+
+---
+
+## 6. Adapted content (Phase 40.32)
+
+§5 is about content the product wrote. This is about content the product **changes**, in bulk, on a
+customer's instruction — «перепиши все упражнения этапа "закрытие" под наш продукт и тон» — and the
+one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a is
+that **adapted content is not a fifth kind of content either.** A batch produces no rows in any
+content table. It produces *proposals*, in tables of its own, and a person turns a proposal into an
+ordinary edit of an ordinary `Exercise`.
+
+Three consequences, and each one is a rule this document already had.
+
+- **Applying a rewrite to a global exercise forks the lesson, and that is §1's rule, not a new one.**
+  A batch collects its scope through §2.6's read resolution, so an organization that has already
+  forked a lesson sees their own exercises and one that has not sees the library's. When the second
+  kind is accepted, `IContentOverrideService.CreateOverrideAsync` runs — the same call pressing "edit"
+  makes — and the body lands in the copy. **This is load-bearing rather than tidy:** the content RLS
+  policy is `organization_id IS NULL OR = current` in its `WITH CHECK` clause too, so the database
+  cannot tell "the global library" from "somebody else's row", and a batch that wrote the base
+  directly would apply one customer's tone to every other customer's curriculum. The boundary is
+  `ContentAuthoringGuard` and the accept path, in code, exactly as §1 says it must be.
+- **Nothing is applied without a person, and nothing is merged.** §2.6 refuses to auto-merge an
+  override with a moved base because a three-way merge of prose and grading criteria produces
+  plausible nonsense that then grades a living salesperson. The same refusal, one level down: a
+  proposal and the current body travel to the screen as two documents plus a list of the leaves that
+  differ, and the only thing that combines them is an administrator clicking accept on one item. The
+  worker cannot write an `Exercise` at all.
+- **A proposal is answerable to a specific body of text.** The item stores the hash of what the model
+  was shown and accept recomputes it; if somebody edited that exercise in between, the answer is a
+  refusal, because applying would discard their words. Staleness is computed on read and stored
+  nowhere — the same shape §2.6 uses, for the same reason: there is no flag, so there is no flag to be
+  wrong.
+
+**No version is published by accepting.** The edit lands on the mutable `Exercise` row, so §2.3 still
+holds: a learner's recorded attempt points at a frozen `LessonVersion` and is unaffected until
+somebody publishes a new one. That is deliberate. A batch that published sixty versions would mean
+sixty snapshots nobody chose to freeze, and §2's whole argument is that a version is a decision.
+
+**The same tables carry the block's other half — AI review of hand-written content** — with
+`mode = 'quality_review'`. It writes a list of codes onto the item and nothing else: there is nothing
+to apply, accept is refused, and the fix is an ordinary edit in the editor. That asymmetry is the one
+place a model is allowed to have an opinion about a customer's curriculum without being able to act
+on it, and it is why the review exists at all: a РОП's weak exercise is, to their team,
+indistinguishable from ours.
