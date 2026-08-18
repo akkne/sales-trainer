@@ -231,7 +231,7 @@ which is a learning-db row and the value that drives an assignment's threshold; 
   customer's compliance list to another customer's practice calls
   ([BACKGROUND_JOBS.md §4b](TENANCY/BACKGROUND_JOBS.md)).
 
-### The admin content pipeline's two calls (Phase 40.27)
+### The admin content pipeline's two calls (Phases 40.27–40.28)
 
 `ContentGenerationController` — `POST /ai/content/structure` and `POST /ai/content/generate`, both
 internal service-to-service routes behind `InternalServiceAuthFilter` and, like `POST /ai/evaluate`,
@@ -245,12 +245,29 @@ LLM — and because roadmap 40.33 makes that single point the place per-organiza
 Generating a lesson is about to be the most expensive call in the product, and putting it outside the
 meter would make 40.33 a rewrite rather than a feature.
 
-Four properties of the prompts are decisions rather than details.
+Five properties of the prompts are decisions rather than details.
 
 - **Structuring leaves gaps rather than filling them.** `null` for a scalar it did not find, `[]` for
   a list. A fabricated ICP is indistinguishable on the review screen from an extracted one, and the
-  checkpoint would then ratify a fabrication instead of catching it. Refusing thin material outright,
-  and saying what is missing, is roadmap 40.28.
+  checkpoint would then ratify a fabrication instead of catching it.
+- **Structuring also returns a sufficiency verdict (40.28), in the same completion.** The response is
+  `{structure, sufficiency: {isSufficient, isOffTopic, missingCodes, note}}`. The obvious design — a
+  second, cheap «это вообще про продажи?» call before the expensive one — was rejected: this call
+  already reads the whole material and already forms the judgement as a side effect of extracting
+  nothing from it, so asking for the verdict here is **free**, cannot disagree with the structure it
+  came with, and removes a round trip from the path a person is waiting on.
+  - **Codes, never sentences.** `missingCodes` is a closed vocabulary (`off_topic`, `too_short`,
+    `no_product`, `no_icp`, `no_objections`, `no_script`, `no_examples`); anything else the model
+    invents is dropped before it leaves this service. The sentence the customer reads is
+    learning-service's, one per code, fixed. A model-authored refusal is a different sentence every
+    run, is untranslatable, and occasionally demands something the product cannot accept.
+  - **A missing or malformed `sufficiency` object reads as "sufficient".** Refusing a customer's
+    material because our own completion dropped a field would be a refusal about us, phrased as one
+    about them. Nothing empty gets through on that default — learning-service still inspects the
+    structure itself.
+  - **It is an opinion, not a decision.** learning-service lets it *add* a refusal and never lift
+    one: «выглядит достаточно» over a structure with no objections and no script stages must not open
+    the gate, or the threshold is bypassed by whichever completion happens to be confident.
 - **Generation never sees the material** — only the confirmed structure and the run's title. That is
   the token saving (a deck is paid for once, during structuring) and, more importantly, what makes the
   reviewer's deletion binding: a model that could still read the source would keep putting the deleted
@@ -271,7 +288,9 @@ substituted value, so a value that survives extraction survives being put in a p
 
 ## Routes (through the gateway, paths preserved)
 
-Phase 40.27 added no gateway route: `/ai/content/*` is internal, like `/ai/evaluate`.
+Phases 40.27–40.28 added no gateway route: `/ai/content/*` is internal, like `/ai/evaluate`. 40.28
+changed the shape of the `structure` response but added no endpoint — the refusal it enables is a
+state of a learning-service run, not a status code from here.
 
 Phase 40.25 added `/admin/dialog-sessions` and `/admin/dialog-sessions/{**catch-all}` to the `ai`
 cluster — a separate gateway route from `/admin/dialog/*`, which does not match a different path

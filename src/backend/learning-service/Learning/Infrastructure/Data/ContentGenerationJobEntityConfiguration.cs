@@ -30,6 +30,12 @@ public sealed class ContentGenerationJobEntityConfiguration : IEntityTypeConfigu
 
         builder.Property(job => job.Structure).HasColumnType("jsonb");
 
+        // Phase 40.28. The recorded refusal — a list of gaps with the sentence each one shows. jsonb
+        // for the same reason the structure is: it is a document with a shape, and the alternative
+        // (a comma-separated code column plus a prose column) would put the sentence and the code in
+        // two places that can disagree.
+        builder.Property(job => job.Insufficiency).HasColumnType("jsonb");
+
         builder.Property(job => job.FailureReason).HasMaxLength(1000);
 
         // The worker's own query: which runs of this organization are waiting for a call. Status

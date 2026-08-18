@@ -10,12 +10,17 @@ namespace Sellevate.Learning.Features.ContentGeneration.Models;
 /// enforced by <c>scripts/tenancy-boundary-lint.py</c>).
 /// </para>
 /// </summary>
+/// <param name="Insufficiency">
+/// Phase 40.28. Why the pipeline refused and what to bring instead, or null when it did not refuse.
+/// Non-null exactly when <paramref name="Status"/> is <c>insufficient</c>.
+/// </param>
 public sealed record ContentGenerationJobDto(
     Guid Id,
     string Title,
     string Status,
     string SourceMaterial,
     ContentStructureDto? Structure,
+    ContentInsufficiencyDto? Insufficiency,
     DateTime? StructuredAt,
     DateTime? ApprovedAt,
     Guid? ProducedLessonId,

@@ -25,9 +25,26 @@ public interface IContentGenerationJobService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The reviewer's edit — «что убрать, что добавить». Allowed only while the run is at the
-    /// checkpoint: after approval the structure is what generation was told, and rewriting it
-    /// afterwards would leave a lesson whose stated source never produced it.
+    /// Phase 40.28. «Вот ещё материал» — the answer to a refusal, and the only way out of the
+    /// <c>insufficient</c> state that does not involve typing the structure by hand.
+    ///
+    /// <para>
+    /// The text is appended and the run resumes where it stopped. It never restarts: the next
+    /// structuring call reads only the added part, alongside the structure already extracted, so
+    /// arguing with a refusal costs the price of what was added and not the price of the deck again.
+    /// </para>
+    /// </summary>
+    Task<ContentGenerationJobDto?> SupplementMaterialAsync(
+        Guid jobId,
+        SupplementContentMaterialRequestDto request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The reviewer's edit — «что убрать, что добавить». Allowed at the checkpoint and, since 40.28,
+    /// on a refused run: somebody who knows the four objections the material lacked may simply type
+    /// them, and the edited structure is re-inspected rather than taken on trust. Never after
+    /// approval — the structure is by then what generation was told, and rewriting it would leave a
+    /// lesson whose stated source never produced it.
     /// </summary>
     Task<ContentGenerationJobDto?> UpdateStructureAsync(
         Guid jobId,
@@ -41,6 +58,14 @@ public interface IContentGenerationJobService
     /// <b>Idempotent by state, not by a guard flag.</b> Approving a run that is already generating or
     /// already finished returns it unchanged rather than re-queueing it: a double-clicked button and
     /// a retried request must not buy two lessons.
+    /// </para>
+    ///
+    /// <para>
+    /// Phase 40.28: it is also the last sufficiency gate. The structure is re-inspected here rather
+    /// than trusted to have been inspected when it was written, because between the write and the
+    /// approval there is a network and a stale screen. A structure that does not pass moves the run
+    /// to <c>insufficient</c> and raises
+    /// <see cref="Models.ContentGenerationInsufficientMaterialException"/>.
     /// </para>
     /// </summary>
     Task<ContentGenerationJobDto?> ApproveAsync(

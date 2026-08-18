@@ -445,6 +445,16 @@ the same fact — **somebody is watching this one.**
   (300 seconds), because a lease expiring mid-call would hand the run to a second worker and buy the
   lesson twice.
 
+**Phase 40.28 changed what the worker does at the end of the structuring half, and changed nothing
+about the registry.** No new job, no new consumer, no new system-mode enumeration. The sweep still
+claims only `structuring` and `generating` runs, and the state 40.28 added — `insufficient` — is
+deliberately **not** worker-owned: a refused run waits for a person and costs nothing while it waits.
+The one operational consequence worth knowing is that the structuring step can now end in a state
+that is neither the checkpoint nor a failure, and it is logged at `Information`, because refusing
+thin material is the feature working ([LLM_FAILURE_HANDLING.md](../LLM_FAILURE_HANDLING.md)). The
+other is that a resumed run sends only the part of the material that has not been read before —
+`StructuredMaterialLength` — so arguing with a refusal does not re-bill the customer for the deck.
+
 **Idempotency does not rest on the dedupe store or on a counter.** A run has produced a lesson exactly
 when `ProducedLessonId` is non-null, and `CK_ContentGenerationJobs_Produced` refuses to let that column
 exist outside the `completed` state. The worker re-reads it after the call and before the write, which

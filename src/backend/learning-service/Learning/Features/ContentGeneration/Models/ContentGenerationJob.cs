@@ -66,6 +66,33 @@ public sealed class ContentGenerationJob : ITenantScoped
     public DateTime? StructuredAt { get; set; }
 
     /// <summary>
+    /// Phase 40.28. How much of <see cref="SourceMaterial"/> the last structuring call actually read.
+    ///
+    /// <para>
+    /// <b>This is what makes a refusal arguable without being expensive.</b> A run refused for thin
+    /// material is meant to be answered by adding more of it, and starting the whole run over would
+    /// re-pay for structuring the deck that was already read. So new material is appended, this
+    /// marker says where the paid-for part ends, and the next call is sent only the tail — together
+    /// with the structure already extracted, which the prompt is told to keep rather than rewrite.
+    /// The customer pays for what they added and nothing else.
+    /// </para>
+    /// </summary>
+    public int StructuredMaterialLength { get; set; }
+
+    /// <summary>
+    /// Phase 40.28. The recorded refusal as canonical JSON — a list of gaps, each with a code and the
+    /// sentence the РОП reads — or null when the run has nothing to complain about.
+    ///
+    /// <para>
+    /// Non-null exactly when <see cref="Status"/> is <c>insufficient</c>, and the database says so
+    /// (<c>CK_ContentGenerationJobs_Insufficiency</c>). It is cleared when the run moves on, because a
+    /// stale «не хватает возражений» sitting on a run that is now generating would be read as a
+    /// warning about the lesson it is about to produce.
+    /// </para>
+    /// </summary>
+    public string? Insufficiency { get; set; }
+
+    /// <summary>
     /// When a human said the structure was right. This is the checkpoint, recorded: nothing is
     /// generated while it is null, and it is the only transition in the pipeline a background worker
     /// cannot make on its own.

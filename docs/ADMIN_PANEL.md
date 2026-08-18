@@ -598,10 +598,10 @@ Each component includes the canonical TypeScript schema and client-side validati
 
 ---
 
-## The РОП's content pipeline — API only (Phase 40.27)
+## The РОП's content pipeline — API only (Phases 40.27–40.28)
 
 **There is no screen for this yet.** The РОП's admin panel is roadmap 40.20 and is waiting on the
-owner's design, the same reason 40.15–40.26 shipped API-only. What exists is the whole pipeline
+owner's design, the same reason 40.15–40.27 shipped API-only. What exists is the whole pipeline
 behind `/admin/content-generation/*` — see [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) and
 [API_CONTRACTS.md](API_CONTRACTS.md).
 
@@ -611,6 +611,18 @@ What the screen has to do, when it is designed, in the order that matters:
    notes from a training session. File upload and call recordings are 40.30.
 2. **A spinner with a poll.** `POST` returns immediately with status `structuring`; the structuring
    call takes tens of seconds to minutes. `GET /admin/content-generation/{jobId}` is the poll.
+2a. **The refusal, which is a screen of its own (40.28).** The run may come back `insufficient`
+   instead of `awaiting_review` — either immediately, if the pasted text was too thin or not about
+   selling at all, or after structuring, if too little could be read out of it. `insufficiency.gaps`
+   is a list of `{code, message}`; **render it as a list of bullets, never as a paragraph**, because
+   usually only one of them is something the РОП can act on today. Two things this screen must
+   offer, and they are the whole reason the refusal is a state rather than an error:
+   a textarea that `POST …/material` appends (the run resumes where it stopped and does not re-read
+   the deck), and — when a structure exists — the ordinary checkpoint editor, because somebody who
+   knows their four objections should be able to type them instead of hunting for a document. Do not
+   render a refusal as an error toast: it is the most useful answer the product gives on that path,
+   and «добавьте примеры возражений или запись звонка» is worth more to that customer than the
+   lesson they asked for would have been.
 3. **The checkpoint, which is the whole screen.** Product, who they sell to, tone, the objections,
    the stages of their script, the glossary, the banned claims — every one editable, every one
    deletable, and gaps shown as gaps rather than hidden. «Всё верно? что убрать, что добавить?»
@@ -622,7 +634,12 @@ What the screen has to do, when it is designed, in the order that matters:
    should link into the existing lesson editor rather than growing a viewer of its own — it is an
    ordinary lesson, which is the point.
 
-Two things the screen must not do, because the backend deliberately does not support them:
+Three things the screen must not do, because the backend deliberately does not support them:
+
+- **Do not offer a "generate anyway" button on a refused run.** There is no route for it. The
+  threshold is answerable — add material, or fill the structure in by hand — but not waivable, and
+  every path back through it is re-inspected. A bypass would hand the customer the fifteen bland
+  exercises this block exists to not sell them.
 
 - **Do not offer per-exercise accept/reject.** That is roadmap 40.32 and it has its own vocabulary to
   invent. The lesson arrives archived precisely because that gate does not exist yet; the way to
