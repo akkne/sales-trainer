@@ -23,6 +23,23 @@ internal sealed class ProgramEnrollmentService(
     IProgramVersionService programVersionService,
     ILogger<ProgramEnrollmentService> logger) : IProgramEnrollmentService
 {
+    /// <summary>
+    /// Reports the learner's pinned programme, whether a newer published version exists, and what
+    /// switching to it would change.
+    ///
+    /// <para>
+    /// <b>Not enrolled is a normal answer, not an error.</b> The organization may have published no
+    /// programme at all, in which case its people go on reading the live library exactly as they did
+    /// before this phase; enrollment deliberately does not gate access to lessons (docs/DECISIONS.md,
+    /// 2026-08-17). Callers must therefore treat <c>IsEnrolled: false</c> as a valid state rather
+    /// than as "set-up incomplete".
+    /// </para>
+    ///
+    /// <para>
+    /// The pending diff is computed only when a switch is actually available, so the common
+    /// steady-state call — pinned to the newest version — costs no diff query.
+    /// </para>
+    /// </summary>
     public async Task<MyProgramDto> GetMyProgramAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -41,10 +58,6 @@ internal sealed class ProgramEnrollmentService(
 
         if (enrollment is null)
         {
-            // Not enrolled is a normal answer. The organization may not have published a programme
-            // at all, in which case its people go on reading the live library exactly as they did
-            // before this phase — see docs/DECISIONS.md (2026-08-17) for why enrollment does not gate
-            // access to lessons.
             return new MyProgramDto(
                 IsEnrolled: false,
                 ProgramVersionId: null,
@@ -101,6 +114,18 @@ internal sealed class ProgramEnrollmentService(
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Pins the learner to the newest published programme version, or returns their existing pin
+    /// unchanged. Returns <c>null</c> when the organization has published no version to pin to.
+    ///
+    /// <para>
+    /// <b>An existing enrollment is deliberately never moved onto the newest version.</b> An
+    /// administrator repeating this call after a publish must not become a way to rearrange the
+    /// programme of somebody already halfway through it; that move is the learner's own act and lives
+    /// in <see cref="SwitchAsync"/>. The idempotence is what makes "enroll everybody" safe to re-run:
+    /// newcomers land on the new version, everybody mid-course stays put.
+    /// </para>
+    /// </summary>
     public async Task<ProgramEnrollmentDto?> EnrollAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -118,9 +143,6 @@ internal sealed class ProgramEnrollmentService(
 
         if (existingEnrollment is not null)
         {
-            // Deliberately not moved onto latestPublished. An administrator repeating this call
-            // after publishing must not be a way to rearrange the programme of somebody who is
-            // already halfway through it; that move belongs to the learner and is SwitchAsync.
             var currentVersionNumber = await databaseContext.ProgramVersions
                 .Where(version => version.Id == existingEnrollment.ProgramVersionId)
                 .Select(version => version.VersionNumber)
@@ -149,6 +171,23 @@ internal sealed class ProgramEnrollmentService(
         return ToDto(enrollment, latestPublished.VersionNumber);
     }
 
+    /// <summary>
+    /// Moves the learner's pin to <paramref name="targetProgramVersionId"/> at their own request,
+    /// recording where they came from, and returns their refreshed programme.
+    ///
+    /// <para>
+    /// <b>The target must be explicitly named and already published.</b> Naming the version is what
+    /// makes the move consented rather than imposed, and the published check stops a learner being
+    /// moved onto a draft an author is still editing. <c>null</c> means no move happened — not
+    /// enrolled, already on that version, or the target is not published — and the caller maps all
+    /// three to the same client response.
+    /// </para>
+    ///
+    /// <para>
+    /// The refreshed programme is read after the write transaction has committed, so the response
+    /// reflects the new pin rather than the pre-switch snapshot.
+    /// </para>
+    /// </summary>
     public async Task<MyProgramDto?> SwitchAsync(
         Guid userId,
         Guid targetProgramVersionId,

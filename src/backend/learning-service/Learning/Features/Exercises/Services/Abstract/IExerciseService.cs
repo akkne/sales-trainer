@@ -4,6 +4,17 @@ using Sellevate.Learning.Infrastructure.Ai;
 
 namespace Sellevate.Learning.Features.Exercises.Services.Abstract;
 
+/// <summary>
+/// Everything a learner does with the library: browsing lessons, reading exercises, submitting answers,
+/// and holding an <c>ai_dialogue</c> conversation.
+///
+/// <para>
+/// Every method is scoped to the caller's organization by the ambient tenant context and takes no
+/// organization argument. The lesson and exercise bodies it returns are already rendered for that
+/// organization and already stripped of their answer keys, so a caller must never reach for the raw
+/// rows to "get the full content" — that is the answer key.
+/// </para>
+/// </summary>
 public interface IExerciseService
 {
     Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(

@@ -8,6 +8,32 @@ using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Techniques.Services.Implementation;
 
+/// <summary>
+/// Read model for the technique library: cards, detail pages, facet counts, and the
+/// first-seen marker.
+///
+/// <para>
+/// <b>Every technique query goes through <c>ResolveOverrides</c>.</b> A tenant override row carries
+/// the same slug and identity as the platform base row it replaces, so an unresolved query returns
+/// both and the caller sees a duplicate — or, on a single-row lookup, whichever row the query planner
+/// reached first. Resolution collapses the pair down to the row this organization should see, so a
+/// new query added here must keep the call (docs/TENANCY/CONTENT_MODEL.md).
+/// </para>
+///
+/// <para>
+/// <b>Free-text search runs in memory, not in SQL.</b> The <c>searchTerm</c> filter is applied after
+/// materialization because it is case-insensitive across four fields including the technique body,
+/// and the library is small enough that a scan costs less than the index machinery a database-side
+/// match would need. Tag and skill filters do run in SQL, so the in-memory pass only ever sees an
+/// already narrowed set.
+/// </para>
+///
+/// <para>
+/// <b>Malformed embedded JSON degrades, it does not throw.</b> <c>DialogJson</c>, <c>CaseJson</c> and
+/// the coach's <c>ChallengesJson</c> are author-supplied documents; a deserialization failure yields
+/// an empty section so the rest of the technique still renders rather than failing the whole page.
+/// </para>
+/// </summary>
 internal sealed class TechniqueService(LearningDbContext databaseContext) : ITechniqueService
 {
     private static readonly JsonSerializerOptions DefaultJsonOptions = new(JsonSerializerDefaults.Web);
@@ -84,6 +110,15 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
             progressByTechniqueId)).ToList();
     }
 
+    /// <summary>
+    /// Loads one technique by slug, or <c>null</c> when this organization cannot see it.
+    ///
+    /// <para>
+    /// <b>Override resolution is correctness here, not tidiness (Phase 40.18).</b> An override
+    /// carries the same slug as its base — that is what keeps the URL stable — so an unresolved
+    /// lookup by slug matches two rows and returns whichever the planner reached first.
+    /// </para>
+    /// </summary>
     public async Task<TechniqueDetailDto?> GetTechniqueBySlugAsync(
         string slug,
         Guid? currentUserId,
@@ -91,9 +126,6 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        // Phase 40.18: resolved, and here it is correctness rather than tidiness. An override
-        // carries the same slug as its base — that is what keeps the URL stable — so an unresolved
-        // lookup by slug would match two rows and return whichever the planner reached first.
         var technique = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
             .Include(loadedTechnique => loadedTechnique.Coach)
             .Include(loadedTechnique => loadedTechnique.AdditionalSkills)

@@ -36,6 +36,13 @@ namespace Sellevate.Learning.Features.Lessons.Services.Implementation;
 /// <c>SELECT</c> does not return these bytes. The hash is defined over the form produced here,
 /// never over what the database hands back.
 /// </para>
+///
+/// <para>
+/// The writer uses relaxed JSON escaping, which keeps Russian lesson text readable in the stored
+/// document instead of turning every letter into <c>\uXXXX</c>. Both sides of a hash comparison go
+/// through the same options object, so the choice cannot make two equal snapshots hash differently —
+/// but changing it later would invalidate every hash already stored.
+/// </para>
 /// </summary>
 public static class LessonSnapshotSerializer
 {
@@ -48,9 +55,6 @@ public static class LessonSnapshotSerializer
     private static readonly JsonWriterOptions CanonicalWriterOptions = new()
     {
         Indented = false,
-        // Relaxed escaping keeps Russian lesson text readable in the stored document instead of
-        // turning every letter into \uXXXX. Both sides of a hash comparison go through this same
-        // options object, so the choice cannot make two equal snapshots hash differently.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 

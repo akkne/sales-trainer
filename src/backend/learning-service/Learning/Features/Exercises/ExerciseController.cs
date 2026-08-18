@@ -8,10 +8,44 @@ using Sellevate.Learning.Infrastructure.Ai;
 
 namespace Sellevate.Learning.Features.Exercises;
 
+/// <summary>
+/// The learner-facing surface of the library: lessons, exercise bodies, answer submission, and the
+/// two interactive <c>ai_dialogue</c> transports.
+///
+/// <para>
+/// <b>Every route acts on the caller identified by the token; none takes a user id.</b> One learner
+/// therefore cannot read or advance another's progress through this controller at all, rather than
+/// being stopped by a check that could be forgotten on a new route.
+/// </para>
+///
+/// <para>
+/// <b>An unavailable AI provider is a 503, never a 500.</b> Grading and chat both depend on
+/// ai-service, and its being busy, rate-limited or unreachable is upstream state rather than a defect
+/// here — so those exceptions are logged as warnings and mapped, and the learner is told to retry in
+/// their own language instead of seeing a stack trace.
+/// </para>
+/// </summary>
 [ApiController]
 [Authorize]
 public sealed class ExerciseController(IExerciseService exerciseService, ILogger<ExerciseController> logger) : ControllerBase
 {
+    /// <summary>
+    /// Shown to the learner whenever ai-service cannot answer. Deliberately identical across grading,
+    /// chat and voice: from the learner's side the three failures are the same event.
+    /// </summary>
+    private const string AiServiceUnavailableMessage = "AI сервис временно недоступен. Попробуйте позже.";
+
+    /// <summary>
+    /// Frame flag bits of the voice stream. Values are read by the client's binary parser and cannot
+    /// be renumbered without shipping a new client.
+    /// </summary>
+    private const uint VoiceFrameFinalFlag = 1u;
+
+    /// <inheritdoc cref="VoiceFrameFinalFlag"/>
+    private const uint VoiceFrameStopSignalFlag = 2u;
+
+    private const int VoiceFrameLengthPrefixByteCount = 4;
+
     [HttpGet("lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetAllLessons(CancellationToken cancellationToken)
     {
@@ -70,18 +104,17 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         catch (OpenAiException exception)
         {
             logger.LogWarning(exception, "AI provider error during evaluation of exercise {ExerciseId}", exerciseId);
-            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = AiServiceUnavailableMessage });
         }
         catch (InvalidOperationException exception)
         {
-            // Upstream unavailability, already mapped to a 503 — warning, not an error.
             logger.LogWarning(exception, "AI evaluation service error");
-            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = AiServiceUnavailableMessage });
         }
         catch (HttpRequestException exception)
         {
             logger.LogWarning(exception, "AI evaluation service HTTP error");
-            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = AiServiceUnavailableMessage });
         }
     }
 
@@ -109,17 +142,39 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         }
         catch (OpenAiException exception)
         {
-            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
             logger.LogWarning(exception, "AI provider error during exercise chat for exercise {ExerciseId}", exerciseId);
-            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = AiServiceUnavailableMessage });
         }
         catch (HttpRequestException exception)
         {
             logger.LogWarning(exception, "AI provider unreachable during exercise chat for exercise {ExerciseId}", exerciseId);
-            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = AiServiceUnavailableMessage });
         }
     }
 
+    /// <summary>
+    /// Streams the AI partner's spoken reply as a sequence of length-prefixed binary frames.
+    ///
+    /// <para>
+    /// <b>Frame layout, big-endian throughout:</b> a 4-byte flag word (see
+    /// <see cref="VoiceFrameFinalFlag"/>), then a 4-byte text length followed by that many UTF-8 bytes,
+    /// then a 4-byte audio length followed by that many MP3 bytes. Either payload may be zero-length —
+    /// text arrives ahead of its audio so the learner sees the reply while it is still being
+    /// synthesized. The client reads frames until the one carrying the final flag.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The exercise is validated before the status line is committed.</b> Once a 200 has been
+    /// written the response cannot carry an error code any more, so a missing exercise or a wrong type
+    /// has to be discovered first; after that point a provider failure can only end the stream cleanly,
+    /// which leaves the learner with a short reply rather than a torn connection.
+    /// </para>
+    ///
+    /// <para>
+    /// Buffering is disabled on the response because a proxy that accumulates the body would defeat the
+    /// point of streaming it.
+    /// </para>
+    /// </summary>
     [HttpPost("exercises/{exerciseId:guid}/voice/stream")]
     public async Task StreamVoiceMessage(
         Guid exerciseId,
@@ -128,30 +183,28 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
     {
         if (!User.TryResolveUserId(out var userId))
         {
-            Response.StatusCode = 401;
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
 
-        // Validate exercise exists and is ai_dialogue BEFORE committing 200 —
-        // once we write status 200 we can no longer return a proper error code.
         try
         {
             await exerciseService.ValidateExerciseForVoiceAsync(exerciseId, cancellationToken);
         }
         catch (KeyNotFoundException exception)
         {
-            Response.StatusCode = 404;
+            Response.StatusCode = StatusCodes.Status404NotFound;
             await Response.WriteAsJsonAsync(new { message = exception.Message }, cancellationToken);
             return;
         }
         catch (NotSupportedException exception)
         {
-            Response.StatusCode = 400;
+            Response.StatusCode = StatusCodes.Status400BadRequest;
             await Response.WriteAsJsonAsync(new { message = exception.Message }, cancellationToken);
             return;
         }
 
-        Response.StatusCode = 200;
+        Response.StatusCode = StatusCodes.Status200OK;
         Response.ContentType = "application/octet-stream";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
@@ -161,10 +214,11 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
             await foreach (var chunk in exerciseService.StreamExerciseVoiceAsync(
                 userId, exerciseId, chatRequest.Message, cancellationToken))
             {
-                var flags = (chunk.IsFinal ? 1u : 0u) | (chunk.IsStopSignal ? 2u : 0u);
+                var frameFlags = (chunk.IsFinal ? VoiceFrameFinalFlag : 0u)
+                                 | (chunk.IsStopSignal ? VoiceFrameStopSignalFlag : 0u);
                 var textBytes = System.Text.Encoding.UTF8.GetBytes(chunk.Text);
 
-                await WriteUInt32BigEndianAsync(Response.Body, flags, cancellationToken);
+                await WriteUInt32BigEndianAsync(Response.Body, frameFlags, cancellationToken);
                 await WriteUInt32BigEndianAsync(Response.Body, (uint)textBytes.Length, cancellationToken);
                 if (textBytes.Length > 0)
                     await Response.Body.WriteAsync(textBytes, cancellationToken);
@@ -180,8 +234,6 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         }
         catch (OpenAiException exception)
         {
-            // Headers are already sent, so we can only end the stream cleanly — the client sees a
-            // short reply instead of a torn connection, and this stays upstream noise, not a defect.
             logger.LogWarning(exception, "Exercise voice stream aborted by AI provider error for exercise {ExerciseId}", exerciseId);
         }
         catch (HttpRequestException exception)
@@ -192,7 +244,7 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
 
     private static async Task WriteUInt32BigEndianAsync(Stream stream, uint value, CancellationToken cancellationToken)
     {
-        var buffer = new byte[4];
+        var buffer = new byte[VoiceFrameLengthPrefixByteCount];
         buffer[0] = (byte)((value >> 24) & 0xff);
         buffer[1] = (byte)((value >> 16) & 0xff);
         buffer[2] = (byte)((value >> 8) & 0xff);

@@ -61,17 +61,29 @@ internal sealed class ProgramVersionService(
         return version is null ? null : await BuildVersionDtoAsync(version, cancellationToken);
     }
 
+    /// <summary>
+    /// Rebuilds the single open draft from the live skill tree, creating it if there is none, and
+    /// returns it with its pinned items in order.
+    ///
+    /// <para>
+    /// <b>Three phases, and the order is load-bearing.</b> The live tree is read first, the lesson
+    /// version pins are resolved second with no transaction of ours open, and only then does the write
+    /// scope open. <c>EnsurePublishedVersionIdAsync</c> mints a lesson's first version and can lose a
+    /// unique-index race doing it; a unique-index violation aborts the whole Postgres transaction it
+    /// happens in, so calling it inside the write scope would take the programme draft down with it.
+    /// The same reasoning governs the call site in <c>ExerciseService</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The draft's items are replaced wholesale, not merged.</b> Re-opening the editor after the
+    /// curriculum moved must show what the curriculum now is; keeping stale items would let an
+    /// administrator publish a programme referencing lessons that have since been archived.
+    /// </para>
+    /// </summary>
     public async Task<ProgramVersionDto> EnsureDraftAsync(
         Guid? actorId,
         CancellationToken cancellationToken = default)
     {
-        // Three phases, and the order is load-bearing. The live tree is read first, the lesson
-        // version pins are resolved second with no transaction of ours open, and only then does the
-        // write scope open. EnsurePublishedVersionIdAsync mints a lesson's first version and can
-        // lose a unique-index race doing it; a unique-index violation aborts the whole Postgres
-        // transaction it happens in, so calling it inside the write scope below would take the
-        // programme draft down with it. Same reasoning, and the same comment, as the call site in
-        // ExerciseService.
         var plannedLessons = await ReadLiveCurriculumAsync(cancellationToken);
         var pinnedLessons = await ResolvePinsAsync(plannedLessons, cancellationToken);
 
@@ -122,6 +134,25 @@ internal sealed class ProgramVersionService(
         return await BuildVersionDtoAsync(draft, cancellationToken);
     }
 
+    /// <summary>
+    /// Freezes the open draft as the next published version, or — when it is structurally identical to
+    /// the newest published version — discards it and returns that one. <c>null</c> means there was no
+    /// draft to publish.
+    ///
+    /// <para>
+    /// <b>The structural comparison is the programme equivalent of 40.15's content hash.</b> There is
+    /// no body to hash — a programme is references — so equality is decided over the reference tuples
+    /// themselves, in order. Publishing an unchanged programme would tell every enrolled learner a new
+    /// version is waiting and then show them an empty diff, which is how a switch notice stops being
+    /// read. <c>CreatedNewVersion: false</c> is the caller's signal that this happened.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The version number is re-derived at publish time, not trusted from draft creation.</b>
+    /// Another version could have been published while the draft sat open, and a version number is not
+    /// something to guess at.
+    /// </para>
+    /// </summary>
     public async Task<PublishProgramVersionResultDto?> PublishAsync(
         Guid? actorId,
         CancellationToken cancellationToken = default)
@@ -142,10 +173,6 @@ internal sealed class ProgramVersionService(
 
         var draftItems = await ReadOrderedItemsAsync(draft.Id, cancellationToken);
 
-        // The programme equivalent of 40.15's content hash. There is no body to hash — a programme
-        // is references — so the comparison is over the reference tuples themselves, in order.
-        // Publishing an unchanged programme would tell every enrolled learner that a new version is
-        // waiting and then show them an empty diff, which is how a switch notice stops being read.
         if (latestPublishedVersion is not null)
         {
             var publishedItems = await ReadOrderedItemsAsync(latestPublishedVersion.Id, cancellationToken);
@@ -162,8 +189,6 @@ internal sealed class ProgramVersionService(
             }
         }
 
-        // Re-derived rather than trusted from draft creation time: another version could have been
-        // published in between, and a version number is not something to guess at.
         draft.VersionNumber = await ResolveNextVersionNumberAsync(cancellationToken);
         draft.Status = ProgramVersionStatuses.Published;
         draft.PublishedAt = DateTime.UtcNow;
@@ -184,6 +209,23 @@ internal sealed class ProgramVersionService(
             CreatedNewVersion: true);
     }
 
+    /// <summary>
+    /// Compares two versions lesson by lesson and classifies each difference as added, removed,
+    /// content-changed, or merely moved.
+    ///
+    /// <para>
+    /// <b>A lesson is matched by its lesson id, never by its position.</b> That is what separates
+    /// "moved" from "changed": a lesson present in both versions with the same pinned snapshot has only
+    /// been reordered or reparented, and reporting that as a content change would make the switch
+    /// notice cry wolf on every curriculum tidy-up. A different pinned snapshot is a real content
+    /// change and is the only case that can be breaking.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>HasBreakingChanges</c> on the result is the roll-up of the per-lesson flags, so a caller can
+    /// gate a confirmation prompt on one boolean without walking the lists.
+    /// </para>
+    /// </summary>
     public async Task<ProgramDiffDto?> GetDiffAsync(
         Guid fromProgramVersionId,
         Guid toProgramVersionId,
@@ -509,6 +551,17 @@ internal sealed class ProgramVersionService(
     private static string? ResolveTitle(Guid lessonVersionId, IReadOnlyDictionary<Guid, SnapshotFacts> snapshots)
         => snapshots.TryGetValue(lessonVersionId, out var facts) ? facts.Title : null;
 
+    /// <summary>
+    /// Pulls the frozen lesson title out of a snapshot document, or <see langword="null"/> when the
+    /// document cannot be read.
+    ///
+    /// <para>
+    /// The <c>title</c> key mirrors what <c>LessonSnapshotSerializer</c> writes; the two must be
+    /// changed together, and only behind a snapshot schema version bump, because existing rows carry
+    /// the old shape. Failure is tolerated rather than thrown: a programme listing must still render
+    /// when one of its pinned snapshots is unreadable, with the title simply missing.
+    /// </para>
+    /// </summary>
     private static string? ReadSnapshotTitle(string content)
     {
         try

@@ -10,9 +10,18 @@ namespace Sellevate.Learning.Features.Programs.Services.Abstract;
 /// </summary>
 public interface IProgramVersionService
 {
+    /// <summary>
+    /// Every version the organization has, newest number first, each with its item and enrollment
+    /// counts. At most one of them is a draft.
+    /// </summary>
     Task<IReadOnlyList<ProgramVersionSummaryDto>> GetVersionsAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// One version with its items in order. Returns <see langword="null"/> when the version does not
+    /// exist or belongs to another organization — the two cases are deliberately indistinguishable to
+    /// the caller. Item titles come from each pinned lesson snapshot, not from the live lesson row.
+    /// </summary>
     Task<ProgramVersionDto?> GetVersionAsync(
         Guid programVersionId,
         CancellationToken cancellationToken = default);

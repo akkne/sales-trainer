@@ -9,6 +9,24 @@ namespace Sellevate.Learning.Features.Lessons.Services.Implementation;
 /// <inheritdoc />
 internal sealed class LessonAccuracyService(LearningDbContext databaseContext) : ILessonAccuracyService
 {
+    /// <summary>
+    /// Builds the lesson's accuracy series, one segment per run of versions that measure the same
+    /// thing, plus a bucket for attempts predating versioning. <c>null</c> means the lesson does not
+    /// exist or is not visible to this organization.
+    ///
+    /// <para>
+    /// <b>Drafts are excluded, archived versions are kept.</b> A draft has never been shown to a
+    /// learner, so no attempt can belong to one; an archived version was live once, and dropping it
+    /// would erase the history of everyone who studied while it was.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The grouped aggregate is projected into an anonymous type on purpose.</b> A grouped
+    /// projection is the one place where binding straight to a constructor is not reliably translatable
+    /// by EF Core, and a query that only fails at runtime against real Postgres is not worth the
+    /// tidiness; the mapping into <c>AttemptAggregate</c> happens afterwards, in memory.
+    /// </para>
+    /// </summary>
     public async Task<LessonAccuracySeriesDto?> GetAccuracySeriesAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default)
@@ -22,9 +40,6 @@ internal sealed class LessonAccuracyService(LearningDbContext databaseContext) :
             return null;
         }
 
-        // Drafts are excluded: a draft has never been shown to a learner, so no attempt can belong
-        // to one. Archived versions are kept — they were live once, and dropping them would erase
-        // the history of everyone who studied while they were.
         var orderedVersions = await databaseContext.LessonVersions
             .Where(version => version.LessonId == lessonId && version.Status != LessonVersionStatuses.Draft)
             .OrderBy(version => version.VersionNumber)
@@ -37,9 +52,6 @@ internal sealed class LessonAccuracyService(LearningDbContext databaseContext) :
 
         var versionIds = orderedVersionMarkers.Select(version => version.VersionId).ToList();
 
-        // Projected into an anonymous type rather than straight into AttemptAggregate: a grouped
-        // projection is the one place where binding to a constructor is not reliably translatable,
-        // and a query that only fails at runtime against real Postgres is not worth the tidiness.
         var aggregateRows = await databaseContext.UserExerciseAttempts
             .Where(attempt => attempt.LessonVersionId != null && versionIds.Contains(attempt.LessonVersionId.Value))
             .GroupBy(attempt => attempt.LessonVersionId!.Value)
