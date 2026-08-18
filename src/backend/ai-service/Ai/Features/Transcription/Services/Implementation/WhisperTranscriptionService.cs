@@ -42,7 +42,6 @@ internal sealed class WhisperTranscriptionService(
     IAiSpendMeter spendMeter,
     ILogger<WhisperTranscriptionService> logger) : ITranscriptionService
 {
-    private const string PlaceholderApiKeyPrefix = AiSecretPlaceholders.ReplacePrefix + "_";
     private const int MaximumLoggedBodyLength = 500;
     private const string FileFormFieldName = "file";
     private const string ModelFormFieldName = "model";
@@ -58,7 +57,7 @@ internal sealed class WhisperTranscriptionService(
         CancellationToken cancellationToken = default)
     {
         var apiKey = openAiOptions.Value.ApiKey;
-        if (string.IsNullOrEmpty(apiKey) || apiKey.StartsWith(PlaceholderApiKeyPrefix, StringComparison.Ordinal))
+        if (!AiSecretPlaceholders.IsRealSecret(apiKey))
         {
             logger.LogWarning("OpenAI API key is not configured. Returning stub transcription.");
             return new TranscriptionResult(TranscriptionMessages.NotConfiguredTranscript, null);

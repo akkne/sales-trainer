@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Features.Quotas.Services.Implementation;
@@ -29,7 +30,7 @@ internal abstract class AiEvaluationStrategyBase(
         CancellationToken cancellationToken)
     {
         var openAiApiKey = openAiOptions.Value.ApiKey;
-        if (string.IsNullOrEmpty(openAiApiKey) || openAiApiKey.StartsWith("REPLACE_"))
+        if (!AiSecretPlaceholders.IsRealSecret(openAiApiKey))
         {
             throw new InvalidOperationException("OpenAI API key is not configured");
         }

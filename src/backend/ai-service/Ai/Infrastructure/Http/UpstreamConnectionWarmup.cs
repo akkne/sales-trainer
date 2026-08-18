@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Infrastructure.Http;
@@ -72,6 +73,5 @@ internal sealed class UpstreamConnectionWarmup
     }
 
     private static bool IsApiKeyConfigured(string? apiKey) =>
-        !string.IsNullOrWhiteSpace(apiKey) &&
-        !apiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
+        AiSecretPlaceholders.IsRealSecret(apiKey);
 }
