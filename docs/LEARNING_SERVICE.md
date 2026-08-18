@@ -810,7 +810,7 @@ user aggregate but never took these admin routes. Phase 9 must move `/admin/user
   own explicit switch — but wiring the learner's existing screens onto the pinned programme belongs
   with the screens that render a programme, which is 40.20. Recorded in `docs/DONT_FORGET.md`.
 
-## The admin content pipeline (Phase 40.27)
+## The admin content pipeline (Phases 40.27–40.28)
 
 The РОП pastes their material and gets a lesson, with a **stop in the middle**: the extracted
 structure — product, ICP, objections, script stages, tone, glossary, banned claims — is shown back for
@@ -839,6 +839,14 @@ What belongs to this service, and why it is split the way it is:
   unreviewed model output must not appear in the team's live tree before then.
 - **`PUT /admin/lessons/{id}` gained an optional `isArchived`** in the same block, because archiving
   had no reverse and an archived-on-arrival lesson would otherwise be stranded.
+- **The sufficiency threshold is this service's decision (40.28).** ai-service supplies an opinion;
+  `ContentSufficiencyInspector` decides. It runs twice — free, on the raw text before any call, and
+  again on the extracted structure, which is the honest signal: what could actually be read out of
+  the material is what says whether four good exercises can be built, and a model that returned an
+  invented ICP over an empty deck is the same failure arriving later. The refusal is a **state**
+  (`insufficient`) carrying a list of gaps, not an error, because it has to be arguable: `POST
+  …/material` appends text and resumes the run, and `StructuredMaterialLength` is what keeps the
+  resumed call from re-reading — and re-paying for — the deck that was already structured.
 
 ## Local dev
 

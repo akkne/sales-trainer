@@ -1722,9 +1722,11 @@ Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
 | `CreatedBy` | uuid | nullable — the РОП who started it |
 | `Title` | varchar(200) | NOT NULL, non-blank; becomes the generated topic's title |
 | `SourceMaterial` | text | NOT NULL, non-blank; the pasted deck/script, verbatim. Bounded at 60 000 characters by the service, not by the column |
-| `Status` | varchar(20) | NOT NULL, DEFAULT `'structuring'`; one of `structuring` / `awaiting_review` / `generating` / `completed` / `failed` |
+| `Status` | varchar(20) | NOT NULL, DEFAULT `'structuring'`; one of `structuring` / `awaiting_review` / `generating` / `completed` / `failed` / `insufficient` (40.28) |
 | `Structure` | jsonb | nullable — the extracted structure, in the organization profile's shape |
+| `Insufficiency` | jsonb | **40.28** — nullable; the recorded refusal: `{stage, gaps: [{code, message}], note}`. Non-null **exactly** when `Status = 'insufficient'` |
 | `StructuredAt` | timestamptz | nullable |
+| `StructuredMaterialLength` | integer | **40.28** — NOT NULL, ≥ 0, ≤ `length(SourceMaterial)`; how much of the material has already been read and paid for. A resumed run is sent only the tail |
 | `ApprovedAt` | timestamptz | nullable — **the checkpoint, recorded** |
 | `ApprovedBy` | uuid | nullable |
 | `ProducedLessonId` | uuid | nullable — **the idempotency key of the expensive half** |
@@ -1749,9 +1751,15 @@ Constraints, and two of them are the block rather than hygiene:
 - **`CK_ContentGenerationJobs_Produced`** — `ProducedLessonId` may not exist outside the `completed`
   state. That is what makes "a run holding a lesson id has already been paid for" a fact the cost
   guard can rely on rather than a convention.
+- **`CK_ContentGenerationJobs_Insufficiency`** (40.28) — `Insufficiency IS NOT NULL` **if and only
+  if** `Status = 'insufficient'`. A refused run with no list of what is missing is a dead end on the
+  screen; a list left behind on a run that has moved on reads as a warning about the lesson it is
+  about to produce. The refusal and the state are one fact, so the database keeps them one fact.
 - `CK_ContentGenerationJobs_Status` (the vocabulary), `CK_ContentGenerationJobs_Structure` (a run at
   the checkpoint has something to review; an approval names a structure),
-  `CK_ContentGenerationJobs_Counters` (non-negative), `CK_ContentGenerationJobs_Input` (non-blank
+  `CK_ContentGenerationJobs_Counters` (non-negative, and since 40.28 `StructuredMaterialLength ≤
+  length(SourceMaterial)` — it is a substring offset the worker slices with, and past the end of the
+  string that slice throws inside a background job), `CK_ContentGenerationJobs_Input` (non-blank
   title and material — an empty one can only fail, and would fail after paying for a call).
 
 **`ProducedLessonId` is not a foreign key and never can be.** `Lessons` is a content table under an
@@ -1762,3 +1770,14 @@ lesson.
 
 Migration: `AddContentGenerationJobs` (2026-08-18). Creates the table empty — no backfill, no
 maintenance window, no concurrent-index script, for the sixth block in a row and for the same reason.
+
+Migration: `AddContentGenerationSufficiency` (2026-08-18, Phase 40.28). Adds the two columns,
+recreates `CK_..._Status` (sixth state) and `CK_..._Counters` (the new column) — Postgres has no
+`ALTER CONSTRAINT` for a `CHECK` expression — and adds `CK_..._Insufficiency`. **No index and no
+concurrent-index script**, and that is a decision: the only query filtering on the new state is the
+administrator's list, already served by `(OrganizationId, Status, CreatedAt)`, and nothing queries
+*inside* the `Insufficiency` document — it is read whole, so a GIN index on it would be maintenance
+nobody reads. Both `ADD COLUMN`s are metadata-only (a nullable column, and a non-volatile default),
+so the table is not rewritten. The `Down` migration moves any `insufficient` row back to
+`awaiting_review` or `structuring` before narrowing the status vocabulary, because a down migration
+that leaves a table unable to accept its own constraint is one nobody can run.

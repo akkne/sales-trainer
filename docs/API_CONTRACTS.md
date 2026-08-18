@@ -2097,7 +2097,7 @@ Syntax, fallbacks and the render-on-read rule: [CONTENT_PARAMETERIZATION.md](CON
 
 ---
 
-## Admin content pipeline (Phase 40.27, learning-service)
+## Admin content pipeline (Phases 40.27–40.28, learning-service)
 
 The РОП's «структурировать → **остановиться** → сгенерировать» run. Every route is
 `RequireOrgAdmin` and carries `[TenantTransaction]`; the organization comes from the
@@ -2112,9 +2112,10 @@ Full description of the pipeline and why the stop is the whole feature:
 |---|---|---|---|
 | GET | /admin/content-generation?status= | — | `ContentGenerationJobSummaryDto[]`, newest first |
 | GET | /admin/content-generation/{jobId} | — | `ContentGenerationJobDto` or `404` |
-| POST | /admin/content-generation | `{title, material}` | `201` + `ContentGenerationJobDto` (status `structuring`) |
-| PUT | /admin/content-generation/{jobId}/structure | `ContentStructureDto` | `ContentGenerationJobDto`, `409` outside `awaiting_review` |
-| POST | /admin/content-generation/{jobId}/approve | — | `ContentGenerationJobDto` (status `generating`) |
+| POST | /admin/content-generation | `{title, material}` | `201` + `ContentGenerationJobDto` (status `structuring`, or **`insufficient`** — 40.28) |
+| PUT | /admin/content-generation/{jobId}/structure | `ContentStructureDto` | `ContentGenerationJobDto`, `409` outside `awaiting_review` / `insufficient` |
+| POST | /admin/content-generation/{jobId}/material | `{material}` | **40.28** — `ContentGenerationJobDto`, `409` unless the run is `insufficient` |
+| POST | /admin/content-generation/{jobId}/approve | — | `ContentGenerationJobDto` (status `generating`), `409` + `insufficiency` if the structure is too thin |
 | POST | /admin/content-generation/{jobId}/retry | — | `ContentGenerationJobDto`, `409` unless the run failed |
 
 ```jsonc
@@ -2135,13 +2136,35 @@ Full description of the pipeline and why the stop is the whole feature:
   "id": "…", "title": "…", "status": "awaiting_review",
   "sourceMaterial": "…",
   "structure": { /* ContentStructureDto */ },        // null until structuring returns
+  "insufficiency": null,                             // 40.28 — non-null iff status is "insufficient"
   "structuredAt": "…", "approvedAt": null,
   "producedLessonId": null, "producedLessonVersionId": null,
   "producedExerciseCount": 0, "generatedAt": null,
   "failureReason": null,
   "createdAt": "…", "updatedAt": "…"
 }
+
+// ContentInsufficiencyDto (Phase 40.28) — the refusal, as a list the screen can render as
+// bullets. `code` is what the UI keys off; `message` is what the РОП reads.
+{
+  "stage": "structure",                              // or "material" — see below
+  "gaps": [
+    { "code": "no_objections",
+      "message": "В материале нет ни одного возражения клиента. Добавьте примеры возражений, которые менеджеры слышат чаще всего, или запись звонка, где они звучат." }
+  ],
+  "note": "…"                                        // the model's own reasoning, diagnostic only
+}
 ```
+
+`code` is one of a closed vocabulary — `off_topic`, `too_short`, `no_product`, `no_icp`,
+`no_objections`, `no_script`, `no_examples` — and a code outside it is dropped rather than shown. The
+sentence per code is fixed and written on the server, never by the model: a model-authored refusal
+is a different sentence every run, is untranslatable, and occasionally demands something the product
+cannot accept.
+
+`ContentGenerationJobSummaryDto` carries `insufficiency` too, unlike the material and the structure:
+it is the reason the run is sitting there, and a list that shows `insufficient` without saying what
+is missing sends the administrator into a detail screen for every refused run.
 
 Behaviour a caller can observe, and each of these is a decision:
 
@@ -2151,10 +2174,26 @@ Behaviour a caller can observe, and each of these is a decision:
 - **`approve` is idempotent by state.** Approving a run that is already `generating` or `completed`
   returns it unchanged rather than re-queueing it — a double-clicked button must not buy two lessons.
   Approving a `structuring` or `failed` run is `409`.
-- **`400` on start** when `material` is under 200 characters or over 60 000, or `title` is blank.
-  The floor is a length, not a judgement: «не хватает примеров возражений» is roadmap 40.28.
-- **`400` on approve** when the structure has no product, no ICP, no objections and no script
-  stages — there would be nothing to generate from.
+- **`400` on start** only when `material` is empty or over 60 000 characters, or `title` is blank.
+  **Thin material is not a `400` (40.28)** — it is a run in the `insufficient` state carrying
+  `insufficiency`. A `400` would make the РОП start over and re-pay for structuring the deck they
+  already uploaded, and «добавьте примеры возражений или запись звонка» is worth more to them than
+  the error was.
+- **The threshold has two stages** (40.28). `stage: "material"` means it was decided from the text
+  itself, before anything was sent to a model — under ~400 characters or 60 words, or not a single
+  word in the whole document that belongs to selling. `stage: "structure"` means the material was
+  read properly and what came back was too thin to build four good exercises from: no objections
+  *and* no script stages, or no product *and* no ICP. The model's own verdict rides the same
+  structuring call and can **add** a refusal (it is the only judge that recognises a recipe
+  mentioning a price) but never lift one.
+- **A refusal is arguable, and arguing with it is cheap.** `POST …/material` appends text and puts
+  the run back to `structuring`; the next call reads only what was added, alongside the structure
+  already extracted. `PUT …/structure` is also open on a refused run, so somebody who knows the four
+  objections may simply type them — the edited structure is re-inspected, and an edit that leaves it
+  just as empty leaves the run refused.
+- **`409` on approve** when the structure is too thin, with `{message, insufficiency}`. The run is
+  moved to `insufficient` *before* the error is returned, so a screen that polls sees the same list
+  without having caught anything.
 - **Every value in a structure is bounded** at 2000 characters and every list is capped, on write and
   on read, matching the 40.19 render path's caps.
 - **The produced lesson arrives archived.** `producedLessonId` names a real `Lesson` with real
