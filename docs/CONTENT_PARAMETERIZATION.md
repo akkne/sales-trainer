@@ -28,6 +28,30 @@ substitution.
 One base lesson serves every customer. The customer fills in a form
 (`PUT /organizations/profile`), and the placeholders in the base text resolve from it.
 
+### 1.1 …except that nobody fills in the form (Phase 40.29)
+
+The sentence above hides the assumption the whole feature rests on. The profile is seven fields, three
+of them lists and one a dictionary — thirty-odd inputs in practice, presented to a sales manager on
+their first day with the product. **If it stays empty, everything on this page renders the fallback**,
+and the customer reads the library exactly as it read before 40.19 shipped. The parameterization is
+not degraded in that case; it is simply absent.
+
+40.29 is the block that makes filling it realistic, and it does not add a placeholder, a fallback or a
+render site. It adds a second way into the same row:
+
+- `GET /organizations/profile/gaps` — three questions at a time, ordered so the ones that unblock this
+  page come first. `isReadyForParameterization` is the flag to watch: it is true once `product`, `icp`
+  and at least three objections exist, which is the point at which a base lesson starts reading as the
+  customer's own.
+- `PATCH /organizations/profile` — one answer, one field, without a read-modify-write of the other six.
+- `POST /organizations/profile/draft` / `…/draft/apply` — the structure the 40.27 content pipeline
+  already extracted from the customer's product deck and call script, merged into the profile
+  field by field.
+
+The merge policy is in [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029);
+the one line worth repeating here is that **`banned_claims` is never replaced, only added to**, because
+§4 below is the reason a regulated customer signs at all.
+
 ---
 
 ## 2. The syntax

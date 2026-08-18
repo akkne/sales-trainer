@@ -1658,14 +1658,28 @@ raw SQL string concatenation. Shape per
 `ObjectionsJson` is `[{text, frequency?, bestResponse?}]`, `ScriptJson` is an ordered array of call
 stage names, `GlossaryJson` is a flat string→string map.
 
+**Phase 40.29 added no column, no constraint and no migration to this table**, which is worth stating
+because the block it belongs to («профиль компании как интервью, а не форма») looks like a schema
+change and is not one. What was added lives entirely above the row: a merge policy, a closed list of
+seven questions, and four routes on the existing controller. In particular the interview keeps no
+state of its own — which question was asked, which was skipped, whether a draft was ever promoted. All
+of that is derivable from the columns above by looking at which of them are empty, and a table
+recording it would be a second source of truth about the same seven fields, drifting the first time
+somebody edited the profile through the plain `PUT`. **There is therefore no
+`docs/TENANCY/sql/40.29_*.sql`**: no index to build concurrently, nothing to backfill, and no
+migration to sequence against a deployment.
+
 **RLS:** `EnableTenantRls("OrganizationProfiles")` in `InitialOrganizationSchema` — `ENABLE`/`FORCE`
 row-level security with a `USING`/`WITH CHECK` policy on `OrganizationId = current_setting('app.organization_id', ...)`.
 Also protected by the EF query filter and the Stage A `TenantSaveChangesInterceptor` write guard.
 `OrganizationProfileController` gates access with `[TenantScoped]`, so a request with no
 `X-Organization-Id` header never reaches the service layer at all.
 
-**Replicated since Phase 40.19.** Every successful `PUT /organizations/profile` publishes
-`organization.profile.updated` (after the commit, with the whole profile in the payload), and
+**Replicated since Phase 40.19.** Every successful write of this row publishes
+`organization.profile.updated` (after the commit, with the whole profile in the payload) — since
+40.29 that is three routes, not one: `PUT /organizations/profile`, `PATCH /organizations/profile` and
+`POST /organizations/profile/draft/apply`, all of which go through a single write path in
+`OrganizationProfileService` for exactly this reason. learning-service and
 learning-service and ai-service each project it into a local `OrganizationProfileReplicas` table with
 the same columns. That is what lets `{{organization.*}}` placeholders resolve without a cross-service
 call on the read path of every lesson and every persona reply — see

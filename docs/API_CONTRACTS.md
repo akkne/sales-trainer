@@ -2095,6 +2095,65 @@ resolve out of it in lesson text, exercise content, grading prompts and persona 
 
 Syntax, fallbacks and the render-on-read rule: [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
 
+### Organization profile as an interview (Phase 40.29, tenant-scoped)
+
+Four routes on the same row, and they exist because nobody fills in a thirty-field form. An empty
+profile is not a cosmetic problem — it is the state in which 40.19's substitution does nothing at all,
+so every lesson in the product reads as the neutral fallback. See
+[ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /organizations/profile/gaps?limit=3 | — | `OrganizationProfileGapsDto` |
+| PATCH | /organizations/profile | `PatchOrganizationProfileRequestDto` | `OrganizationProfileDto` |
+| POST | /organizations/profile/draft | `ExtractedProfileDraftDto` | `OrganizationProfileDraftPreviewDto` |
+| POST | /organizations/profile/draft/apply | `ApplyOrganizationProfileDraftRequestDto` | `OrganizationProfileDraftAppliedDto` |
+
+**Authorization.** `GET …/gaps` and `POST …/draft` are `[Authorize]` only, like `GET`: neither writes
+anything. `PATCH` and `POST …/draft/apply` additionally require `RequireOrgAdmin` — they are the two
+routes on this controller that can change what every lesson in the organization says. The plain `PUT`
+is still reachable by any authenticated member; that predates 40.29 and is recorded in
+[DONT_FORGET.md](DONT_FORGET.md) rather than closed here.
+
+- `OrganizationProfileGapsDto`: `{questions: [{code, question, priority}], totalGapCount, blockingGapCount, isReadyForParameterization}`.
+  Codes: `product`, `icp`, `objections`, `script_stages`, `tone`, `banned_claims`, `glossary` — a
+  closed list, in asking order. `priority` is `blocking` / `important` / `optional`; **`blocking` means
+  `{{organization.*}}` renders the fallback until it is answered**, and `isReadyForParameterization`
+  is exactly `blockingGapCount == 0`. `questions` is capped (default 3, maximum 7) and
+  `totalGapCount` is not, so a screen can show three and still say «осталось ещё 4». A gap is
+  reported for fewer than 3 objections and fewer than 3 script stages, not merely for zero.
+  **Never 404**: an organization that has never saved a profile gets all seven questions.
+- `PatchOrganizationProfileRequestDto`: the `PUT` body with every field optional. **An omitted field
+  keeps its stored value.** There is no way to *clear* a field here — `null` already means «не
+  отвечал» — so clearing stays on the whole-row `PUT`.
+- `ExtractedProfileDraftDto`: `{product?, icp?, tone?, objections?: [{text, bestResponse?}], scriptStages?: string[], glossary?: {[term]: string}, bannedClaims?: string[]}` —
+  learning-service's `ContentStructureDto`, field for field, redeclared rather than shared (same rule
+  as `MaterialGapCodes`). **There is no `jobId`:** the caller reads the structure off
+  `GET /admin/content-generation/{jobId}` and posts it here, so organization-service stays the only
+  writer of the profile. That adds no authority — the same administrator can already `PUT` an
+  arbitrary structure onto the run and an arbitrary profile onto this row.
+- `OrganizationProfileDraftPreviewDto`: `{fields: [{field, decision, currentValue?, suggestedValue?, addedItemCount}], conflictCount, gapsAfterApply}`.
+  Writes nothing. `decision` is `unchanged` / `fill` / `conflict` / `extend`. The preview is planned
+  with **every** overwritable field accepted, because its job is to show the most the draft could do.
+- `ApplyOrganizationProfileDraftRequestDto`: `{draft, acceptedFields?: string[]}`. `acceptedFields`
+  accepts only `product`, `icp`, `tone`, `script_stages`; anything else is dropped silently. Omitting
+  it is the safe default and the expected case. `400` if `draft` is missing.
+- `OrganizationProfileDraftAppliedDto`: `{profile, appliedFields, gaps}` — the write and the next
+  round of the interview in one response, so the screen does not need a second round trip between
+  «ИИ заполнил профиль» and «остался один вопрос».
+
+**The merge policy, which is the contract that matters:**
+
+| Field | What apply does | Consent needed |
+|---|---|---|
+| `product`, `icp`, `tone`, `scriptStages` | fills if empty; **keeps the existing value** if not | yes — name it in `acceptedFields` |
+| `objections` | union by text (case-insensitive); an existing entry wins, keeping its `frequency` | no — nothing is lost |
+| `glossary` | adds unknown terms; an existing term keeps its definition | no |
+| `bannedClaims` | union, add-only | **impossible** — no `acceptedFields` value can delete one |
+
+`POST …/draft/apply` publishes `organization.profile.updated` like every other save, so the 40.19
+replicas learn about a promoted draft the same way they learn about a form submission.
+
 ---
 
 ## Admin content pipeline (Phases 40.27–40.28, learning-service)
