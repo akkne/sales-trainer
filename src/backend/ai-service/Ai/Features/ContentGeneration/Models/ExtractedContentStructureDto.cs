@@ -9,7 +9,15 @@ namespace Sellevate.Ai.Features.ContentGeneration.Models;
 /// whatever they had — three slides, a call script, a page of notes — and a model that has to invent
 /// an ICP because the contract says the field is required produces exactly the confident nonsense the
 /// checkpoint exists to catch. An empty field is a question the review screen asks; a fabricated one
-/// is a lie the review screen ratifies. Refusing outright when the material is too thin is 40.28.
+/// is a lie the review screen ratifies.
+/// </para>
+///
+/// <para>
+/// Phase 40.28 is what happens when the gaps add up: this record still describes only what was found,
+/// and the judgement «этого мало, чтобы что-то генерировать» travels beside it in
+/// <see cref="MaterialSufficiencyDto"/>. Keeping the two apart is what lets the extraction stay
+/// honest — a model asked to both find nothing and justify finding nothing would start finding
+/// things.
 /// </para>
 ///
 /// <para>

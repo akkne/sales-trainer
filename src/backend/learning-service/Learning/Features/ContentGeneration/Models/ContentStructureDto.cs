@@ -61,9 +61,14 @@ public sealed record ContentStructureDto(
     }
 
     /// <summary>
-    /// True when there is nothing in here worth generating from. Used to refuse approval of an empty
-    /// checkpoint rather than to spend a generation call producing exercises about nothing. The
-    /// richer judgement — «этого материала мало, добавьте примеры возражений» — is 40.28.
+    /// True when there is nothing in here at all. Used to decide whether a structure is worth sending
+    /// to the model as a seed — an empty one is sent as nothing rather than as an object of nulls.
+    ///
+    /// <para>
+    /// It is <b>not</b> the sufficiency threshold. «Есть хоть что-то» and «хватит ли этого на четыре
+    /// хороших упражнения» are different questions, and 40.28 answers the second one in
+    /// <c>ContentSufficiencyInspector</c>, which is what approval consults.
+    /// </para>
     /// </summary>
     public bool IsEmpty
         => string.IsNullOrWhiteSpace(Product)
