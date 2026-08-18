@@ -100,13 +100,14 @@ internal sealed class ContentGenerationStepRunner(
     private async Task<IReadOnlyList<Guid>> FindClaimableJobIdsAsync(CancellationToken cancellationToken)
     {
         var leaseExpiry = DateTime.UtcNow.AddMinutes(-Math.Clamp(options.Value.ClaimLeaseMinutes, 1, 120));
+        var maximumAttempts = options.Value.MaximumAttempts;
 
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         return await databaseContext.ContentGenerationJobs
             .AsNoTracking()
             .Where(job => ContentGenerationJobStatuses.WorkerOwned.Contains(job.Status)
-                          && job.Attempts < options.Value.MaximumAttempts
+                          && job.Attempts < maximumAttempts
                           && (job.ClaimedAt == null || job.ClaimedAt < leaseExpiry))
             .OrderBy(job => job.CreatedAt)
             .Take(Math.Clamp(options.Value.MaximumJobsPerTick, 1, 20))
