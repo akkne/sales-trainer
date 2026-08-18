@@ -172,29 +172,64 @@ internal sealed class ContentGenerationStepRunner(
                 claimedJob.ProducedLessonId);
     }
 
+    /// <summary>
+    /// Reads the material and writes back a structure, in one paid call.
+    ///
+    /// <para>
+    /// <b>A refused run that has since been given more material is resumed, not restarted</b>
+    /// (Phase 40.28). Only the part nobody has read yet is sent, and what is already known travels as
+    /// the known structure the prompt is told to keep rather than rewrite. A sales lead arguing with
+    /// «нет ни одного возражения» pays for reading their objections list, not for reading the
+    /// fifty-page deck a second time.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The seed comes from the organization profile</b> so a customer who already filled the form in
+    /// is not asked the same seven questions again, and so the model is told to fill gaps rather than
+    /// contradict a human. An empty profile is sent as nothing at all rather than as an object of
+    /// nulls. On a resumed run the seed is the run's own structure instead — it already contains the
+    /// profile's contribution and, more importantly, the reviewer's.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The profile branch must normalize too, and once did not</b> (found in the 40.34 review).
+    /// Deserialize already applied the caps but <c>FromProfile</c> did not, and the profile columns are
+    /// unbounded <c>text</c>/<c>jsonb</c> — so a multi-megabyte product description or a
+    /// five-thousand-entry glossary went straight into the prompt of <i>every</i> generation call the
+    /// organization made, burning its whole monthly token allowance in a handful of runs. The caps
+    /// belong to the structure, not to the route the structure arrived by.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Stage two of the threshold runs here: the structure is the honest signal.</b> Length said the
+    /// material was worth reading; what could actually be read out of it says whether four good
+    /// exercises can be built. The model's opinion arrives in the same completion and may <i>add</i> a
+    /// refusal — it is the only judge able to recognise a recipe that happens to mention a price — but
+    /// it cannot lift one, or a confident completion would be all it took to bypass the threshold.
+    /// </para>
+    ///
+    /// <para>
+    /// The run's state is re-checked after the call, because somebody could have retried or the row
+    /// could have moved on while it was in flight: writing a structure over a state that is no longer
+    /// <c>structuring</c> would overwrite a reviewer's edit with the model's first draft. The read
+    /// length is recorded whichever way the verdict went — the material has been read and paid for,
+    /// and that record is what stops a resumed run from reading it again.
+    /// </para>
+    ///
+    /// <para>
+    /// A refusal is logged at Information, not Warning: refusing thin material is the feature working,
+    /// not a fault. A run of these lines against one organization is, however, the signal that their
+    /// onboarding never told them what to upload.
+    /// </para>
+    /// </summary>
     private async Task RunStructuringAsync(
         ClaimedContentGenerationJob claim,
         CancellationToken cancellationToken)
     {
-        // Phase 40.28. A run that was refused and has since been given more material is resumed, not
-        // restarted: only the part of the material nobody has read yet is sent, and what is already
-        // known travels as the known structure the prompt is told to keep rather than rewrite. A РОП
-        // arguing with «нет ни одного возражения» pays for reading their objections list, not for
-        // reading the fifty-page deck a second time.
         var alreadyStructuredLength = Math.Clamp(
             claim.StructuredMaterialLength, 0, claim.SourceMaterial.Length);
         var materialToRead = claim.SourceMaterial[alreadyStructuredLength..];
 
-        // Seeded from the profile so a customer who already filled the form in is not asked the same
-        // seven questions again, and so the model is told to fill gaps rather than to contradict a
-        // human. An empty profile is sent as nothing at all rather than as an object of nulls. On a
-        // resumed run the seed is the run's own structure instead — it already contains the profile's
-        // contribution and, more importantly, the reviewer's.
-        // Normalize on the profile branch too. Deserialize already applies it, but FromProfile did
-        // not, and the profile columns are unbounded `text`/`jsonb` — so a multi-megabyte `product`
-        // or a five-thousand-entry glossary went straight into the prompt of every generation call
-        // this organization made, burning its whole monthly token allowance in a handful of runs.
-        // The caps belong to the structure, not to the route the structure arrived by. Review, 40.34.
         var knownStructure = claim.Structure is not null
             ? ContentStructureDocumentSerializer.Deserialize(claim.Structure)
             : ContentStructureDocumentSerializer.Normalize(
@@ -207,11 +242,6 @@ internal sealed class ContentGenerationStepRunner(
 
         var structure = structured.Structure ?? ContentStructureDto.Empty;
 
-        // Phase 40.28, stage two: the structure is the honest signal. Length said the material was
-        // worth reading; what could actually be read out of it says whether four good exercises can
-        // be built. The model's opinion arrived in the same completion and can add a refusal here —
-        // it is the only judge able to recognise a recipe that happens to mention a price — but it
-        // cannot lift one, or a confident completion would be all it took to bypass the threshold.
         var insufficiency = ContentSufficiencyInspector.InspectStructure(structure, structured.Sufficiency);
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
@@ -219,9 +249,6 @@ internal sealed class ContentGenerationStepRunner(
         var job = await databaseContext.ContentGenerationJobs
             .FirstOrDefaultAsync(candidate => candidate.Id == claim.JobId, cancellationToken);
 
-        // Somebody could have retried or the row could have moved on while the call was in flight.
-        // Writing a structure over a state that is no longer structuring would overwrite a reviewer's
-        // edit with the model's first draft.
         if (job is null || job.Status != ContentGenerationJobStatuses.Structuring)
         {
             return;
@@ -231,8 +258,6 @@ internal sealed class ContentGenerationStepRunner(
         job.Structure = ContentStructureDocumentSerializer.Serialize(structure);
         job.StructuredAt = now;
 
-        // Recorded whichever way the verdict went: the material has been read and paid for, and if
-        // the run is refused and later resumed, this is what stops it being read again.
         job.StructuredMaterialLength = job.SourceMaterial.Length;
 
         job.Status = insufficiency is null
@@ -258,9 +283,6 @@ internal sealed class ContentGenerationStepRunner(
         }
         else
         {
-            // Logged at Information, not Warning: refusing thin material is the feature working, not
-            // a fault. A run of these lines against one organization is, however, the signal that
-            // their onboarding never told them what to upload.
             logger.LogInformation(
                 "Content generation run refused for thin material JobId={JobId} Gaps={Gaps} ModelNote={ModelNote}",
                 claim.JobId,
@@ -269,6 +291,23 @@ internal sealed class ContentGenerationStepRunner(
         }
     }
 
+    /// <summary>
+    /// Turns an approved structure into a lesson, in one paid call.
+    ///
+    /// <para>
+    /// <b>The cost guard is re-read after the call, not before it.</b> A lease that expired while a
+    /// long call was in flight lets a second tick pick the run up, and this is where the loser finds
+    /// out: a run that already holds a lesson id has been paid for, and writing a second lesson would
+    /// bill the customer twice for one approval. The pre-call case cannot arise —
+    /// <c>CK_ContentGenerationJobs_Produced</c> forbids a lesson id outside the completed state.
+    /// </para>
+    ///
+    /// <para>
+    /// If everything the model returned fails validation, that is a <b>failure, not an empty
+    /// success</b>: a completed run pointing at a lesson with no exercises is the worst of both — it
+    /// looks finished and teaches nothing.
+    /// </para>
+    /// </summary>
     private async Task RunGenerationAsync(
         ClaimedContentGenerationJob claim,
         CancellationToken cancellationToken)
@@ -287,11 +326,6 @@ internal sealed class ContentGenerationStepRunner(
         var job = await databaseContext.ContentGenerationJobs
             .FirstOrDefaultAsync(candidate => candidate.Id == claim.JobId, cancellationToken);
 
-        // The cost guard, re-read after the call rather than before it. A lease that expired while a
-        // long call was in flight lets a second tick pick the run up, and this is where the loser
-        // finds out: a run that already holds a lesson id has been paid for, and writing a second
-        // lesson would bill the customer twice for one approval. (The pre-call case cannot arise —
-        // CK_ContentGenerationJobs_Produced forbids a lesson id outside the completed state.)
         if (job is null || job.Status != ContentGenerationJobStatuses.Generating || job.ProducedLessonId is not null)
         {
             return;
@@ -300,9 +334,6 @@ internal sealed class ContentGenerationStepRunner(
         var lesson = await WriteGeneratedLessonAsync(job, generatedLesson, cancellationToken);
         if (lesson is null)
         {
-            // Everything the model returned failed validation. That is a failure, not an empty
-            // success: a "completed" run pointing at a lesson with no exercises is the worst of both
-            // — it looks finished and teaches nothing.
             throw new InvalidOperationException(
                 "No generated exercise passed content validation; nothing was written.");
         }
@@ -347,6 +378,10 @@ internal sealed class ContentGenerationStepRunner(
     /// it is the ordinary <c>PUT /admin/lessons/{id}</c>.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// The slug is derived from the run's own id, so it is unique per organization by construction and
+    /// never needs a retry loop — the same call <c>LessonSlugGenerator</c> makes, for the same reason.
+    /// </remarks>
     private async Task<GeneratedLessonWriteResult?> WriteGeneratedLessonAsync(
         ContentGenerationJob job,
         AiGeneratedLesson generatedLesson,
@@ -387,9 +422,6 @@ internal sealed class ContentGenerationStepRunner(
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
             SkillId = skill.Id,
-            // Derived from the run's own id, so it is unique per organization by construction and
-            // never needs a retry loop — the call LessonSlugGenerator makes for slugs, for the same
-            // reason.
             IconicName = $"generated-{job.Id:N}",
             Title = job.Title,
             OrderInSkill = await NextTopicOrderAsync(skill.Id, cancellationToken)
@@ -477,13 +509,20 @@ internal sealed class ContentGenerationStepRunner(
     /// Records why the attempt failed and, when the budget is spent, hands the run back to a person.
     /// The lease is released either way so the next tick can retry within the budget.
     /// </summary>
+    /// <remarks>
+    /// The change tracker is cleared first. The failed step may have left half a lesson in it after its
+    /// own transaction rolled back, and saving without clearing would try to insert those rows again
+    /// into a run that just failed — a torn lesson nobody asked for, attached to nothing.
+    ///
+    /// <para>
+    /// The failure path failing must not take the sweep down for every other run in the organization;
+    /// the lease releases this one on its own.
+    /// </para>
+    /// </remarks>
     private async Task RecordFailureAsync(Guid jobId, string reason, CancellationToken cancellationToken)
     {
         try
         {
-            // The failed step may have left half a lesson in the change tracker after its transaction
-            // rolled back. Saving here without clearing would try to insert those rows again, into a
-            // run that just failed — a torn lesson nobody asked for, attached to nothing.
             databaseContext.ChangeTracker.Clear();
 
             await using var tenantScope =
@@ -512,8 +551,6 @@ internal sealed class ContentGenerationStepRunner(
         }
         catch (Exception exception)
         {
-            // The failure path failing must not take the sweep down for every other run in the
-            // organization; the lease will release this one on its own.
             logger.LogError(exception, "Could not record a content generation failure for JobId={JobId}", jobId);
         }
     }

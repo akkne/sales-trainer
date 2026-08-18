@@ -100,6 +100,12 @@ internal static class ContentSufficiencyInspector
     /// Stage one: the text itself, before a single token is paid for. Returns <see langword="null"/>
     /// when there is nothing to complain about yet — which is not a promise that the material is
     /// good, only that it is worth reading.
+    ///
+    /// <para>
+    /// The two tests are ordered, not independent. Off-topic is asked only once the volume test has
+    /// passed, because refusing a two-line note for being off-topic would be true and useless:
+    /// «добавьте материала» is the sentence that actually helps its author.
+    /// </para>
     /// </summary>
     public static ContentInsufficiencyDto? InspectMaterial(string material)
     {
@@ -110,8 +116,6 @@ internal static class ContentSufficiencyInspector
             return Refusal(ContentInsufficiencyDto.MaterialStage, [ContentSufficiencyCodes.TooShort], note: null);
         }
 
-        // Only asked once the volume test has passed: refusing a two-line note for being off-topic
-        // would be true and useless, and «добавьте материала» is the sentence that actually helps.
         if (!ContainsSalesVocabulary(text))
         {
             return Refusal(ContentInsufficiencyDto.MaterialStage, [ContentSufficiencyCodes.OffTopic], note: null);
@@ -123,6 +127,22 @@ internal static class ContentSufficiencyInspector
     /// <summary>
     /// Stage two: what was actually read out of the material, plus the model's opinion of the
     /// material it read. Returns <see langword="null"/> when the run may proceed to the checkpoint.
+    ///
+    /// <para>
+    /// The structure has to answer two questions, and each is satisfied by either of a pair.
+    /// <b>Something to teach about:</b> a structure that knows the product but not the buyer still
+    /// supports exercises, and so does the reverse — only lacking both refuses.
+    /// <b>Something to drill:</b> objections and a script are the two shapes a sales exercise takes;
+    /// with neither, generation has a topic and no task, and produces the fifteen bland exercises
+    /// this block exists to prevent.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>An unjustified refusal from the model is dropped on purpose.</b> A verdict that says
+    /// «недостаточно» without naming anything gives the customer nothing to do, and an unactionable
+    /// refusal is the one thing this block must never produce — so it is treated as no opinion at
+    /// all rather than as a reason to stop.
+    /// </para>
     /// </summary>
     /// <param name="verdict">
     /// The structuring call's verdict, or <see langword="null"/> when there is none — which is the
@@ -139,17 +159,12 @@ internal static class ContentSufficiencyInspector
 
         var codes = new List<string>();
 
-        // Something to teach about. Either half answers it: a structure that knows the product but
-        // not the buyer still supports exercises, and so does the reverse.
         if (string.IsNullOrWhiteSpace(structure.Product) && string.IsNullOrWhiteSpace(structure.Icp))
         {
             codes.Add(ContentSufficiencyCodes.NoProduct);
             codes.Add(ContentSufficiencyCodes.NoIcp);
         }
 
-        // Something to drill. Objections and a script are the two shapes a sales exercise takes; with
-        // neither, generation has a topic and no task, and produces the fifteen bland exercises this
-        // block exists to prevent.
         if (structure.Objections.Count < MinimumObjectionCount
             && structure.ScriptStages.Count < MinimumScriptStageCount)
         {
@@ -164,9 +179,6 @@ internal static class ContentSufficiencyInspector
                 codes.Add(ContentSufficiencyCodes.OffTopic);
             }
 
-            // An unjustified refusal is dropped on purpose. A model that says «недостаточно» without
-            // naming anything gives the customer nothing to do, and an unactionable refusal is the
-            // one thing this block must never produce — so it is treated as no opinion at all.
             if (!verdict.IsSufficient)
             {
                 codes.AddRange(verdict.MissingCodes);
