@@ -240,7 +240,7 @@ One route, and it is the only thing in identity-service that another service may
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/internal/memberships/active` | `{ userIds: uuid[] }` — active memberships of the organization named in `X-Organization-Id` |
+| GET | `/internal/memberships/active` | `{ userIds: uuid[], administratorUserIds: uuid[] }` — active memberships of the organization named in `X-Organization-Id`, and (40.26) the subset of them holding `TenancyAdmin` / `TenancySuperAdmin` |
 
 It exists because learning-service has to turn an assignment's audience **rule** (`whole_team`, a
 list of people, a group) into named people, and it cannot: learning-db holds only the
@@ -253,9 +253,23 @@ on.
 
 Three properties are load-bearing and should survive any change to this route:
 
-- **Ids only.** No names, no emails, no roles. The caller already has display names in its own user
-  replica, so returning a directory here would put employee data behind a shared-secret header for
-  no gain.
+- **Ids only.** No names, no emails. The caller already has display names in its own user replica, so
+  returning a directory here would put employee data behind a shared-secret header for no gain.
+
+  **Phase 40.26 added a second list of ids and deliberately not a role per member.** learning-service
+  has to address a notice to whoever runs the organization — the day-before digest of who has not
+  started, and a manager's disputed score — and 40.25 recorded that it could not, because this route
+  answered with ids and nothing else. The narrowest widening that answers the question is
+  `administratorUserIds`: a subset of `userIds`, computed here where the roles live. A `role` field
+  on every member would have answered the same question by publishing the organization's whole role
+  directory to any service holding the shared secret, and the callers do not need it — nothing in
+  learning-service asks "is this person a manager", only "who should hear about this". Both tenancy
+  administrator roles qualify: they differ only in who may add and remove people, and that
+  distinction has nothing to do with who should be told the team is missing a deadline.
+
+  A caller reading an older identity-service sees the field absent, which is **not** the same as an
+  empty list — see `OrganizationRoster` in learning-service, which keeps the two apart so a rolling
+  deploy cannot silently swallow a digest.
 - **Active memberships only.** Leaving an organization is `status = deactivated`, never a row
   deletion (Phase 40.7). Without this filter every assignment issued after somebody's last day would
   still be issued to them — an email to an ex-employee, and a permanent "has not started" row on the
