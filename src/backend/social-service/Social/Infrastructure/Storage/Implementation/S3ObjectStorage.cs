@@ -7,6 +7,16 @@ using Sellevate.Social.Infrastructure.Storage.Abstract;
 
 namespace Sellevate.Social.Infrastructure.Storage.Implementation;
 
+/// <summary>
+/// S3-compatible object storage — MinIO in every environment the platform runs today, which is why
+/// path-style addressing and an explicit endpoint are configurable rather than assumed.
+///
+/// <para>
+/// Registered as a singleton: the underlying client is thread-safe, holds the connection pool, and is
+/// deliberately built once. It carries no tenant state, so a singleton is safe here in a way it would
+/// not be for anything reading <c>ITenantContext</c>.
+/// </para>
+/// </summary>
 internal sealed class S3ObjectStorage : IObjectStorage
 {
     private readonly IAmazonS3 _client;
@@ -22,7 +32,7 @@ internal sealed class S3ObjectStorage : IObjectStorage
             BuildClientConfiguration(configuration));
     }
 
-    public static AmazonS3Config BuildClientConfiguration(S3Configuration configuration) =>
+    private static AmazonS3Config BuildClientConfiguration(S3Configuration configuration) =>
         new AmazonS3Config
         {
             ServiceURL = configuration.Endpoint,
@@ -30,6 +40,10 @@ internal sealed class S3ObjectStorage : IObjectStorage
             AuthenticationRegion = configuration.Region
         };
 
+    /// <summary>
+    /// Creates the bucket, treating "it already exists and is mine" as success — two services booting
+    /// against the same MinIO must both survive the race.
+    /// </summary>
     public async Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -60,6 +74,10 @@ internal sealed class S3ObjectStorage : IObjectStorage
         await _client.PutObjectAsync(putObjectRequest, cancellationToken);
     }
 
+    /// <summary>
+    /// Copies the object into memory rather than handing back the network stream, so the response is
+    /// not still reading from storage after this method's cancellation token is gone.
+    /// </summary>
     public async Task<Stream> GetAsync(string key, CancellationToken cancellationToken = default)
     {
         var response = await _client.GetObjectAsync(_bucket, key, cancellationToken);
@@ -68,32 +86,6 @@ internal sealed class S3ObjectStorage : IObjectStorage
         await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
         memoryStream.Position = 0;
         return memoryStream;
-    }
-
-    public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
-            return true;
-        }
-        catch (AmazonS3Exception amazonS3Exception) when (amazonS3Exception.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-    }
-
-    public async Task<string?> TryGetETagAsync(string key, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var metadata = await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
-            return metadata.ETag;
-        }
-        catch (AmazonS3Exception amazonS3Exception) when (amazonS3Exception.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
-        }
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Eventing;
+using Sellevate.Social.Features.Friends.Constants;
 using Sellevate.Social.Features.Friends.Models;
 using Sellevate.Social.Features.Friends.Services.Abstract;
 using Sellevate.Social.Identity;
@@ -34,13 +35,6 @@ internal sealed class FriendService(
     SocialDbContext databaseContext,
     ISocialEventPublisher eventPublisher) : IFriendService
 {
-    private const int MaximumSearchResultCount = 20;
-    private const string DirectionIncoming = "incoming";
-    private const string DirectionOutgoing = "outgoing";
-    private const string StatusNone = "none";
-    private const string StatusPendingOutgoing = "pending_outgoing";
-    private const string StatusPendingIncoming = "pending_incoming";
-    private const string StatusFriends = "friends";
     private const string UnknownDisplayName = "Пользователь";
 
     public async Task<List<FriendDto>> GetFriendsAsync(
@@ -112,13 +106,24 @@ internal sealed class FriendService(
                     otherUserId,
                     otherDisplayName,
                     null,
-                    isIncoming ? DirectionIncoming : DirectionOutgoing,
+                    isIncoming ? FriendRequestDirections.Incoming : FriendRequestDirections.Outgoing,
                     friendship.CreatedAt);
             })
             .OrderByDescending(request => request.CreatedAt)
             .ToList();
     }
 
+    /// <summary>
+    /// Sends, or revives, a pending request between two people. A previously declined pair is reused
+    /// rather than re-created, so declining does not block a later attempt, and the request is
+    /// re-pointed at whoever is asking this time.
+    ///
+    /// <para>
+    /// The insert is guarded because two people can ask each other at the same instant: the
+    /// canonical-pair unique index rejects the reciprocal row, and that rejection means "a request
+    /// already exists" rather than a failure worth surfacing.
+    /// </para>
+    /// </summary>
     public async Task<Friendship> SendFriendRequestAsync(
         Guid requesterId,
         Guid addresseeId,
@@ -127,13 +132,13 @@ internal sealed class FriendService(
         await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         if (requesterId == addresseeId)
-            throw new InvalidOperationException("Cannot send a friend request to yourself.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestToSelf);
 
         var addresseeExists = await databaseContext.UserReplicas
             .AnyAsync(replica => replica.UserId == addresseeId, cancellationToken);
 
         if (!addresseeExists)
-            throw new KeyNotFoundException("Target user not found.");
+            throw new KeyNotFoundException(ErrorMessages.FriendRequestTargetNotFound);
 
         var existingFriendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship =>
@@ -144,10 +149,10 @@ internal sealed class FriendService(
         if (existingFriendship is not null)
         {
             if (existingFriendship.Status == FriendshipStatus.Accepted)
-                throw new InvalidOperationException("You are already friends with this user.");
+                throw new InvalidOperationException(ErrorMessages.FriendRequestAlreadyFriends);
 
             if (existingFriendship.Status == FriendshipStatus.Pending)
-                throw new InvalidOperationException("A friend request already exists between you and this user.");
+                throw new InvalidOperationException(ErrorMessages.FriendRequestAlreadyExists);
 
             if (existingFriendship.Status == FriendshipStatus.Declined)
             {
@@ -179,12 +184,10 @@ internal sealed class FriendService(
         {
             await databaseContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
         {
-            // A concurrent request inserted the reciprocal pair (B,A) at the same instant.
-            // The canonical-pair unique index caught it — treat as "already exists".
             throw new InvalidOperationException(
-                "A friend request already exists between you and this user.", ex);
+                ErrorMessages.FriendRequestAlreadyExists, exception);
         }
 
         await scope.CommitAsync(cancellationToken);
@@ -203,13 +206,13 @@ internal sealed class FriendService(
 
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
-            ?? throw new KeyNotFoundException("Friend request not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.FriendRequestNotFound);
 
         if (friendship.AddresseeId != userId)
-            throw new InvalidOperationException("Only the addressee can accept a friend request.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestAcceptorMustBeAddressee);
 
         if (friendship.Status != FriendshipStatus.Pending)
-            throw new InvalidOperationException("This friend request is no longer pending.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestNotPending);
 
         friendship.Status = FriendshipStatus.Accepted;
         friendship.AcceptedAt = DateTime.UtcNow;
@@ -228,19 +231,25 @@ internal sealed class FriendService(
 
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
-            ?? throw new KeyNotFoundException("Friend request not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.FriendRequestNotFound);
 
         if (friendship.AddresseeId != userId)
-            throw new InvalidOperationException("Only the addressee can decline a friend request.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestDeclinerMustBeAddressee);
 
         if (friendship.Status != FriendshipStatus.Pending)
-            throw new InvalidOperationException("This friend request is no longer pending.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestNotPending);
 
         friendship.Status = FriendshipStatus.Declined;
         await databaseContext.SaveChangesAsync(cancellationToken);
         await scope.CommitAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Withdraws a request the caller sent. The row is hard-deleted rather than left as a declined
+    /// tombstone — withdrawing returns the pair to "no request ever happened", so either party may
+    /// start fresh afterwards. Declining is the opposite and keeps the row, which is what lets the
+    /// requester revive it later.
+    /// </summary>
     public async Task CancelFriendRequestAsync(
         Guid userId,
         Guid friendshipId,
@@ -250,17 +259,14 @@ internal sealed class FriendService(
 
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
-            ?? throw new KeyNotFoundException("Friend request not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.FriendRequestNotFound);
 
         if (friendship.RequesterId != userId)
-            throw new InvalidOperationException("Only the requester can cancel a friend request.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestCancellerMustBeRequester);
 
         if (friendship.Status != FriendshipStatus.Pending)
-            throw new InvalidOperationException("This friend request is no longer pending.");
+            throw new InvalidOperationException(ErrorMessages.FriendRequestNotPending);
 
-        // Withdrawing a pending request returns the pair to the "none" state, so we hard-delete
-        // the row rather than leaving a Declined tombstone behind (unlike decline, which keeps the
-        // record so the requester can later revive it). Either party may start fresh afterwards.
         databaseContext.Friendships.Remove(friendship);
         await databaseContext.SaveChangesAsync(cancellationToken);
         await scope.CommitAsync(cancellationToken);
@@ -279,7 +285,7 @@ internal sealed class FriendService(
                 ((friendship.RequesterId == userId && friendship.AddresseeId == friendUserId) ||
                  (friendship.RequesterId == friendUserId && friendship.AddresseeId == userId)),
                 cancellationToken)
-            ?? throw new KeyNotFoundException("Friendship not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.FriendshipNotFound);
 
         databaseContext.Friendships.Remove(friendship);
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -293,7 +299,7 @@ internal sealed class FriendService(
     {
         await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+        if (string.IsNullOrWhiteSpace(query) || query.Length < FriendSearchConstants.MinimumQueryLength)
             return [];
 
         var escapedQuery = query.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
@@ -304,7 +310,7 @@ internal sealed class FriendService(
                 replica.UserId != currentUserId &&
                 (EF.Functions.ILike(replica.DisplayName, searchPattern, "\\") ||
                  EF.Functions.ILike(replica.Email, searchPattern, "\\")))
-            .Take(MaximumSearchResultCount)
+            .Take(FriendSearchConstants.MaximumResultCount)
             .ToListAsync(cancellationToken);
 
         if (matchingReplicas.Count == 0)
@@ -347,7 +353,7 @@ internal sealed class FriendService(
 
         var targetReplica = await databaseContext.UserReplicas
             .FirstOrDefaultAsync(replica => replica.UserId == targetUserId, cancellationToken)
-            ?? throw new KeyNotFoundException("User not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.UserNotFound);
 
         var existingFriendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship =>
@@ -356,7 +362,7 @@ internal sealed class FriendService(
                 cancellationToken);
 
         var friendshipStatus = viewerUserId == targetUserId
-            ? StatusNone
+            ? FriendshipStatusValues.None
             : ResolveFriendshipStatus(existingFriendship, viewerUserId);
 
         return new PublicProfileDto(
@@ -484,18 +490,24 @@ internal sealed class FriendService(
     private static string ResolveFriendshipStatus(Friendship? friendship, Guid currentUserId)
     {
         if (friendship is null)
-            return StatusNone;
+            return FriendshipStatusValues.None;
 
         return friendship.Status switch
         {
-            FriendshipStatus.Accepted => StatusFriends,
-            FriendshipStatus.Pending when friendship.RequesterId == currentUserId => StatusPendingOutgoing,
-            FriendshipStatus.Pending => StatusPendingIncoming,
-            _ => StatusNone
+            FriendshipStatus.Accepted => FriendshipStatusValues.Friends,
+            FriendshipStatus.Pending when friendship.RequesterId == currentUserId => FriendshipStatusValues.PendingOutgoing,
+            FriendshipStatus.Pending => FriendshipStatusValues.PendingIncoming,
+            _ => FriendshipStatusValues.None
         };
     }
 
-    // PostgreSQL error code 23505 = unique_violation
-    private static bool IsUniqueViolation(DbUpdateException ex) =>
-        ex.InnerException is PostgresException { SqlState: "23505" };
+    /// <summary>
+    /// Distinguishes "somebody got there first" from every other write failure, so the caller can
+    /// answer with the same message it would have given had it seen the existing row.
+    /// </summary>
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation
+        };
 }

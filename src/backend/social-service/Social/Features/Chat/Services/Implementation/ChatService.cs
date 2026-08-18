@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
+using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Eventing;
+using Sellevate.Social.Features.Chat.Constants;
 using Sellevate.Social.Features.Chat.Models;
 using Sellevate.Social.Features.Chat.Services.Abstract;
 using Sellevate.Social.Features.Friends.Models;
@@ -12,27 +14,29 @@ namespace Sellevate.Social.Features.Chat.Services.Implementation;
 /// Phase 40.13 moved every Mongo call in this class behind
 /// <see cref="IChatConversationRepository"/>. The organization is no longer something this service
 /// reasons about: it cannot construct an unscoped query, because it no longer holds a collection.
+///
+/// <para>
+/// Only <see cref="GetOrCreateConversationAsync"/> opens a <see cref="TenantTransactionScope"/>,
+/// because it is the only method that reads a table carrying a row-level-security policy
+/// (<c>Friendships</c>). Every other method reads <c>UserReplicas</c>, which has no policy
+/// (docs/TENANCY/TENANCY.md §4.2), and takes its tenant boundary from the Mongo repository instead.
+/// </para>
 /// </summary>
 internal sealed class ChatService(
     IChatConversationRepository conversations,
     SocialDbContext databaseContext,
     ISocialEventPublisher eventPublisher) : IChatService
 {
-    private const int MaximumMessagePreviewLength = 100;
-    private const int MaximumPreviewLength = 160;
-    private const string UnknownDisplayName = "Unknown";
-
+    /// <summary>
+    /// Opens the conversation between two accepted friends, creating it on first use. Without the
+    /// transaction the <c>SET LOCAL</c> never applies, the friendship check sees zero rows, and every
+    /// attempt to open a chat is refused as "not friends" — fail-closed, but a broken screen.
+    /// </summary>
     public async Task<ChatConversationSummaryDto> GetOrCreateConversationAsync(
         Guid userId,
         Guid friendUserId,
         CancellationToken cancellationToken = default)
     {
-        // The only method here that reads a table with a row-level-security policy (Friendships).
-        // Without the transaction the SET LOCAL never applies, the friendship check returns zero
-        // rows and every attempt to open a chat fails with "you can only chat with accepted
-        // friends" — the fail-closed direction, but still a broken feature. The other methods read
-        // UserReplicas only, which carries no policy (docs/TENANCY/TENANCY.md §4.2), and their
-        // tenant boundary is the Mongo repository rather than Postgres.
         await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         await ValidateFriendshipExistsAsync(userId, friendUserId, cancellationToken);
@@ -60,18 +64,20 @@ internal sealed class ChatService(
         return MapToConversationSummary(newConversation, friendUserId, newFriendDisplayName);
     }
 
+    /// <summary>
+    /// Appends a message on behalf of a participant. The repository's filter carries both the
+    /// organization and "the sender is a participant", so a conversation in another organization and
+    /// a conversation the sender is not in fail identically — telling them apart would confirm that
+    /// a given conversation id exists somewhere else.
+    /// </summary>
     public async Task<ChatMessageDto> SendMessageAsync(
         Guid senderId,
         string conversationId,
         string content,
         CancellationToken cancellationToken = default)
     {
-        // The repository's filter already carries both the organization and "senderId is a
-        // participant", so a conversation in another organization and a conversation the sender is
-        // not in are the same not-found here — deliberately, since telling them apart would confirm
-        // that a given conversation id exists somewhere else.
         var conversation = await conversations.FindForParticipantAsync(conversationId, senderId, cancellationToken)
-            ?? throw new KeyNotFoundException("Conversation not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.ConversationNotFound);
 
         var chatMessage = new ChatMessage
         {
@@ -93,18 +99,29 @@ internal sealed class ChatService(
             true);
     }
 
+    /// <summary>
+    /// One page of messages, oldest-first within the page, ending just before
+    /// <paramref name="beforeMessageId"/> when one is given. An unknown
+    /// <paramref name="beforeMessageId"/> yields an empty page rather than the newest messages, so a
+    /// stale cursor cannot make the client jump back to the bottom.
+    ///
+    /// <para>
+    /// Messages are embedded in the conversation document, so paging happens in memory over the whole
+    /// document — see docs/DECISIONS.md on the pending move to a separate messages collection.
+    /// </para>
+    /// </summary>
     public async Task<List<ChatMessageDto>> GetMessagesAsync(
         Guid userId,
         string conversationId,
-        int limit = 50,
+        int limit = ChatConstants.DefaultMessagePageSize,
         string? beforeMessageId = null,
         CancellationToken cancellationToken = default)
     {
-        // TODO SO3: restructure ChatConversation to a separate messages collection to avoid loading the full document here.
-        limit = Math.Clamp(limit, 1, 100);
+        limit = Math.Clamp(
+            limit, ChatConstants.MinimumMessagePageSize, ChatConstants.MaximumMessagePageSize);
 
         var conversation = await conversations.FindForParticipantAsync(conversationId, userId, cancellationToken)
-            ?? throw new KeyNotFoundException("Conversation not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.ConversationNotFound);
 
         var messages = conversation.Messages;
 
@@ -150,7 +167,8 @@ internal sealed class ChatService(
             .Select(conversation =>
             {
                 var friendUserId = conversation.ParticipantIds.First(participantId => participantId != userId);
-                var friendDisplayName = participantDisplayNames.GetValueOrDefault(friendUserId, UnknownDisplayName);
+                var friendDisplayName = participantDisplayNames.GetValueOrDefault(
+                    friendUserId, ChatConstants.UnknownDisplayName);
                 return MapToConversationSummary(conversation, friendUserId, friendDisplayName);
             })
             .ToList();
@@ -162,7 +180,7 @@ internal sealed class ChatService(
         CancellationToken cancellationToken = default)
     {
         var conversation = await conversations.FindForParticipantAsync(conversationId, userId, cancellationToken)
-            ?? throw new KeyNotFoundException("Conversation not found.");
+            ?? throw new KeyNotFoundException(ErrorMessages.ConversationNotFound);
 
         var readAt = DateTime.UtcNow;
 
@@ -186,8 +204,8 @@ internal sealed class ChatService(
 
         var senderDisplayName = await GetUserDisplayNameAsync(senderId, cancellationToken);
 
-        var preview = content.Length > MaximumPreviewLength
-            ? content[..MaximumPreviewLength] + "..."
+        var preview = content.Length > ChatConstants.NotificationPreviewLength
+            ? content[..ChatConstants.NotificationPreviewLength] + ChatConstants.PreviewEllipsis
             : content;
 
         await eventPublisher.PublishChatMessageSentAsync(
@@ -212,7 +230,7 @@ internal sealed class ChatService(
                 cancellationToken);
 
         if (!friendshipExists)
-            throw new InvalidOperationException("You can only chat with accepted friends.");
+            throw new InvalidOperationException(ErrorMessages.ChatRequiresAcceptedFriendship);
     }
 
     private async Task<string> GetUserDisplayNameAsync(
@@ -224,7 +242,7 @@ internal sealed class ChatService(
             .Select(replica => replica.DisplayName)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return string.IsNullOrWhiteSpace(displayName) ? UnknownDisplayName : displayName;
+        return string.IsNullOrWhiteSpace(displayName) ? ChatConstants.UnknownDisplayName : displayName;
     }
 
     private static Guid? ParseConversationId(string conversationId) =>
@@ -245,8 +263,9 @@ internal sealed class ChatService(
         var lastMessage = conversation.Messages.LastOrDefault();
         var lastMessagePreview = lastMessage?.Content;
 
-        if (lastMessagePreview is not null && lastMessagePreview.Length > MaximumMessagePreviewLength)
-            lastMessagePreview = lastMessagePreview[..MaximumMessagePreviewLength] + "...";
+        if (lastMessagePreview is not null && lastMessagePreview.Length > ChatConstants.ConversationPreviewLength)
+            lastMessagePreview =
+                lastMessagePreview[..ChatConstants.ConversationPreviewLength] + ChatConstants.PreviewEllipsis;
 
         return new ChatConversationSummaryDto(
             conversation.Id,

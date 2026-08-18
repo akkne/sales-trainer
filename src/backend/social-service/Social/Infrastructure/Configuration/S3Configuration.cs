@@ -1,5 +1,14 @@
 namespace Sellevate.Social.Infrastructure.Configuration;
 
+/// <summary>
+/// Connection settings for the photo bucket. <c>AccessKey</c> and <c>SecretKey</c> are secrets and
+/// arrive from the environment; everything else is committed configuration.
+///
+/// <para>
+/// <c>ForcePathStyle</c> defaults to <see langword="true"/> for MinIO, which does not serve
+/// virtual-host-style bucket URLs. A real AWS endpoint needs it set to <see langword="false"/>.
+/// </para>
+/// </summary>
 public sealed class S3Configuration
 {
     public const string SectionName = "Storage:S3";

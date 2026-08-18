@@ -7,6 +7,17 @@ using Sellevate.BuildingBlocks.Messaging;
 
 namespace Sellevate.Social.Eventing;
 
+/// <summary>
+/// Keeps the local copy of the platform's user directory in step with identity-service, so that a
+/// friend list or a thread can show a display name without a cross-service call on every read.
+///
+/// <para>
+/// The projection is deliberately narrow — id, email, display name, avatar key — and last-write-wins:
+/// handlers are idempotent, an update for a user this service has never seen is dropped rather than
+/// inserted (only registration creates a row), and a delete removes the row outright. It is eventually
+/// consistent by construction, which is why every reader has a fallback display name.
+/// </para>
+/// </summary>
 internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
 {
     public UserReplicaConsumer(

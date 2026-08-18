@@ -2,6 +2,18 @@ using Npgsql;
 
 namespace Sellevate.Social.Infrastructure.Data;
 
+/// <summary>
+/// Creates the service's own database on first boot, before EF is asked to migrate into it — a fresh
+/// environment has a Postgres server but no <c>social</c> database, and <c>Migrate()</c> cannot create
+/// one.
+///
+/// <para>
+/// It connects to the maintenance database to do so, and treats a duplicate-database error as success
+/// rather than a failure: several services boot at once against the same server, and the loser of that
+/// race wants the same outcome as the winner. Ordinary application code must never call this — the
+/// connection it opens is outside every tenant guard.
+/// </para>
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)

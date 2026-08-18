@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Social.Eventing;
+using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
 using Sellevate.Social.Infrastructure.Data;
@@ -28,10 +29,6 @@ namespace Sellevate.Social.Features.Discuss.Services.Implementation;
 /// </summary>
 internal sealed partial class DiscussService : IDiscussService
 {
-    private const int BodyPreviewLength = 240;
-    private const int HotCandidateCap = 1000;
-    private const int TopAuthorsCount = 3;
-
     private readonly SocialDbContext _databaseContext;
     private readonly IObjectStorage _objectStorage;
     private readonly ISocialEventPublisher _eventPublisher;
@@ -67,7 +64,9 @@ internal sealed partial class DiscussService : IDiscussService
         await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
 
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize is < 1 or > 100 ? 20 : query.PageSize;
+        var pageSize = query.PageSize is < 1 or > DiscussFeedConstants.MaximumPageSize
+            ? DiscussFeedConstants.DefaultPageSize
+            : query.PageSize;
 
         IQueryable<DiscussThread> filtered = _databaseContext.DiscussThreads
             .Include(thread => thread.ThreadTags)
@@ -89,8 +88,8 @@ internal sealed partial class DiscussService : IDiscussService
                 EF.Functions.ILike(thread.Body, pattern, "\\"));
         }
 
-        var sort = (query.Sort ?? "hot").ToLowerInvariant();
-        if (sort == "unanswered")
+        var sort = (query.Sort ?? DiscussSortOptions.Hot).ToLowerInvariant();
+        if (sort == DiscussSortOptions.Unanswered)
         {
             filtered = filtered.Where(thread => thread.ReplyCount == 0);
         }
@@ -98,14 +97,14 @@ internal sealed partial class DiscussService : IDiscussService
         var totalCount = await filtered.CountAsync(cancellationToken);
 
         List<DiscussThread> pageItems;
-        if (sort == "new")
+        if (sort == DiscussSortOptions.New)
         {
             pageItems = await filtered
                 .OrderByDescending(thread => thread.LastActivityAt)
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .ToListAsync(cancellationToken);
         }
-        else if (sort == "unanswered")
+        else if (sort == DiscussSortOptions.Unanswered)
         {
             pageItems = await filtered
                 .OrderByDescending(thread => thread.CreatedAt)
@@ -118,7 +117,7 @@ internal sealed partial class DiscussService : IDiscussService
                 .OrderByDescending(thread => thread.IsPinned)
                 .ThenByDescending(thread => thread.UpvoteCount)
                 .ThenByDescending(thread => thread.LastActivityAt)
-                .Take(HotCandidateCap)
+                .Take(DiscussFeedConstants.HotCandidateCap)
                 .ToListAsync(cancellationToken);
 
             var now = DateTime.UtcNow;
@@ -148,12 +147,21 @@ internal sealed partial class DiscussService : IDiscussService
         return new PagedResultDto<DiscussThreadSummaryDto>(items, page, pageSize, totalCount);
     }
 
+    /// <summary>
+    /// Ranks a thread for the default feed. Weights and decay live in
+    /// <see cref="DiscussFeedConstants"/>, which also states the formula; the only thing decided here
+    /// is that a thread whose last activity is in the future scores as if it were brand new, so a
+    /// clock skew cannot produce a negative age.
+    /// </summary>
     private static double HotScore(DiscussThread thread, DateTime now)
     {
         var hours = Math.Max(0, (now - thread.LastActivityAt).TotalHours);
-        var baseScore = thread.UpvoteCount * 4 + thread.ReplyCount * 2 + Math.Log10(thread.ViewCount + 1);
-        var decayed = baseScore / Math.Pow(hours + 2, 0.5);
-        if (thread.IsHot) decayed += 1000;
+        var baseScore = thread.UpvoteCount * DiscussFeedConstants.UpvoteScoreWeight
+                        + thread.ReplyCount * DiscussFeedConstants.ReplyScoreWeight
+                        + Math.Log10(thread.ViewCount + 1);
+        var decayed = baseScore
+                      / Math.Pow(hours + DiscussFeedConstants.DecayHoursOffset, DiscussFeedConstants.DecayExponent);
+        if (thread.IsHot) decayed += DiscussFeedConstants.HotFlagScoreBoost;
         return decayed;
     }
 
@@ -237,6 +245,14 @@ internal sealed partial class DiscussService : IDiscussService
         return ToDetail(thread, authorNames, viewerHasUpvoted: false, replies: [], photos: Array.Empty<DiscussPhotoDto>());
     }
 
+    /// <summary>
+    /// Resolves labels a thread author typed to existing tags, creating whatever is missing. A tag
+    /// created here is stamped with the author's organization, never left global: the write guard
+    /// cannot do it, because <c>DiscussTag.OrganizationId</c> is nullable — <c>NULL</c> means the
+    /// shared vocabulary — so the entity is not <c>ITenantScoped</c> and nothing stamps it
+    /// automatically. A blank label, or one that slugifies to nothing, is skipped rather than
+    /// rejected.
+    /// </summary>
     private async Task<List<DiscussTag>> ResolveOrCreateTagsAsync(
         IReadOnlyList<string> tagLabels, CancellationToken cancellationToken)
     {
@@ -261,10 +277,6 @@ internal sealed partial class DiscussService : IDiscussService
             var created = new DiscussTag
             {
                 Id = Guid.NewGuid(),
-                // Phase 40.13. A tag typed by a user belongs to their organization, never to the
-                // shared vocabulary. The write guard cannot do this for us: DiscussTag's
-                // OrganizationId is nullable — NULL is meaningful here, it means "global" — so the
-                // entity is not ITenantScoped and nothing stamps it automatically.
                 OrganizationId = RequireOrganizationId(),
                 Slug = slug,
                 Name = bySlug[slug].Label,
@@ -308,7 +320,6 @@ internal sealed partial class DiscussService : IDiscussService
 
         await scope.CommitAsync(cancellationToken);
 
-        // Notify the thread author that someone replied to their discussion (never self-notify).
         if (thread.AuthorId != authorId)
         {
             await _eventPublisher.PublishDiscussReplyCreatedAsync(
@@ -332,6 +343,11 @@ internal sealed partial class DiscussService : IDiscussService
     public Task<VoteResultDto?> SetReplyVoteAsync(Guid replyId, Guid userId, bool upvote, CancellationToken cancellationToken = default)
         => SetVoteAsync(DiscussVoteTarget.Reply, replyId, userId, upvote, cancellationToken);
 
+    /// <summary>
+    /// Adds or removes one person's upvote, then recounts. The denormalised counter on the thread or
+    /// reply is recomputed from the votes table inside the same transaction rather than incremented,
+    /// so two people voting at the same instant cannot drift it away from the authoritative count.
+    /// </summary>
     private async Task<VoteResultDto?> SetVoteAsync(
         DiscussVoteTarget targetType, Guid targetId, Guid userId, bool upvote, CancellationToken cancellationToken)
     {
@@ -369,15 +385,11 @@ internal sealed partial class DiscussService : IDiscussService
             _databaseContext.DiscussVotes.Remove(existing);
         }
 
-        // Recompute the vote count from the DiscussVotes table within the same transaction
-        // to avoid read-then-write drift under concurrent votes.
-        // The pending Add/Remove above is reflected by SaveChangesAsync below.
         await _databaseContext.SaveChangesAsync(cancellationToken);
 
         var count = await _databaseContext.DiscussVotes
-            .CountAsync(v => v.TargetType == targetType && v.TargetId == targetId, cancellationToken);
+            .CountAsync(vote => vote.TargetType == targetType && vote.TargetId == targetId, cancellationToken);
 
-        // Keep the denormalised counter in sync with the authoritative vote count.
         if (thread != null)
         {
             thread.UpvoteCount = count;
@@ -394,6 +406,16 @@ internal sealed partial class DiscussService : IDiscussService
         return new VoteResultDto(count, upvote);
     }
 
+    /// <summary>
+    /// Marks one reply as the accepted answer, or clears the mark when no reply is named. At most one
+    /// reply on a thread is accepted at a time, so any previous mark is cleared first.
+    ///
+    /// <para>
+    /// The detail it returns is read back through <c>GetThreadAsync</c>, which finds this
+    /// transaction already open and joins it rather than starting a second one — the commit here is
+    /// what persists both halves.
+    /// </para>
+    /// </summary>
     public async Task<(DiscussOperationStatus Status, DiscussThreadDetailDto? Thread)> SetAcceptedReplyAsync(
         Guid threadId, Guid actingUserId, bool isAdmin, Guid? replyId, CancellationToken cancellationToken = default)
     {
@@ -424,8 +446,6 @@ internal sealed partial class DiscussService : IDiscussService
         thread.UpdatedAt = DateTime.UtcNow;
         await _databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Nested scopes are re-entrant no-ops, so GetThreadAsync joins this transaction rather than
-        // opening a second one; the commit below is what persists both.
         var detail = await GetThreadAsync(threadId, actingUserId, incrementView: false, cancellationToken);
 
         await scope.CommitAsync(cancellationToken);

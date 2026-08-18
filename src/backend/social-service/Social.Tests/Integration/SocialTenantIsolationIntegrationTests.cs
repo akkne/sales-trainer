@@ -57,8 +57,10 @@ public class SocialTenantIsolationIntegrationTests
     private static readonly Guid OrganizationATagId = new("a0000000-0000-4000-8000-0000000000e1");
     private static readonly Guid OrganizationBTagId = new("b0000000-0000-4000-8000-0000000000e2");
 
-    // Deliberately the same two people on both sides: after 40.6 one person can be a member of two
-    // customers, and several assertions below exist only because that is possible.
+    /// <summary>
+    /// Deliberately the same two people on both sides of the boundary: after 40.6 one person can be a
+    /// member of two customers, and several assertions below exist only because that is possible.
+    /// </summary>
     private static readonly Guid FirstUserId = new("00000000-0000-4000-8000-0000000000f1");
     private static readonly Guid SecondUserId = new("00000000-0000-4000-8000-0000000000f2");
 
@@ -67,8 +69,6 @@ public class SocialTenantIsolationIntegrationTests
 
     private string _organizationAConversationId = string.Empty;
     private string _organizationBConversationId = string.Empty;
-
-    // ── fixture lifecycle ────────────────────────────────────────────────
 
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
@@ -87,6 +87,11 @@ public class SocialTenantIsolationIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Drops the throwaway database, role and Mongo database. Every step is best-effort: the fixture
+    /// owns nothing anybody else needs, and failing a run over teardown would hide the result of the
+    /// tests that just passed.
+    /// </summary>
     [OneTimeTearDown]
     public async Task OneTimeTearDownAsync()
     {
@@ -105,7 +110,6 @@ public class SocialTenantIsolationIntegrationTests
             }
             catch
             {
-                // Best-effort cleanup of a throwaway fixture — never fail the run over teardown.
             }
         }
 
@@ -118,12 +122,9 @@ public class SocialTenantIsolationIntegrationTests
             }
             catch
             {
-                // As above.
             }
         }
     }
-
-    // ── Postgres: discuss, friendships ───────────────────────────────────
 
     [Test]
     public async Task One_organizations_threads_are_invisible_to_another()
@@ -198,6 +199,11 @@ public class SocialTenantIsolationIntegrationTests
             "without SET LOCAL the policy compares against NULL, which matches no row");
     }
 
+    /// <summary>
+    /// Two guards fire here and either one is enough: the write interceptor refuses a foreign
+    /// organization before the command is built, and the policy's <c>WITH CHECK</c> would refuse the
+    /// row if it ever reached Postgres. The assertion is deliberately loose about which spoke first.
+    /// </summary>
     [Test]
     public async Task Writing_a_thread_into_another_organization_is_refused_by_the_policy()
     {
@@ -219,9 +225,6 @@ public class SocialTenantIsolationIntegrationTests
 
         var act = async () => await context.SaveChangesAsync();
 
-        // Two guards fire here and either is enough: the write interceptor refuses a foreign
-        // organization before the command is built, and WITH CHECK would refuse the row if it ever
-        // reached Postgres. The assertion is deliberately loose about which spoke first.
         await act.Should().ThrowAsync<Exception>();
     }
 
@@ -254,8 +257,6 @@ public class SocialTenantIsolationIntegrationTests
         friendshipsInA.Should().Be(1);
         friendshipsInB.Should().Be(1);
     }
-
-    // ── Mongo: chat conversations ────────────────────────────────────────
 
     [Test]
     public async Task One_organizations_conversations_are_invisible_to_another()
@@ -379,8 +380,17 @@ public class SocialTenantIsolationIntegrationTests
             .WithMessage("Organization context is not set.");
     }
 
-    // ── setup helpers ────────────────────────────────────────────────────
-
+    /// <summary>
+    /// Builds the fixture's Postgres side: a throwaway database, a login role, and the schema.
+    ///
+    /// <para>
+    /// <c>NOBYPASSRLS</c> on that role is the whole point — <c>FORCE ROW LEVEL SECURITY</c> still lets a
+    /// superuser (and, without FORCE, the table owner) read everything, so isolation tested as the
+    /// admin role would pass no matter what the policies said. The schema comes from the service's own
+    /// migrations, run as the owner, exactly how production gets its policies; nothing here writes DDL
+    /// of its own.
+    /// </para>
+    /// </summary>
     private static async Task SetUpPostgresAsync()
     {
         await using (var maintenanceConnection = new NpgsqlConnection(LocalSocialStoreTestSettings.AdminConnectionString()))
@@ -393,9 +403,6 @@ public class SocialTenantIsolationIntegrationTests
             await ExecuteAsync(maintenanceConnection, $"DROP DATABASE IF EXISTS {LocalSocialStoreTestSettings.TestDatabaseName};");
             await ExecuteAsync(maintenanceConnection, $"DROP ROLE IF EXISTS {LocalSocialStoreTestSettings.ApplicationRoleName};");
             await ExecuteAsync(maintenanceConnection, $"CREATE DATABASE {LocalSocialStoreTestSettings.TestDatabaseName};");
-            // NOBYPASSRLS is the whole point: FORCE ROW LEVEL SECURITY still lets a superuser (and,
-            // without FORCE, the table owner) read everything, so isolation tested as the admin
-            // role would pass no matter what the policies said.
             await ExecuteAsync(maintenanceConnection, $"""
                 CREATE ROLE {LocalSocialStoreTestSettings.ApplicationRoleName}
                     WITH LOGIN PASSWORD '{LocalSocialStoreTestSettings.ApplicationRolePassword}'
@@ -407,8 +414,6 @@ public class SocialTenantIsolationIntegrationTests
                 """);
         }
 
-        // The real migrations, run as the owner — exactly how production gets its schema and its
-        // RLS policies. Nothing in this fixture writes DDL of its own.
         await using (var migrationContext = CreateAdminContext())
         {
             await migrationContext.Database.MigrateAsync();
@@ -448,7 +453,6 @@ public class SocialTenantIsolationIntegrationTests
         await InsertTagAsync(connection, OrganizationATagId, OrganizationAId, "a-only", isCurated: false);
         await InsertTagAsync(connection, OrganizationBTagId, OrganizationBId, "b-only", isCurated: false);
 
-        // The same pair of people, twice. Rejected outright before this block's unique swap.
         await InsertFriendshipAsync(connection, OrganizationAId);
         await InsertFriendshipAsync(connection, OrganizationBId);
     }
@@ -529,14 +533,20 @@ public class SocialTenantIsolationIntegrationTests
         await command.ExecuteNonQueryAsync();
     }
 
+    /// <summary>
+    /// Builds the fixture's Mongo side: one conversation between the same two people per organization.
+    ///
+    /// <para>
+    /// Inserted through the repository on purpose. Hand-written documents would let every isolation
+    /// assertion above keep passing even if the repository stopped stamping the organization on write,
+    /// which is the regression most worth catching here.
+    /// </para>
+    /// </summary>
     private async Task SetUpMongoAsync()
     {
         await new MongoClient(LocalSocialStoreTestSettings.MongoConnectionString())
             .DropDatabaseAsync(LocalSocialStoreTestSettings.MongoDatabaseName);
 
-        // Inserted through the repository on purpose: if it ever stopped stamping the organization
-        // on write, every isolation assertion above would still pass against hand-written documents
-        // and the regression would go unnoticed.
         var organizationAConversation = new ChatConversation
         {
             ParticipantIds = SortedParticipants(),
@@ -553,8 +563,6 @@ public class SocialTenantIsolationIntegrationTests
         await CreateConversationRepository(OrganizationBId).InsertAsync(organizationBConversation);
         _organizationBConversationId = organizationBConversation.Id;
     }
-
-    // ── plumbing ─────────────────────────────────────────────────────────
 
     private static SocialDbContext CreateAdminContext()
     {

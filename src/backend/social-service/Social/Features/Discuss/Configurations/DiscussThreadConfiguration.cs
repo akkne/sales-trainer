@@ -1,9 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
 
 namespace Sellevate.Social.Features.Discuss.Configurations;
 
+/// <summary>
+/// Phase 40.13. Every index leads with the organization, because every list on the Discuss screen is
+/// "this organization, then sort" — an index that ordered first and filtered second would scan the
+/// whole forum to serve one customer's page.
+/// </summary>
 public sealed class DiscussThreadConfiguration : IEntityTypeConfiguration<DiscussThread>
 {
     public void Configure(EntityTypeBuilder<DiscussThread> builder)
@@ -11,16 +17,16 @@ public sealed class DiscussThreadConfiguration : IEntityTypeConfiguration<Discus
         builder.ToTable("DiscussThreads");
         builder.HasKey(thread => thread.Id);
 
-        builder.Property(thread => thread.Title).IsRequired().HasMaxLength(300);
-        builder.Property(thread => thread.Body).IsRequired().HasMaxLength(20000);
+        builder.Property(thread => thread.Title).IsRequired()
+            .HasMaxLength(DiscussContentLimits.ThreadTitleMaximumLength);
+        builder.Property(thread => thread.Body).IsRequired()
+            .HasMaxLength(DiscussContentLimits.BodyMaximumLength);
 
         builder.HasMany(thread => thread.Replies)
             .WithOne(reply => reply.Thread)
             .HasForeignKey(reply => reply.ThreadId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Phase 40.13: every list on the Discuss screen is "this organization, then sort", so the
-        // organization leads each index rather than being an afterthought filter.
         builder.HasIndex(thread => new { thread.OrganizationId, thread.AuthorId });
         builder.HasIndex(thread => new { thread.OrganizationId, thread.IsPinned });
         builder.HasIndex(thread => new { thread.OrganizationId, thread.LastActivityAt });

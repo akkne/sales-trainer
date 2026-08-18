@@ -113,6 +113,16 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
                 .Set(conversation => conversation.LastMessageAt, message.SentAt),
             cancellationToken: cancellationToken);
 
+    /// <summary>
+    /// Moves one participant's read watermark. The dotted field path addresses that participant's
+    /// entry inside the <c>lastReadAt</c> map, so the other participant's watermark is left untouched —
+    /// replacing the whole map would silently mark the conversation read for both people.
+    ///
+    /// <para>
+    /// The path is composed from the element name on <c>ChatConversation.LastReadAt</c>; the two must
+    /// agree, and nothing but this method writes it.
+    /// </para>
+    /// </summary>
     public async Task SetReadWatermarkAsync(
         string conversationId,
         Guid participantUserId,
@@ -120,8 +130,6 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         CancellationToken cancellationToken = default)
         => await _conversations.UpdateOneAsync(
             ConversationOfParticipantForWriteFilter(conversationId, participantUserId),
-            // Dotted field path: sets only this participant's entry, leaving the other's watermark
-            // untouched.
             Builders<ChatConversation>.Update.Set($"lastReadAt.{participantUserId}", readAt),
             cancellationToken: cancellationToken);
 

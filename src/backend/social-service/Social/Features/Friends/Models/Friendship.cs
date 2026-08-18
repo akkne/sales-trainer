@@ -20,8 +20,13 @@ public sealed class Friendship : ITenantScoped
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AcceptedAt { get; set; }
 
-    // Computed (stored) columns — populated by the database, never set by application code.
-    // They enforce that (A,B) and (B,A) cannot coexist via a unique index on (LowId, HighId).
+    /// <summary>
+    /// The lower of the two user ids, and <see cref="CanonicalHighId"/> the higher. Stored computed
+    /// columns: the database populates them, application code never assigns them, and a unique index
+    /// over the pair is what stops (A,B) and (B,A) from both existing.
+    /// </summary>
     public Guid CanonicalLowId { get; private set; }
+
+    /// <inheritdoc cref="CanonicalLowId"/>
     public Guid CanonicalHighId { get; private set; }
 }
