@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { canManagePlatformUsers, useAuthStore } from "@/shared/stores/auth-store";
 import { beginImpersonationSession } from "@/features/admin/lib/impersonation-session";
@@ -231,6 +232,12 @@ export default function AdminOrganizationsPage() {
                                         >
                                             {organization.status === "Suspended" ? "Resume" : "Suspend"}
                                         </button>
+                                        <Link
+                                            href={`/admin/organizations/${organization.id}/quota`}
+                                            className="ml-3 text-xs text-indigo-ink hover:underline"
+                                        >
+                                            Quota
+                                        </Link>
                                         {canManageUsers && (
                                             <button
                                                 type="button"

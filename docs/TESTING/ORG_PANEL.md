@@ -1093,3 +1093,66 @@ pre-seeded — on a fresh install every organization has zero programme versions
 | Enrolling a group in one action | there is no bulk route, deliberately (DONT_FORGET.md → блок 40.17) | one `POST` per person, driven by a per-row button; no multi-select that could later be pointed at existing pins |
 | The pinned programme actually driving what a learner sees | `/skill-tree`, `/lessons` and `/exercises/*` still read the live tree; only `GET /program` serves the pin, and no learner screen calls it yet | a footnote on O18 says exactly that, so that publishing is not read as «команда уже учится по этой версии» |
 | Un-enrolling somebody | no route exists | none offered |
+
+---
+
+## Slice 11 — `/admin/organizations/[organizationId]/quota` (the platform-side addition)
+
+Everything above this heading is the **organization** panel (`/org/*`, Russian). This one section is
+the block's single addition to the **platform** panel (`/admin/*`, English,
+[ADMIN_UI_DESIGN.md §3.2](../TENANCY/ADMIN_UI_DESIGN.md)) and lives here only because the platform
+panel has no testing doc of its own.
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/adminOrganizationQuota.test.tsx` | the three hooks, the formatting and validation rules in `features/admin/lib/organization-quota-format.ts`, and the screen's four states |
+
+The behaviours worth naming:
+
+- **An unpriced model is words, never a zero.** `estimatedCost: null` renders as `No price`, the
+  total refuses to print while `hasUnpricedModels` is true *even when an amount is present*, and the
+  rendered page contains no `0.00 ₽`. Pinned both at the formatter and in the DOM.
+- **The write body never carries an organization id.** `PUT /admin/ai-quota` is tenant-scoped through
+  `X-Organization-Id`; a body field would be a tenancy-boundary violation and would be ignored.
+- **The two ceilings are two numbers.** `calculateBatchTokenCeiling` reproduces
+  `ResolvedAiQuota.BatchTokenCeiling`, integer truncation and the 90% clamp included, so «remaining»
+  is computed twice — once for background work, once for interactive.
+- **An empty field is a reset, not a removal**, and an unset field renders empty rather than
+  pre-filled with the default it would fall back to.
+- **`0` is refused as a way of lowering a limit.** `AiSpendMeter` gates on `limit > 0`, so zero turns
+  enforcement *off*; the field says so the moment it is typed.
+- **A negative number and a reserve above 90 are refused client-side**, because ai-service accepts
+  both and then silently reinterprets them (negative → `null`, i.e. a reset; >90 → clamped).
+- **No gamification**: the rendered page is asserted to contain no XP, streak or league.
+
+### Manual
+
+Preconditions: the app running, and a platform `Admin` or `SuperAdmin`.
+
+| Scenario | Expect |
+|---|---|
+| Open `/admin/organizations`, press «Quota» on a row | the screen, headed with that organization's name, slug and status from `GET /organizations/{id}` |
+| Session scoped to that same organization | the form is editable; saving reports «Quota saved» and the effective captions move |
+| Session with no organization (the ordinary platform staff case) | a warn banner, every field disabled, and the spend panel labelled as the installation-wide total |
+| Organization with no `OrganizationQuotas` row | «not unmetered — every number below is the platform default and is already being enforced» |
+| Type `0` into a limit | the warn line saying zero removes the ceiling instead of closing it |
+| Type `95` into the reserve | refused before the request, naming the 90% cap |
+| Break `GET /admin/ai-usage` alone | the spend panel shows its own error; the form above stays editable |
+| Look for XP, streaks or leagues | none |
+
+### What the backend cannot serve, and what the screen does instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| A screen at `/admin/organizations/[organizationId]/quota` that edits *that* organization | `GET`/`PUT /admin/ai-quota` take no organization anywhere. The tenant is `X-Organization-Id`, which `Gateway/IdentityForwarding.cs` strips from the request and re-adds **only** from the token's `org_id` claim | the route parameter is treated as a claim to check, not a parameter to send: the screen compares it with the session's own `orgId` and disables saving unless they match |
+| «доступен только внутри impersonation» (§3.2) | impersonation mints `role: User` (`PlatformAdminService.BuildImpersonationAccessToken`), which fails `RequirePlatformAdmin` on both quota routes — and `app/(admin)/layout.tsx` would bounce the session out of the panel first | the «Quota» link goes straight to the screen without impersonating. Editing therefore works only for platform staff who also hold a membership in that organization; the banner says exactly that |
+| `PUT` for an organization the operator is not scoped to | ai-service throws `"Organization context is not set."` → 500 | saving is disabled rather than attempted |
+| Per-model money on the report | the price table is `AiQuotas:PricePerMillionTokens` in ai-service configuration and no endpoint reads or writes it | shown read-only, with the copy separating «the token limit gates calls» from «the price table only changes reports» |
+
+**One documentation discrepancy found and not fixed here:** `docs/AI_QUOTAS.md` §2 says «`0` in any
+limit disables that window explicitly. Null and zero mean different things on purpose.» The code
+disagrees — `AiSpendMeter`'s LLM gate, its Lua reserve script and `DescribeState` all short-circuit on
+`limit > 0`, so zero means *no ceiling*, the same as an unbounded window. The screen warns about it in
+place; the doc still needs correcting by whoever owns `AI_QUOTAS.md`.
