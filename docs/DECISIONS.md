@@ -5102,3 +5102,114 @@ papered over with a made-up conversion.
   missing test would have caught — is listed there.
 - **Nothing executed.** No migration applied, no Redis touched, no LLM or speech provider called.
   Rule №1.
+
+---
+
+## 2026-08-18 — Phase 40.34: final acceptance, and what the review found
+
+The block ran a full `code-reviewer` and `security-reviewer` pass over the branch, verified the build
+and every suite, synchronised the reference documents, and stopped short of the release itself. Its
+decisions are almost all of one shape: **which findings to fix now and which to leave named rather
+than half-fixed under time pressure at the end of a twenty-block phase.**
+
+### The tenant boundary held, and that is the block's headline
+
+Both reviewers, working independently on the same range (`9e10ed7..feature/tenancy`, stages D/E/F,
+515 files, +71 057 lines written without a single test), reached the same conclusion: **no
+authenticated user of one organization can read another's data through the gateway.** The organization
+is never client-supplied — the gateway strips `X-Organization-Id` from every proxied request and
+re-adds it from the validated `org_id` claim, and `tenancy-boundary-lint.py` forbids the identifier on
+request DTOs mechanically. All seven production `IgnoreQueryFilters()` sites are the same disciplined
+enumeration: system mode, project the organization column only, fresh scope per organization. Copy-on-
+write stamps the caller's organization in all four implementations. The single raw-SQL statement in the
+backend is parameterized and tenant-scoped.
+
+That is worth stating positively, because the rest of this entry is a list of defects and would
+otherwise read as a verdict on the phase. It is not. The defects are of the kind that a test over a
+controller would have caught, which is the actual finding.
+
+### Fixed in the block: eleven findings, all a handful of lines
+
+Two were security, and both were single misplaced or missing lines rather than design errors. In
+`AdminLessonsController` the platform-authoring guard sat on the `GET` while the `POST` it was written
+for — the one that creates a row in the **global** library — had none; both reviewers found it
+independently. `PUT /organizations/profile` carried only the class-level `[Authorize]` while both of
+its writing siblings required an organization administrator, so any member could empty
+`banned_claims` and make their own organization's AI coach the promises compliance forbade. The
+`InternalServiceAuthFilter` copies allowed the request when no secret was configured, and the key was
+configured in no compose file — a check that was a no-op wherever it mattered.
+
+Two were money, and both defeated 40.33's central claim that spend is metered and visible. The
+streaming charge sat after the loop in an async iterator, so a client hanging up mid-turn — the normal
+case on the most frequent LLM call in the product — was billed by the provider and metered as zero.
+And `estimatedCost` summed the priced lines and skipped the rest while the shipped table prices no LLM
+model, so the report showed a confident number that omitted the entire dominant cost.
+
+The rest were availability: an unguarded Kafka message loop that let a five-second Redis restart stop
+the whole host, two profile consumers reading outside a tenant transaction, a destructively-claimed
+email batch discarded whole on the first SMTP timeout, an unconditional claim release, and a warmup
+loop that could crash-loop ai-service over a configuration typo.
+
+### Not fixed, and why — the four that are the owner's call
+
+**The `dotnet format` gate was fixed; the `codestyle-lint.py` gate was not.** Both run on any PR
+touching identity-service, and the final PR does. `dotnet format` was mechanical and is now green.
+`codestyle-lint.py` reports 1218 violations against 88 on `main`, almost all `/// <summary>` blocks
+that §9 of CODESTYLE.md forbids alongside `//` explanations. Fixing it automatically would mean
+deleting roughly 1 130 comments that carry the design rationale of the entire phase — the opposite of
+a mechanical change, and not something an acceptance block should do unasked. Block 40.9 already
+framed the choice correctly and it has not changed: **either soften §9 to "`///` on public API is
+allowed, `//` inside a method is not", or clean identity-service once.** While the rule and the code
+contradict each other the gate is meaningless in both directions.
+
+**The ai-service resilience configuration versus the content pipeline.** The shared `OpenAI` client
+allows 30 s per attempt, 90 s total and two retries; `AiServiceConfiguration` declares a 300 s content
+pipeline timeout with a comment saying a lesson routinely exceeds 100 s. If the reviewer's reading is
+right, 40.27 generation and 40.32 rewriting may not complete for a realistic lesson at all, and each
+failure bills the provider three times while recording nothing. **This was not fixed because it cannot
+be settled by reading**: it needs one real generation call against a real gateway to know whether the
+budget is wrong, and the retry semantics of a paid POST are a decision, not a cleanup. It is the first
+thing to reproduce once a provider key is in play.
+
+**Postgres RLS is inert in the shipped configuration.** Every service connects as the cluster owner, so
+`FORCE ROW LEVEL SECURITY` does not apply and every policy the phase installed is currently decorative.
+The boundary is one layer, not the three the design describes. Nothing exploits it today — no query
+escapes the EF filter — but several comments in stages D and E cite RLS as their security argument
+while it enforces nothing. The `sellevate_app` cutover was always the owner's task and remains so; the
+new detail worth carrying is that the seven `BYPASSRLS`-dependent enumerations go **silently empty**
+the day it happens.
+
+**The remaining thirty-odd MEDIUM and LOW findings** were recorded rather than fixed. The rule applied
+was not severity but blast radius and reversibility: anything that crosses the tenant boundary, costs
+money, or stops a host was fixed; anything needing a migration, a product decision, or a judgement
+about retry and scoring semantics was written down. Notable among them: `repeatSchedule` is editable on
+an active assignment and wave identity is ordinal, so an edit can re-fan a whole cohort (needs a
+migration to the freeze trigger); `exercise_accuracy` measures cumulative lifetime accuracy, which
+makes `failed_threshold` far harder to escape than the doc claims (`DECISIONS.md` argues for cumulative
+on anti-brute-force grounds — this is a genuine trade-off, not a bug); and lesson-override staleness is
+computed from published version ids rather than a live hash, so ordinary base edits leave the review
+queue reporting zero stale overrides.
+
+### The release was prepared, not performed
+
+**Nothing was pushed, no PR was opened, nothing was merged.** The branch is 111 852 lines over 278
+commits, of which roughly 71 000 have no test coverage by standing policy, and the owner left the run
+unattended. Handing that to `main` is not a step an agent should take on its own authority at 4 a.m.
+Instead the block left the whole procedure ready to execute: `docs/TENANCY/RELEASE_PR.md` carries the
+commands and a written PR body, `docs/TENANCY/PHASE_40_SUMMARY.md` §2 carries the deployment order the
+per-block notes never had, and `docs/TESTING/TENANCY.md` gained the two-organization acceptance
+checklist the roadmap asks for. The same reasoning covers the manual acceptance run itself: it needs a
+running system and two populated organizations, which is Rule №1.
+
+### The counters, checked rather than assumed
+
+`AddHostedService` = 30. `IgnoreQueryFilters()` in production code = **7**, not the 6 that block
+40.31's note still states — 40.32 added `ContentAdaptationSweepService` after that note was written.
+Raw SQL = 0. The `TESTING/TENANCY.md` grep step was corrected to expect seven and to name all of them,
+so the live checklist disagrees with the stale note rather than quietly matching it.
+
+One more, found while verifying: **`dotnet test` against `Sellevate.sln` does not run all eleven test
+projects.** Twice in a row it reported one project's 53 tests and then nothing at all. The real 891
+require iterating over `src/backend/*/*.Tests/*.csproj`, and since no workflow in `.github/` runs
+`dotnet test` at all, nothing catches this automatically. Anyone wiring CI should loop over the
+projects, not the solution.
