@@ -48,25 +48,34 @@ internal static class ContentAdaptationScopeCollector
                 && databaseContext.Skills.Any(skill => skill.Id == topic.SkillId && skill.Stage == stageKey)))
             .ResolveOverrides(databaseContext);
 
-        return await databaseContext.Exercises
+        // Joined rather than projected through a correlated subquery: the title is only a label, and a
+        // subquery inside the projection is the kind of LINQ that compiles, reads fine, and fails on
+        // the first real Postgres connection — which for a background worker is the least visible
+        // place in the service.
+        var rows = await databaseContext.Exercises
             .AsNoTracking()
             .Where(exercise => lessons.Any(lesson => lesson.Id == exercise.LessonId))
-            .OrderBy(exercise => exercise.LessonId)
-            .ThenBy(exercise => exercise.OrderInLesson)
-            .ThenBy(exercise => exercise.Id)
+            .Join(
+                databaseContext.Lessons,
+                exercise => exercise.LessonId,
+                lesson => lesson.Id,
+                (exercise, lesson) => new { Exercise = exercise, lesson.Title })
+            .OrderBy(row => row.Exercise.LessonId)
+            .ThenBy(row => row.Exercise.OrderInLesson)
+            .ThenBy(row => row.Exercise.Id)
             .Take(limit)
-            .Select(exercise => new ContentAdaptationScopeRow(
-                exercise.Id,
-                exercise.LessonId,
-                databaseContext.Lessons
-                    .Where(lesson => lesson.Id == exercise.LessonId)
-                    .Select(lesson => lesson.Title)
-                    .FirstOrDefault() ?? string.Empty,
-                exercise.Type,
-                exercise.OrderInLesson,
-                exercise.SerializedContent,
-                exercise.CustomAiPrompt))
             .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(row => new ContentAdaptationScopeRow(
+                row.Exercise.Id,
+                row.Exercise.LessonId,
+                row.Title,
+                row.Exercise.Type,
+                row.Exercise.OrderInLesson,
+                row.Exercise.SerializedContent,
+                row.Exercise.CustomAiPrompt))
+            .ToList();
     }
 
     /// <summary>

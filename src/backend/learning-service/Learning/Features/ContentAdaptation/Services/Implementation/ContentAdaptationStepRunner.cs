@@ -379,36 +379,39 @@ internal sealed class ContentAdaptationStepRunner(
             return null;
         }
 
-        var work = await databaseContext.ContentAdaptationItems
+        // Two plain reads rather than one projection carrying a correlated subquery. The attempt is
+        // already committed below either way, so a missing exercise costs an attempt and lands the
+        // item in failed with a reason instead of spinning.
+        var item = await databaseContext.ContentAdaptationItems
             .AsNoTracking()
-            .Where(item => item.Id == itemId)
-            .Select(item => new
-            {
-                item.Id,
-                item.ExerciseId,
-                item.ExerciseType,
-                Exercise = databaseContext.Exercises
-                    .Where(exercise => exercise.Id == item.ExerciseId)
-                    .Select(exercise => new { exercise.SerializedContent, exercise.CustomAiPrompt })
-                    .FirstOrDefault()
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == itemId, cancellationToken);
+
+        var exercise = item is null
+            ? null
+            : await databaseContext.Exercises
+                .AsNoTracking()
+                .FirstOrDefaultAsync(candidate => candidate.Id == item.ExerciseId, cancellationToken);
 
         await tenantScope.CommitAsync(cancellationToken);
 
-        if (work?.Exercise is null)
+        if (item is null)
+        {
+            return null;
+        }
+
+        if (exercise is null)
         {
             // The exercise was deleted between collection and this tick. Nothing to propose about it
-            // and nothing to fix: the item burns its attempts and lands in failed with a reason.
+            // and nothing to fix.
             throw new InvalidOperationException(
-                $"Exercise {work?.ExerciseId} no longer exists; nothing to adapt.");
+                $"Exercise {item.ExerciseId} no longer exists; nothing to adapt.");
         }
 
         return new ContentAdaptationItemWork(
-            work.Id,
-            work.ExerciseType,
-            work.Exercise.SerializedContent,
-            work.Exercise.CustomAiPrompt);
+            item.Id,
+            item.ExerciseType,
+            exercise.SerializedContent,
+            exercise.CustomAiPrompt);
     }
 
     private async Task<ContentAdaptationItem?> LoadPendingItemAsync(

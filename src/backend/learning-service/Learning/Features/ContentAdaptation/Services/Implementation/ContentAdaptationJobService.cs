@@ -243,13 +243,17 @@ internal sealed class ContentAdaptationJobService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        // Read back before the commit, not after. Outside a transaction there is no
+        // SET LOCAL app.organization_id, so the row-level-security policy returns nothing and the
+        // response would describe an empty batch that was in fact just written.
+        var items = await ReadItemsAsync(job.Id, cancellationToken);
+
         await tenantScope.CommitAsync(cancellationToken);
 
         logger.LogInformation(
             "Content adaptation batch created JobId={JobId} Mode={Mode} Stage={StageKey} Items={ItemCount}",
             job.Id, mode, stageKey, scope.Count);
-
-        var items = await ReadItemsAsync(job.Id, cancellationToken);
 
         return new ContentAdaptationJobDto(
             ToSummary(job, CountByStatus(items)),
@@ -341,6 +345,11 @@ internal sealed class ContentAdaptationJobService(
         await RefreshJobStatusAsync(job, now, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        // Described before the commit, for the reason StartAsync gives: outside the transaction the
+        // tenant session variable is gone and every read comes back empty.
+        var described = await DescribeItemAsync(item, cancellationToken);
+
         await tenantScope.CommitAsync(cancellationToken);
 
         logger.LogInformation(
@@ -348,7 +357,7 @@ internal sealed class ContentAdaptationJobService(
             + "AppliedExerciseId={AppliedExerciseId} ActorId={ActorId}",
             jobId, itemId, item.ExerciseId, target.Id, actorId);
 
-        return await DescribeItemAsync(item, cancellationToken);
+        return described;
     }
 
     public async Task<ContentAdaptationItemDto?> RejectItemAsync(
@@ -392,9 +401,12 @@ internal sealed class ContentAdaptationJobService(
         await RefreshJobStatusAsync(job, now, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        var described = await DescribeItemAsync(item, cancellationToken);
+
         await tenantScope.CommitAsync(cancellationToken);
 
-        return await DescribeItemAsync(item, cancellationToken);
+        return described;
     }
 
     public async Task<ContentAdaptationJobDto?> RetryAsync(
