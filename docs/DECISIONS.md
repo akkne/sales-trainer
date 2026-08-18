@@ -100,12 +100,18 @@ different sentence every run, so a screen cannot count, sort, skip or translate 
 question is answered *into a database column*: «пришлите ваш прайс в PDF» is a question with no field
 behind it, and the customer who answers it has been wasted rather than helped.
 
-**A separate vocabulary from `ContentSufficiencyCodes`**, which was the tempting reuse — 40.28's
-`gaps` are already a machine-readable list of what is missing. The two disagree in both directions.
+**A separate vocabulary from `ContentSufficiencyCodes`** — and this one overrules an explicit
+recommendation. 40.28's own handover note in `ROADMAP.md` says «коды `no_product` / `no_icp` /
+`no_objections` / `no_script` уже существуют, и заводить второй словарь пробелов не надо». It was
+reasonable advice from where it was written, and it does not survive contact with the profile: the two
+lists disagree in both directions.
 `banned_claims` and the glossary block nothing in generation and matter a great deal in a profile;
 `too_short` and `off_topic` are facts about an uploaded document and say nothing about a row that has
 no document. A shared list would have to satisfy both audiences and would end up describing neither —
-which is, concretely, how «добавьте больше информации» gets written.
+which is, concretely, how «добавьте больше информации» gets written. The sentences would have had to
+merge too: 40.28's are refusals («добавьте примеры возражений или запись звонка»), and 40.29's are
+questions somebody answers from memory in under a minute. What *is* shared is the pattern, which was
+the useful half of the advice: a closed list of codes, one fixed sentence each, resolved on the server.
 
 ### Three questions at a time, and the priority tiers are about 40.19 rather than about completeness
 
