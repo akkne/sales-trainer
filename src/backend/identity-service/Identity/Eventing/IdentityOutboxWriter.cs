@@ -5,6 +5,12 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Eventing;
 
+/// <summary>
+/// Stages an integration event as a row in identity-db's outbox, inside the caller's transaction, so
+/// it cannot be published without the state change that justified it. The organization is stamped from
+/// <see cref="ITenantContext"/> rather than taken from the caller — a platform-wide write leaves it
+/// null, which is what consumers read as "not scoped to one tenant".
+/// </summary>
 internal sealed class IdentityOutboxWriter : IOutboxWriter
 {
     private readonly IdentityDbContext _databaseContext;

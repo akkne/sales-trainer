@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
@@ -12,6 +13,16 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
 
+/// <summary>
+/// The public authentication surface: invite acceptance, email verification, the three-step login flow,
+/// Google sign-in, refresh and logout.
+///
+/// <para>
+/// The refresh token never appears in a response body. It is set as an HttpOnly, SameSite=Strict cookie
+/// so page script cannot read it, and <c>Secure</c> is switched off only in Development, where there is
+/// no https to carry it.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("auth")]
 public sealed class AuthController(
@@ -35,10 +46,10 @@ public sealed class AuthController(
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var email = User.FindFirstValue(ClaimTypes.Email);
-        var displayName = User.FindFirstValue("displayName");
+        var displayName = User.FindFirstValue(ClaimTypeNames.DisplayName);
         var role = User.FindFirstValue(ClaimTypes.Role);
-        var orgId = User.FindFirstValue("org_id");
-        var orgRole = User.FindFirstValue("org_role");
+        var organizationId = User.FindFirstValue(ClaimTypeNames.OrganizationId);
+        var organizationRole = User.FindFirstValue(AuthorizationPolicies.OrganizationRoleClaimType);
 
         var isOnboardingCompleted = Guid.TryParse(userId, out var parsedUserId) && await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == parsedUserId && profile.IsOnboardingCompleted, cancellationToken);
@@ -49,8 +60,8 @@ public sealed class AuthController(
             email,
             displayName,
             role,
-            orgId,
-            orgRole,
+            orgId = organizationId,
+            orgRole = organizationRole,
             isOnboardingCompleted
         });
     }

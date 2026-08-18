@@ -5,6 +5,11 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Onboarding.Services.Implementation;
 
+/// <summary>
+/// Writes the onboarding answers onto the caller's profile row, creating that row if invite acceptance
+/// did not. Returns without touching anything once onboarding is marked complete — the first set of
+/// answers is the one kept.
+/// </summary>
 internal sealed class OnboardingService(IdentityDbContext databaseContext) : IOnboardingService
 {
     public async Task CompleteOnboardingForUserAsync(

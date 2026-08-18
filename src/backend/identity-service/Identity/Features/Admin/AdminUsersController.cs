@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Identity.Common.Constants;
+using Sellevate.Identity.Features.Admin.Constants;
 using Sellevate.Identity.Features.Admin.Models;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars;
@@ -12,11 +13,17 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Admin;
 
-// 2026-08-16 role-split audit: this controller lists and manages ALL users platform-wide (not
-// scoped to one organization), so it stays Sellevate-staff-only. Reading the roster is ordinary
-// platform administration and is open to `Admin` as well as `SuperAdmin`; every mutation below
-// adds, removes or re-roles a user, and that is the single privilege reserved for `SuperAdmin`
-// (docs/DECISIONS.md).
+/// <summary>
+/// Platform-wide user administration: this controller lists and manages ALL users, not the roster of
+/// one organization, so it stays Sellevate-staff-only.
+///
+/// <para>
+/// From the 2026-08-16 role-split audit: reading the roster is ordinary platform administration and
+/// is open to <c>Admin</c> as well as <c>SuperAdmin</c>; every mutation here adds, removes or
+/// re-roles a user, and that is the single privilege reserved for <c>SuperAdmin</c>
+/// (docs/DECISIONS.md).
+/// </para>
+/// </summary>
 [ApiController]
 [Route("admin/users")]
 [Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
@@ -26,8 +33,8 @@ public sealed class AdminUsersController(
     IProfileService profileService,
     ILogger<AdminUsersController> logger) : ControllerBase
 {
-    private const int DisplayNameMinLength = 2;
-    private const int DisplayNameMaxLength = 50;
+    private const int DisplayNameMinimumLength = 2;
+    private const int DisplayNameMaximumLength = 50;
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AdminUserDto>>> GetAll(CancellationToken cancellationToken)
@@ -41,7 +48,7 @@ public sealed class AdminUsersController(
                 user.Role.ToString(),
                 user.CreatedAt,
                 user.IsEmailVerified,
-                user.GoogleId != null ? "Google" : "Password",
+                user.GoogleId != null ? AuthProviderLabels.Google : AuthProviderLabels.Password,
                 user.AvatarType == AvatarKind.Uploaded,
                 AvatarUrls.For(user.Id)))
             .ToListAsync(cancellationToken);
@@ -71,7 +78,7 @@ public sealed class AdminUsersController(
             user.Role.ToString(),
             user.CreatedAt,
             user.IsEmailVerified,
-            user.GoogleId != null ? "Google" : "Password",
+            user.GoogleId != null ? AuthProviderLabels.Google : AuthProviderLabels.Password,
             user.AvatarType == AvatarKind.Uploaded,
             AvatarUrls.For(user.Id),
             stats.CurrentStreakDayCount,
@@ -91,11 +98,11 @@ public sealed class AdminUsersController(
         CancellationToken cancellationToken)
     {
         var displayName = (request.DisplayName ?? "").Trim();
-        if (displayName.Length is < DisplayNameMinLength or > DisplayNameMaxLength)
+        if (displayName.Length is < DisplayNameMinimumLength or > DisplayNameMaximumLength)
         {
             return BadRequest(new
             {
-                message = $"Display name must be between {DisplayNameMinLength} and {DisplayNameMaxLength} characters."
+                message = $"Display name must be between {DisplayNameMinimumLength} and {DisplayNameMaximumLength} characters."
             });
         }
 
@@ -112,16 +119,7 @@ public sealed class AdminUsersController(
         logger.LogInformation("User display name changed TargetUserId={TargetUserId} \"{OldName}\" -> \"{NewName}\" by ActorId={ActorId}",
             user.Id, previousName, displayName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminUserDto(
-            user.Id,
-            user.Email,
-            user.DisplayName,
-            user.Role.ToString(),
-            user.CreatedAt,
-            user.IsEmailVerified,
-            user.GoogleId != null ? "Google" : "Password",
-            user.AvatarType == AvatarKind.Uploaded,
-            AvatarUrls.For(user.Id)));
+        return Ok(ToAdminUserDto(user));
     }
 
     [HttpDelete("{id:guid}/avatar")]
@@ -143,6 +141,12 @@ public sealed class AdminUsersController(
         return NoContent();
     }
 
+    /// <summary>
+    /// <c>Enum.TryParse</c> also accepts bare numbers and returns undefined values for them ("99"
+    /// would become <c>(UserRole)99</c>), so the parse is paired with an <c>IsDefined</c> check.
+    /// Demoting the last remaining superadministrator is refused: it would leave the platform with
+    /// nobody able to promote anyone back.
+    /// </summary>
     [HttpPut("{id:guid}/role")]
     [Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
     public async Task<ActionResult<AdminUserDto>> ChangeRole(
@@ -156,8 +160,6 @@ public sealed class AdminUsersController(
             return NotFound();
         }
 
-        // `Enum.TryParse` also accepts bare numbers and returns undefined values for them
-        // ("99" would become (UserRole)99), so the parse is paired with an `IsDefined` check.
         if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var newRole)
             || !Enum.IsDefined(newRole))
         {
@@ -169,7 +171,7 @@ public sealed class AdminUsersController(
         if (previousRole == UserRole.SuperAdmin && newRole != UserRole.SuperAdmin)
         {
             var superAdminCount = await database.Users
-                .CountAsync(u => u.Role == UserRole.SuperAdmin, cancellationToken);
+                .CountAsync(candidate => candidate.Role == UserRole.SuperAdmin, cancellationToken);
             if (superAdminCount <= 1)
             {
                 return Conflict(new { message = "Cannot demote the last SuperAdmin." });
@@ -182,15 +184,18 @@ public sealed class AdminUsersController(
         logger.LogInformation("User role changed TargetUserId={TargetUserId} Email={Email} {OldRole} -> {NewRole} by ActorId={ActorId}",
             user.Id, user.Email, previousRole, newRole, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminUserDto(
+        return Ok(ToAdminUserDto(user));
+    }
+
+    private static AdminUserDto ToAdminUserDto(User user)
+        => new(
             user.Id,
             user.Email,
             user.DisplayName,
             user.Role.ToString(),
             user.CreatedAt,
             user.IsEmailVerified,
-            user.GoogleId != null ? "Google" : "Password",
+            user.GoogleId != null ? AuthProviderLabels.Google : AuthProviderLabels.Password,
             user.AvatarType == AvatarKind.Uploaded,
-            AvatarUrls.For(user.Id)));
-    }
+            AvatarUrls.For(user.Id));
 }

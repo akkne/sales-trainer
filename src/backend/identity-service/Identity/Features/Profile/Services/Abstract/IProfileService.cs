@@ -2,6 +2,10 @@ using Sellevate.Identity.Features.Profile.Models;
 
 namespace Sellevate.Identity.Features.Profile.Services.Abstract;
 
+/// <summary>
+/// The caller's own profile. Throws <see cref="KeyNotFoundException"/> when the user does not exist,
+/// which for these routes means the token outlived the account.
+/// </summary>
 public interface IProfileService
 {
     Task<UserProfileStatsDto> GetProfileStatsForUserAsync(

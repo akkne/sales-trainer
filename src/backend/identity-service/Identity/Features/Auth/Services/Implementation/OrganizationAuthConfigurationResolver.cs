@@ -12,6 +12,11 @@ namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 /// (docs/TENANCY/TENANCY.md §4.5). Runs before authentication, so it has no tenant context and
 /// queries across organizations by design — see <see cref="OrganizationAuthConfiguration"/> for
 /// why that table is not behind row-level security.
+///
+/// <para>
+/// An organization with no configuration row yet resolves to passwords — the same answer the
+/// platform default gives, so an outsider cannot tell the two apart.
+/// </para>
 /// </summary>
 internal sealed class OrganizationAuthConfigurationResolver(
     IdentityDbContext databaseContext,
@@ -37,8 +42,6 @@ internal sealed class OrganizationAuthConfigurationResolver(
             .Select(configuration => configuration.Method)
             .FirstOrDefaultAsync(cancellationToken);
 
-        // An organization with no configuration row yet uses passwords — the same answer the
-        // platform default gives, so the two stay indistinguishable from outside.
         var method = string.IsNullOrEmpty(configuredMethod) ? AuthMethodNames.Password : configuredMethod;
 
         logger.LogInformation(

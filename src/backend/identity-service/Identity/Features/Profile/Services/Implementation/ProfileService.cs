@@ -8,6 +8,12 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Profile.Services.Implementation;
 
+/// <summary>
+/// Reads and writes the caller's own profile. Persona lives on the one-to-one
+/// <see cref="UserProfile"/> row, which may not exist yet — every write path upserts it rather than
+/// assuming onboarding created it. A display-name change is published to the replica-holding
+/// services (ai, notification, …) so their copies do not drift.
+/// </summary>
 internal sealed class ProfileService(
     IdentityDbContext databaseContext,
     IUserEventPublisher userEventPublisher) : IProfileService
@@ -41,26 +47,7 @@ internal sealed class ProfileService(
         string persona,
         CancellationToken cancellationToken = default)
     {
-        var userProfile = await databaseContext.UserProfiles
-            .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
-
-        if (userProfile is null)
-        {
-            databaseContext.UserProfiles.Add(new UserProfile
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Persona = persona,
-                SalesType = "",
-                ExperienceLevel = "",
-                Goal = "",
-                IsOnboardingCompleted = false
-            });
-        }
-        else
-        {
-            userProfile.Persona = persona;
-        }
+        await UpsertPersonaAsync(userId, persona, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
     }
@@ -77,35 +64,44 @@ internal sealed class ProfileService(
 
         user.DisplayName = displayName;
 
-        // Persona lives on the one-to-one UserProfile row; upsert only when provided.
         if (!string.IsNullOrWhiteSpace(persona))
         {
-            var userProfile = await databaseContext.UserProfiles
-                .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
-
-            if (userProfile is null)
-            {
-                databaseContext.UserProfiles.Add(new UserProfile
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Persona = persona,
-                    SalesType = "",
-                    ExperienceLevel = "",
-                    Goal = "",
-                    IsOnboardingCompleted = false
-                });
-            }
-            else
-            {
-                userProfile.Persona = persona;
-            }
+            await UpsertPersonaAsync(userId, persona, cancellationToken);
         }
 
-        // Propagate the new display name to replica-holding services (ai, notification, …).
         await userEventPublisher.PublishUpdatedAsync(
             new UserUpdatedEvent(userId, displayName, user.AvatarKey), cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Stages the persona on the caller's profile row, creating that row when onboarding has not
+    /// produced one yet. Does not save: the caller decides the transaction boundary.
+    /// </summary>
+    private async Task UpsertPersonaAsync(
+        Guid userId,
+        string persona,
+        CancellationToken cancellationToken)
+    {
+        var userProfile = await databaseContext.UserProfiles
+            .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
+
+        if (userProfile is null)
+        {
+            databaseContext.UserProfiles.Add(new UserProfile
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Persona = persona,
+                SalesType = "",
+                ExperienceLevel = "",
+                Goal = "",
+                IsOnboardingCompleted = false
+            });
+            return;
+        }
+
+        userProfile.Persona = persona;
     }
 }

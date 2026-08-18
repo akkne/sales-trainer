@@ -4,6 +4,12 @@ using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Maps the per-organization login configuration. The organization identifier is the primary key
+/// rather than a surrogate id, so a second configuration for the same organization cannot exist.
+/// The GIN index on <c>AllowedEmailDomains</c> serves the first login step, which asks "which
+/// organization claims this domain" and therefore cannot be selective by organization.
+/// </summary>
 public sealed class OrganizationAuthConfigurationEntityConfiguration
     : IEntityTypeConfiguration<OrganizationAuthConfiguration>
 {
@@ -13,8 +19,6 @@ public sealed class OrganizationAuthConfigurationEntityConfiguration
     {
         builder.ToTable("OrganizationAuthConfigurations");
 
-        // The organization is the key: one login configuration per organization, no surrogate id
-        // to get out of sync with it.
         builder.HasKey(configuration => configuration.OrganizationId);
         builder.Property(configuration => configuration.OrganizationId)
             .ValueGeneratedNever();
@@ -33,8 +37,6 @@ public sealed class OrganizationAuthConfigurationEntityConfiguration
         builder.Property(configuration => configuration.CreatedAt)
             .IsRequired();
 
-        // The domain lookup on the first login step is the hot path and is not selective by
-        // organization — it asks "which organization claims this domain".
         builder.HasIndex(configuration => configuration.AllowedEmailDomains)
             .HasMethod("gin");
     }

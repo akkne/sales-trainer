@@ -2,6 +2,12 @@ using Npgsql;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Creates the service's database on first startup if it is not there yet, by connecting to the
+/// cluster's <c>postgres</c> maintenance database. Safe to run concurrently on several replicas: a
+/// duplicate-database error from a racing instance is treated as success. Touches no application
+/// table and therefore no tenant-scoped data.
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)

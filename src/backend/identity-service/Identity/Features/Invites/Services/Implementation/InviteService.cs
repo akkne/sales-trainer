@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Email.Abstract;
 using Sellevate.BuildingBlocks.Email.Models;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
@@ -20,6 +21,31 @@ using MembershipEntity = Sellevate.Identity.Features.Membership.Models.Membershi
 
 namespace Sellevate.Identity.Features.Invites.Services.Implementation;
 
+/// <summary>
+/// Owns the whole life of an invite: issue, revoke, accept. Accepting is the only way an account
+/// comes into existence (docs/TENANCY/TENANCY.md §4.1), so this is also the user-provisioning path.
+///
+/// <para>
+/// Every method wraps its reads and writes in one explicit transaction. A bare <c>SELECT</c> has no
+/// implicit transaction for <c>TenantConnectionInterceptor</c>'s <c>SET LOCAL</c> to attach to, so
+/// without it row-level security sees no organization at all and returns nothing
+/// (docs/TENANCY/TENANCY.md §1.5).
+/// </para>
+///
+/// <para>
+/// Acceptance takes the organization from the HMAC signature of the token, before any database
+/// access — see <see cref="IInviteTokenFactory"/>. It is the one path that cannot read the
+/// <c>X-Organization-Id</c> header, because the caller has no organization yet. This is why
+/// <see cref="TenantContext"/> is injected concretely rather than as <c>ITenantContext</c>: the
+/// scope has to be pointed at the token's organization from inside the service.
+/// </para>
+///
+/// <para>
+/// A user created here is marked email-verified on the spot. The invite token itself proves control
+/// of the mailbox, so there is no separate verification step any more
+/// (docs/EMAIL_VERIFICATION.md).
+/// </para>
+/// </summary>
 internal sealed class InviteService(
     IdentityDbContext databaseContext,
     TenantContext tenantContext,
@@ -59,10 +85,6 @@ internal sealed class InviteService(
             requestedEmails.AddRange(request.Emails);
         }
 
-        // A single explicit transaction covers the pending-invite read as well as the write: a bare
-        // SELECT has no implicit transaction for TenantConnectionInterceptor's SET LOCAL to attach
-        // to, so without it row-level security would see no organization at all and return nothing
-        // (docs/TENANCY/TENANCY.md §1.5).
         await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
 
         var pendingInviteEmails = await databaseContext.Invites
@@ -178,9 +200,6 @@ internal sealed class InviteService(
         AcceptInviteRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        // The organization is established from the HMAC signature of the token, before any database
-        // access — see InviteTokenFactory. This is the one path that cannot take it from the
-        // X-Organization-Id header, because the caller has no organization yet.
         if (!inviteTokenFactory.TryReadOrganizationId(rawToken, out var tokenOrganizationId))
         {
             throw new InviteNotAcceptableException(InviteRejectionReason.NotFound, InviteConstants.NotFoundMessage);
@@ -243,8 +262,6 @@ internal sealed class InviteService(
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? invite.Email : request.DisplayName.Trim(),
                 CreatedAt = now,
-                // The invite token itself proves control of the mailbox, so there is no separate
-                // email-verification step any more (docs/EMAIL_VERIFICATION.md).
                 IsEmailVerified = true,
                 DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
             };
@@ -300,7 +317,7 @@ internal sealed class InviteService(
 
     private Guid RequireOrganizationId()
         => tenantContext.OrganizationId
-           ?? throw new InvalidOperationException("Organization context is not set.");
+           ?? throw new InvalidOperationException(ErrorMessages.OrganizationContextNotSet);
 
     /// <summary>
     /// Accepts only the names declared on <see cref="OrgRole"/>. The 2026-08-16 role split renamed

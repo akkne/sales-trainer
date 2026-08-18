@@ -14,6 +14,17 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 
+/// <summary>
+/// Generates, mails and verifies the numeric email code. Only the SHA-256 hash of a code is stored, and
+/// comparison is fixed-time, so neither the database nor the timing of a rejection reveals the code.
+/// Each address holds at most one live code: generating a new one deletes the rest, which is what makes
+/// the attempt counter meaningful.
+///
+/// <para>
+/// The display name is HTML-encoded into the HTML body and left verbatim in the text body — the text
+/// part is never parsed as markup, and escaping it would show the user their own name mangled.
+/// </para>
+/// </summary>
 internal sealed class EmailVerificationService(
     IdentityDbContext databaseContext,
     IEmailSender emailSender,

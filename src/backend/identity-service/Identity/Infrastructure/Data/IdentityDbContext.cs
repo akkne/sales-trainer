@@ -11,6 +11,17 @@ using Sellevate.Identity.Features.PlatformAdmin.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// identity-db. Most tables here are identity facts, which are cross-organization by definition
+/// (docs/TENANCY/TENANCY.md §4.2); <c>Invites</c> is the one tenant-scoped table, and the sets that
+/// deliberately carry neither a query filter nor a row-level-security policy say so individually
+/// below.
+///
+/// <para>
+/// Not <c>sealed</c> because EF Core's proxies and the design-time tooling subclass it. Must never be
+/// registered with a pooled-context helper — see <see cref="IdentityDataServiceCollectionExtensions"/>.
+/// </para>
+/// </summary>
 public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITenantContext tenantContext)
     : DbContext(options)
 {
@@ -45,13 +56,16 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITen
     /// </summary>
     public DbSet<ImpersonationAuditEntry> ImpersonationAuditEntries => Set<ImpersonationAuditEntry>();
 
+    /// <summary>
+    /// The <see cref="Invite"/> query filter added here is convenience, not security — the security
+    /// boundary is the row-level-security policy created by the AddInvite migration
+    /// (docs/TENANCY/TENANCY.md §1.4).
+    /// </summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
 
-        // Convenience, not security — the security boundary is the RLS policy created by the
-        // AddInvite migration (docs/TENANCY/TENANCY.md §1.4).
         modelBuilder.Entity<Invite>()
             .HasQueryFilter(invite => tenantContext.IsPlatformWide || invite.OrganizationId == tenantContext.OrganizationId);
     }

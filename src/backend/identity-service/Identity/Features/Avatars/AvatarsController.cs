@@ -1,15 +1,32 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Avatars.Models;
 using Sellevate.Identity.Features.Avatars.Services.Abstract;
 
 namespace Sellevate.Identity.Features.Avatars;
 
+/// <summary>
+/// Serves and replaces avatar images. Reading an avatar is anonymous on purpose — the images are
+/// rendered in shared views and carry nothing private — while writing requires the caller's own token
+/// and can only touch their own avatar.
+///
+/// <para>
+/// An upload has to pass both checks: an allow-listed extension and matching magic bytes. The extension
+/// alone is a claim by the client, and the object store serves what it is given, so a mislabelled file
+/// would otherwise be handed back with a content type it does not match.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("avatars")]
 public sealed class AvatarsController(IAvatarService avatarService) : ControllerBase
 {
+    private const int MaximumAvatarByteCount = 5 * 1024 * 1024;
+    private const string AvatarCacheControlValue = "public, no-cache";
+    private const string NoSniffValue = "nosniff";
+    private const int MaximumAvatarMegabytes = 5;
+
     private static readonly HashSet<string> AllowedExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
 
@@ -46,7 +63,7 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
 
     [HttpPost]
     [Authorize]
-    [RequestSizeLimit(5 * 1024 * 1024)]
+    [RequestSizeLimit(MaximumAvatarByteCount)]
     public async Task<ActionResult<AvatarUploadResponseDto>> UploadAvatar(
         IFormFile file,
         CancellationToken cancellationToken)
@@ -62,9 +79,9 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
             return BadRequest(new { error = "No file provided or file is empty." });
         }
 
-        if (file.Length > 5 * 1024 * 1024)
+        if (file.Length > MaximumAvatarByteCount)
         {
-            return BadRequest(new { error = "File size exceeds the 5 MB limit." });
+            return BadRequest(new { error = $"File size exceeds the {MaximumAvatarMegabytes} MB limit." });
         }
 
         var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -125,8 +142,8 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
             return NotFound();
         }
 
-        Response.Headers["Cache-Control"] = "public, no-cache";
-        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers.CacheControl = AvatarCacheControlValue;
+        Response.Headers.XContentTypeOptions = NoSniffValue;
         if (result.ETag is not null)
         {
             Response.Headers.ETag = result.ETag;
@@ -140,11 +157,17 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
         return File(result.Stream!, result.ContentType);
     }
 
+    /// <summary>
+    /// The caller's user id, or <see langword="null"/> when the token carries none. Reads
+    /// <c>ClaimTypes.NameIdentifier</c> first and falls back to the raw <c>sub</c> spelling, because a
+    /// principal built by the JWT handler carries the mapped URI while one forwarded by the gateway keeps
+    /// the wire name.
+    /// </summary>
     private Guid? ResolveUserId()
     {
-        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(ClaimTypeNames.Subject);
 
-        return Guid.TryParse(raw, out var id) ? id : null;
+        return Guid.TryParse(rawUserId, out var userId) ? userId : null;
     }
 }

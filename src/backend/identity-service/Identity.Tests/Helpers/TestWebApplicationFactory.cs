@@ -10,17 +10,24 @@ using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Tests.Helpers;
 
+/// <summary>
+/// Hosts the real identity-service in-process for the integration suite, with the email sender and
+/// the user-event publisher swapped for recording doubles.
+/// </summary>
 public sealed class TestWebApplicationFactory(string connectionString) : WebApplicationFactory<Program>
 {
     public RecordingEmailSender EmailSender { get; } = new();
     public RecordingUserEventPublisher UserEventPublisher { get; } = new();
 
-    // Program.cs uses the minimal hosting model, so its top-level statements read
-    // builder.Configuration directly while the host is being constructed — which happens
-    // before WebApplicationFactory gets to apply ConfigureAppConfiguration below. Anything
-    // Program.cs validates eagerly (Jwt:Key) must therefore already be in the environment
-    // by the time the host is built, so the settings are also exported as environment
-    // variables, which the default configuration sources pick up first.
+    /// <summary>
+    /// Program.cs uses the minimal hosting model, so its top-level statements read
+    /// <c>builder.Configuration</c> while the host is still being constructed — before
+    /// <see cref="WebApplicationFactory{TEntryPoint}"/> gets to apply
+    /// <c>ConfigureAppConfiguration</c>. Anything Program.cs validates eagerly (<c>Jwt:Key</c>) must
+    /// therefore already be in the environment by the time the host is built, which is why
+    /// <see cref="ExportSettingsToEnvironment"/> publishes the same dictionary as environment
+    /// variables: the default configuration sources pick those up first.
+    /// </summary>
     private static Dictionary<string, string?> BuildSettings(string connectionString) => new()
     {
         ["ConnectionStrings:Postgres"] = connectionString,
@@ -50,6 +57,15 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
         }
     }
 
+    /// <summary>
+    /// Phase 40.9: <see cref="OrganizationReplicaConsumer"/> resolves the Redis-backed idempotency
+    /// store the moment the host starts, and there is no Redis in the test environment, so it is
+    /// removed here. Removed by exact implementation type rather than with
+    /// <c>RemoveAll&lt;IHostedService&gt;()</c> so the outbox relay and the topic provisioner keep
+    /// running exactly as before. The tests seed <c>OrganizationReplicas</c> directly through
+    /// <see cref="TestOrganizationSeeder"/> — exactly what the consumer would have written — and the
+    /// projection it performs is covered separately by <c>OrganizationReplicaProjectorTests</c>.
+    /// </summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -67,13 +83,6 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
             services.RemoveAll<IUserEventPublisher>();
             services.AddSingleton<IUserEventPublisher>(UserEventPublisher);
 
-            // Phase 40.9: OrganizationReplicaConsumer resolves the Redis-backed idempotency
-            // store the moment the host starts, and there is no Redis in the test environment.
-            // Removed by exact implementation type rather than with RemoveAll<IHostedService>()
-            // so the outbox relay and topic provisioner keep running exactly as before. The tests
-            // seed OrganizationReplicas directly (TestOrganizationSeeder) — exactly what the
-            // consumer would have written — and the projection it performs is covered separately
-            // by OrganizationReplicaProjectorTests.
             var organizationReplicaConsumerDescriptors = services
                 .Where(descriptor => descriptor.ImplementationType == typeof(OrganizationReplicaConsumer))
                 .ToList();
@@ -94,13 +103,18 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
         return client;
     }
 
-    // Stands in for the gateway, which is the only thing allowed to set X-Organization-Id and
-    // always derives it from the validated token (docs/TENANCY/TENANCY.md §1.1). Calling the
-    // service directly in a test means setting it by hand.
-    // The default is TenancySuperAdmin rather than TenancyAdmin because most callers use this
-    // client to invite or offboard someone, and after the 2026-08-16 role split that is the one
-    // thing only a superadmin may do (docs/DECISIONS.md). Pass `organizationRole` explicitly to
-    // assert the negative case.
+    /// <summary>
+    /// Stands in for the gateway, which is the only thing allowed to set <c>X-Organization-Id</c> and
+    /// always derives it from the validated token (docs/TENANCY/TENANCY.md §1.1). Calling the service
+    /// directly in a test means setting it by hand.
+    ///
+    /// <para>
+    /// <paramref name="organizationRole"/> defaults to <c>TenancySuperAdmin</c> rather than
+    /// <c>TenancyAdmin</c> because most callers use this client to invite or offboard someone, and
+    /// after the 2026-08-16 role split that is the one thing only a superadmin may do
+    /// (docs/DECISIONS.md). Pass it explicitly to assert the negative case.
+    /// </para>
+    /// </summary>
     public HttpClient CreateOrganizationAdminClient(
         Guid userId,
         Guid organizationId,

@@ -76,11 +76,13 @@ public class InviteFlowTests
         body.Rejected.Should().HaveCount(2);
     }
 
+    /// <summary>
+    /// The caller is a fully entitled <c>TenancySuperAdmin</c>, so the 403 must come from the missing
+    /// <c>X-Organization-Id</c> header alone and not from the role gate.
+    /// </summary>
     [Test]
     public async Task CreateInvites_WithoutOrganizationHeader_IsForbidden()
     {
-        // The caller is a fully entitled TenancySuperAdmin — the 403 must come from the missing
-        // X-Organization-Id header alone, not from the role gate.
         var client = Factory.CreateAuthenticatedClient(
             Guid.NewGuid(), "orgadmin@test.com", "Org Admin", orgRole: "TenancySuperAdmin");
 
@@ -102,9 +104,11 @@ public class InviteFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    // The 2026-08-16 role split: adding and removing users is the single privilege that separates
-    // a tenancy admin from a tenancy superadmin. A TenancyAdmin runs everything else in the
-    // organization and still cannot invite.
+    /// <summary>
+    /// The 2026-08-16 role split: adding and removing users is the single privilege that separates a
+    /// tenancy admin from a tenancy superadmin. A <c>TenancyAdmin</c> runs everything else in the
+    /// organization and still cannot invite.
+    /// </summary>
     [Test]
     public async Task CreateInvites_AsTenancyAdmin_IsForbidden()
     {
@@ -117,8 +121,10 @@ public class InviteFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    // A platform SuperAdmin holds no membership anywhere, so it carries no `org_role` claim at
-    // all — the policy has to let it through on the platform role alone.
+    /// <summary>
+    /// A platform <c>SuperAdmin</c> holds no membership anywhere, so it carries no <c>org_role</c>
+    /// claim at all — the policy has to let it through on the platform role alone.
+    /// </summary>
     [Test]
     public async Task CreateInvites_AsPlatformSuperAdminWithoutAnyMembership_IsAllowed()
     {
@@ -132,8 +138,10 @@ public class InviteFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // The role name `OrgAdmin` was retired on 2026-08-16. A stale client must be told, not
-    // silently mapped onto whatever the closest surviving value happens to be.
+    /// <summary>
+    /// The role name <c>OrgAdmin</c> was retired on 2026-08-16. A stale client must be told, not
+    /// silently mapped onto whatever the closest surviving value happens to be.
+    /// </summary>
     [Test]
     public async Task CreateInvites_WithTheRetiredOrgAdminRoleName_IsRejected()
     {
@@ -271,6 +279,10 @@ public class InviteFlowTests
         acceptResponse.StatusCode.Should().Be(HttpStatusCode.Gone);
     }
 
+    /// <summary>
+    /// Repoints the token at a different organization. The HMAC no longer matches, so the token must
+    /// be refused before any lookup happens.
+    /// </summary>
     [Test]
     public async Task AcceptInvite_WithTamperedToken_IsRejected()
     {
@@ -278,8 +290,6 @@ public class InviteFlowTests
         var client = Factory.CreateOrganizationAdminClient(Guid.NewGuid(), organizationId);
         var createdInvite = await CreateInviteAsync(client, UniqueEmail(), "Manager");
 
-        // Repoint the token at a different organization; the HMAC no longer matches, so the token
-        // must be refused before any lookup happens.
         var tokenParts = createdInvite.Token.Split('.');
         var tamperedToken = $"{Guid.NewGuid():N}.{tokenParts[1]}.{tokenParts[2]}";
 

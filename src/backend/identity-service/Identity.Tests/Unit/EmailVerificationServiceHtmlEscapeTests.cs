@@ -30,8 +30,8 @@ public class EmailVerificationServiceHtmlEscapeTests
         var message = email.SentMessages.Single();
         message.HtmlBody.Should().NotContain("<script>", "raw HTML tags must be escaped in the HTML body");
         message.HtmlBody.Should().Contain("&lt;script&gt;", "display name must be HTML-encoded");
-        // Text body should still contain the raw name (plain text, no escaping needed)
-        message.TextBody.Should().Contain(maliciousName);
+        message.TextBody.Should().Contain(
+            maliciousName, "the plain-text body needs no escaping and must keep the name verbatim");
     }
 
     [Test]

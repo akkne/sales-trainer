@@ -3,6 +3,12 @@ using Sellevate.BuildingBlocks.Outbox;
 
 namespace Sellevate.Identity.Eventing;
 
+/// <summary>
+/// Maps each user event onto its topic and stages it in the outbox. The methods are synchronous work
+/// behind a <see cref="Task"/>-returning signature on purpose: nothing leaves the process here, so
+/// there is nothing to await, and the interface stays awaitable for a future transport that does.
+/// The user id is the partition key, which keeps every fact about one user in order.
+/// </summary>
 internal sealed class KafkaUserEventPublisher(IOutboxWriter outboxWriter) : IUserEventPublisher
 {
     public Task PublishRegisteredAsync(UserRegisteredEvent payload, CancellationToken cancellationToken = default)

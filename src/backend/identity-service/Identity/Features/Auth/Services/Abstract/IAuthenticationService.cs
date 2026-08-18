@@ -2,6 +2,12 @@ using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Features.Auth.Services.Abstract;
 
+/// <summary>
+/// The token surface of the platform. Every method that authenticates signals failure by throwing
+/// <see cref="UnauthorizedAccessException"/> with a message that is safe to show a caller: the wording
+/// is deliberately identical across "unknown address", "wrong credential" and "no access", so no
+/// endpoint here can be used to enumerate accounts.
+/// </summary>
 public interface IAuthenticationService
 {
     Task<IssuedTokenPair> VerifyEmailAsync(

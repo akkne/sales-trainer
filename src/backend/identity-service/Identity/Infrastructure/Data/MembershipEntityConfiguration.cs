@@ -5,6 +5,13 @@ using Sellevate.Identity.Features.Membership.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Maps the membership join table. <c>OrganizationId</c> is a bare uuid with no foreign key on
+/// purpose: organization-service owns the tenant registry under database-per-service, so this
+/// column is a cross-service reference that cannot be enforced here (docs/TENANCY/TENANCY.md §1.1).
+/// <c>UserId</c> is same-service — this database also owns Users — so it does carry a cascading
+/// foreign key and keeps the two tables consistent.
+/// </summary>
 public sealed class MembershipEntityConfiguration : IEntityTypeConfiguration<Membership>
 {
     public void Configure(EntityTypeBuilder<Membership> builder)
@@ -12,8 +19,6 @@ public sealed class MembershipEntityConfiguration : IEntityTypeConfiguration<Mem
         builder.ToTable("Memberships");
         builder.HasKey(membership => new { membership.UserId, membership.OrganizationId });
 
-        // Bare uuid, no FK — organization-service owns the registry (DB-per-service);
-        // see docs/TENANCY/TENANCY.md §1.1.
         builder.Property(membership => membership.OrganizationId);
 
         builder.Property(membership => membership.Role)
@@ -26,9 +31,6 @@ public sealed class MembershipEntityConfiguration : IEntityTypeConfiguration<Mem
 
         builder.HasIndex(membership => membership.OrganizationId);
 
-        // UserId is same-service (this database also owns Users), so an FK is safe and
-        // keeps the two tables consistent; unlike OrganizationId it is not a cross-service
-        // reference.
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(membership => membership.UserId)

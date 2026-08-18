@@ -17,16 +17,19 @@ namespace Sellevate.Identity.Tests.Unit;
 [TestFixture]
 public class AdminUsersControllerRoleTests
 {
-    private static AdminUsersController BuildController(out Sellevate.Identity.Infrastructure.Data.IdentityDbContext db)
+    /// <summary>
+    /// Builds the controller over an in-memory context, with a stand-in <c>ClaimsPrincipal</c> so the
+    /// audit-logging calls to <c>User.FindFirstValue</c> have something to read.
+    /// </summary>
+    private static AdminUsersController BuildController(out Sellevate.Identity.Infrastructure.Data.IdentityDbContext databaseContext)
     {
-        db = InMemoryDbContextFactory.Create();
+        databaseContext = InMemoryDbContextFactory.Create();
         var controller = new AdminUsersController(
-            db,
+            databaseContext,
             Substitute.For<IAvatarService>(),
             Substitute.For<IProfileService>(),
             NullLogger<AdminUsersController>.Instance);
 
-        // Provide a fake ClaimsPrincipal so User.FindFirstValue doesn't throw.
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -42,7 +45,7 @@ public class AdminUsersControllerRoleTests
     [Test]
     public async Task ChangeRole_DemoteLastSuperAdmin_ReturnsConflict()
     {
-        var controller = BuildController(out var db);
+        var controller = BuildController(out var databaseContext);
 
         var superAdmin = new User
         {
@@ -52,8 +55,8 @@ public class AdminUsersControllerRoleTests
             Role = UserRole.SuperAdmin,
             CreatedAt = DateTime.UtcNow
         };
-        db.Users.Add(superAdmin);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(superAdmin);
+        await databaseContext.SaveChangesAsync();
 
         var result = await controller.ChangeRole(
             superAdmin.Id,
@@ -67,7 +70,7 @@ public class AdminUsersControllerRoleTests
     [Test]
     public async Task ChangeRole_DemoteOneSuperAdminWhenMultipleExist_Succeeds()
     {
-        var controller = BuildController(out var db);
+        var controller = BuildController(out var databaseContext);
 
         var superAdmin1 = new User
         {
@@ -85,8 +88,8 @@ public class AdminUsersControllerRoleTests
             Role = UserRole.SuperAdmin,
             CreatedAt = DateTime.UtcNow
         };
-        db.Users.AddRange(superAdmin1, superAdmin2);
-        await db.SaveChangesAsync();
+        databaseContext.Users.AddRange(superAdmin1, superAdmin2);
+        await databaseContext.SaveChangesAsync();
 
         var result = await controller.ChangeRole(
             superAdmin1.Id,
@@ -100,7 +103,7 @@ public class AdminUsersControllerRoleTests
     [Test]
     public async Task ChangeRole_PromoteUserToSuperAdmin_AlwaysSucceeds()
     {
-        var controller = BuildController(out var db);
+        var controller = BuildController(out var databaseContext);
 
         var regularUser = new User
         {
@@ -110,8 +113,8 @@ public class AdminUsersControllerRoleTests
             Role = UserRole.User,
             CreatedAt = DateTime.UtcNow
         };
-        db.Users.Add(regularUser);
-        await db.SaveChangesAsync();
+        databaseContext.Users.Add(regularUser);
+        await databaseContext.SaveChangesAsync();
 
         var result = await controller.ChangeRole(
             regularUser.Id,

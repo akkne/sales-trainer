@@ -4,6 +4,12 @@ using Sellevate.Identity.Features.Invites.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Maps the invite table. The <c>TokenHash</c> index is globally unique rather than per
+/// organization because the acceptance path finds an invite by hash alone, before the caller has an
+/// organization. The composite index puts <c>OrganizationId</c> first, matching the tenant-scoped
+/// index rule in docs/TENANCY/TENANCY.md §3.
+/// </summary>
 public sealed class InviteEntityConfiguration : IEntityTypeConfiguration<Invite>
 {
     private const int EmailMaximumLength = 320;
@@ -34,12 +40,9 @@ public sealed class InviteEntityConfiguration : IEntityTypeConfiguration<Invite>
         builder.Property(invite => invite.CreatedAt)
             .IsRequired();
 
-        // The acceptance path finds the invite by hash alone, so the lookup must be unique and
-        // indexed globally rather than per organization.
         builder.HasIndex(invite => invite.TokenHash)
             .IsUnique();
 
-        // Organization first, matching the tenant-scoped index rule in docs/TENANCY/TENANCY.md §3.
         builder.HasIndex(invite => new { invite.OrganizationId, invite.Email });
     }
 }

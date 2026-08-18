@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
@@ -21,13 +23,13 @@ namespace Sellevate.Identity.Features.Auth;
 /// </summary>
 public sealed class ExpiredRefreshTokenCleanupService(
     IServiceScopeFactory scopeFactory,
+    IOptions<BackgroundJobConfiguration> backgroundJobOptions,
     ILogger<ExpiredRefreshTokenCleanupService> logger) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromHours(backgroundJobOptions.Value.ExpiredRefreshTokenCleanupIntervalHours));
         do
         {
             try
@@ -46,13 +48,16 @@ public sealed class ExpiredRefreshTokenCleanupService(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// System mode is declared before the <see cref="IdentityDbContext"/> is resolved, so the
+    /// context is built against a scope whose mode is already decided. <see cref="TenantContext"/>
+    /// refuses to be re-pointed afterwards, which is what makes "system" a statement rather than a
+    /// default.
+    /// </summary>
     private async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
 
-        // Declared before the DbContext is resolved, so the context is built against a scope whose
-        // mode is already decided. TenantContext refuses to be re-pointed afterwards, which is what
-        // makes "system" a statement rather than a default.
         scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
 
         var databaseContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();

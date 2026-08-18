@@ -4,6 +4,10 @@ using Sellevate.Identity.Features.PlatformAdmin.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
+/// <summary>
+/// Maps the impersonation audit trail. The two descending indexes exist for the only two questions
+/// asked of this table: "who went in recently" and "who has been inside this organization".
+/// </summary>
 public sealed class ImpersonationAuditEntryEntityConfiguration
     : IEntityTypeConfiguration<ImpersonationAuditEntry>
 {
@@ -40,11 +44,9 @@ public sealed class ImpersonationAuditEntryEntityConfiguration
         builder.Property(entry => entry.ExpiresAt)
             .IsRequired();
 
-        // The list endpoint is "who went in recently", newest first.
         builder.HasIndex(entry => entry.IssuedAt)
             .IsDescending();
 
-        // The other question worth asking of this table: "who has been inside this organization".
         builder.HasIndex(entry => new { entry.OrganizationId, entry.IssuedAt })
             .IsDescending(false, true);
     }
