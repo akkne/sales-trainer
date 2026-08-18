@@ -321,3 +321,113 @@ read the panel but is not an org administrator gets 403 on every save (see the l
 | Delete a banned claim, then save | two dialogs, in that order; cancelling either one changes nothing on the server |
 | Save as a member who is not an org administrator | «Изменять профиль компании может только администратор организации» — a 403 is a role, not a fault to retry |
 | Look for XP, streaks or leagues | none, on any of the three modes |
+
+---
+
+## Slice 1 — Задания (O2 `/org/assignments`, O3 `/org/assignments/new`, O4 `/org/assignments/[assignmentId]`)
+
+The three screens behind [ADMIN_UI_DESIGN.md §O2–O4](../TENANCY/ADMIN_UI_DESIGN.md) and the
+semantics of [TENANCY/ASSIGNMENTS.md](../TENANCY/ASSIGNMENTS.md): completion is a **quality
+threshold**, `failed_threshold` is a visible fifth state, and the audience is a rule rather than a
+list of names.
+
+### Endpoints each screen calls
+
+| Screen | Calls |
+|---|---|
+| O2 | `GET /admin/assignments`, `DELETE /admin/assignments/{id}` (drafts only) |
+| O3 | `POST /admin/assignments`, `POST /admin/assignments/{id}/activate`, `GET /admin/lessons`, `GET /admin/lessons/{lessonId}/versions`, `GET /dialog/bundles`, `GET /dialog/bundles/{bundleId}/modes`, `GET /reference?search=`, `GET /admin/team/skill-map` (via `useTeamMemberNames`) |
+| O4 | `GET /admin/assignments/{id}/dashboard`, `GET /admin/assignments/{id}`, `PUT /admin/assignments/{id}`, `POST /admin/assignments/{id}/remind?scope=`, `POST /admin/assignments/{id}/close`, `POST /admin/assignments/{id}/activate` (draft), `GET /admin/assignments/{id}/progress` (error fallback only) |
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgAssignmentsLogic.test.ts` | the §1.4 dictionary, completion-rule drafting and validation, audience-rule building, funnel maths, deadline wording, repeat-schedule bounds, content-draft ordering, and the 503/409/400 failure wording |
+| `__tests__/OrgAssignmentsComponents.test.tsx` | `AssignmentFunnelBar`, `AssignmentFunnel`, `RemindDialog`, `CompletionRuleEditor` |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **`notStarted` is derived, not read.** `AssignmentSummaryDto` has no such field, so the list row
+  computes `assignedCount − startedCount` and «в работе» as the rest — both clamped at zero so an
+  inconsistent read never draws a negative segment.
+- **«▲ N ниже порога» appears only when N > 0.** It is the one line of the list worth opening an
+  assignment for; a zero would bury it.
+- **The dashboard funnel has five stages.** `failed_threshold` is a column, never a slice of
+  «выполнили».
+- **Neither threshold radio starts selected**, and a rule whose content the assignment does not
+  carry cannot be selected at all — `activate` answers 409 for exactly that pairing.
+- **The «одна из двух половин» warning renders only when both `lesson_version` and
+  `dialog_scenario` are present.**
+- **An unknown `completionRule.kind` reads as «no rule»** in the editor and renders nothing in the
+  sentence — never as a guess.
+- **An unknown `repeatSchedule.kind` is never rewritten**; the editor falls back to `[7, 21]` and
+  the list prints no offsets.
+- **503 is worded as «nothing was written, press it again»** on issue, save and remind — it is not a
+  generic failure.
+- **`?action=remind` opens the dialog and sends nothing.** Only the button sends.
+- **`notifiedCount` is reported as an intention** («Напоминание отправлено: 3 человека»), and the
+  dialog says a repeat within the hour will not arrive.
+- **No XP, no streaks, no leagues** anywhere in the slice.
+
+### Manual — O2 `/org/assignments`
+
+| Scenario | Expect |
+|---|---|
+| Open with no assignments at all | «Заданий пока нет» + «Создать первое задание» |
+| Filter to a status with nothing in it | «В этом статусе ничего нет» + «Показать все» |
+| Slow connection | five skeleton rows, never an empty table |
+| Stop learning-service | one `ErrorState` with «Повторить» |
+| A wave row | title carries «· волна 2» and a third line «↳ повтор задания «…»» when the origin is in the same array, «↳ повтор» when it is not |
+| An assignment whose deadline has passed while still active | the cell reads «прошёл 11 авг.» in amber, not red |
+| A draft row | «Удалить» appears; the first click arms it («Точно удалить?»), the second deletes; row click still opens the card |
+| An issued row | no «Удалить» at all — `DELETE` answers 409 for anything ever issued |
+| Click any row | `/org/assignments/{id}` |
+
+### Manual — O3 `/org/assignments/new`
+
+| Scenario | Expect |
+|---|---|
+| Open the screen | «Выдать команде» is disabled and the reason is printed next to it |
+| Pick a lesson with no published version | the version button is replaced by «у урока нет опубликованной версии» and a link into the lesson editor |
+| Pick the same lesson version twice | the second attempt is marked «✓ уже добавлено» and cannot be clicked — a duplicate `(kind, reference)` is a 400 |
+| Add a conversation | the persona fields appear inside that row and nowhere else |
+| Reorder by dragging, or with the ↑/↓ buttons | positions renumber; no `orderIndex` field is ever typed |
+| Choose «Разговоры» with no conversation in the assignment | the radio is disabled, with the reason under it |
+| Add both exercises and a conversation | the amber «порог измеряет только …» warning appears |
+| Set the required count to 21 or the score to 0 | refused client-side with the server's own bounds quoted |
+| Choose «Выбрать людей» | the list is the skill-map roster, with «Здесь только те, кто уже что-то решал» under it |
+| Enable repeats and type 21 then 7 | «по возрастанию» refusal before anything is sent |
+| «Сохранить черновик» | one `POST`, then the card |
+| «Выдать команде» | «Создаём…» then «Выдаём…», then the card with the funnel |
+| Press «Выдать команде» again after a failure | no second draft is created — the id from the first `POST` is reused |
+| Stop identity-service, then «Выдать команде» | «Задание сохранено черновиком, нажмите «Выдать» ещё раз» |
+
+### Manual — O4 `/org/assignments/[assignmentId]`
+
+| Scenario | Expect |
+|---|---|
+| Open a draft | no funnel and no table — «Задание ещё не выдано» + «Выдать команде» |
+| Open an assignment issued an hour ago | the funnel reads «Выдано 12 · пока никто не начал», which is not an error |
+| Open a closed assignment | read-only: no «Закрыть», no reminder button |
+| A person with no `UserReplicas` row | «Без имени · 3f2a1b9c», never a placeholder name |
+| A person who left, with the roster readable | a «†» and the footnote under the table |
+| Stop identity-service (`rosterKnown: false`) | «Не удалось проверить, кто ещё работает в компании», no «†» anywhere, the reminder button still enabled |
+| Break the dashboard entirely | `ErrorState` + «Показать сырые строки», which renders `GET …/progress` — ids, no names |
+| A repeat series | the wave tabs appear only from the second wave on; clicking another wave navigates to its own card |
+| Open `/admin/assignments/{id}?action=remind&scope=not_started` from the deadline digest | slice 0 redirects to `/org/assignments/{id}?…`; the dialog is **already open**, preset to «тем, кто не начал», and **nothing has been sent** |
+| Inside the dialog | the recipients are listed by name, and the counts match the funnel |
+| Send it | «Напоминание отправлено: N человек»; stopping identity-service instead gives «Никто не получил напоминание» |
+| Expand «Содержание и настройки» on an issued assignment | content and threshold are shown but frozen, with the sentence explaining why; title, goal, audience, dates and repeats stay editable |
+| Add a new hire to an issued assignment and save | rows are appended, nobody is removed |
+| Look for XP, streaks or leagues | none |
+
+### What the backend cannot serve, and what the screens do instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| «6 человек» under a `users` draft in the list | `AssignmentSummaryDto` carries `audienceKind` only — no user ids, no count — and a draft has no progress rows to borrow one from | «выбранные люди» until the assignment is issued, then the resolved `assignedCount` |
+| «повтор +7, +21» under a list row | the summary carries `hasRepeatSchedule: bool` and no offsets | «с повторами»; the exact offsets appear on O4, which reads the full assignment |
+| Titles of the content items on O4 | `AssignmentDto.content` is `(kind, reference, orderIndex, persona)` — the learner-facing `ActiveAssignmentDto` resolves titles, the admin one does not | the kind plus the raw reference (a dialog mode key is already readable; a lesson version is a uuid) |
+| A people picker for the audience | identity-service has no `GET /memberships` (§6.1) | `GET /admin/team/skill-map` members, with the caveat printed under the list |
+| Per-status counts on the filter chips | `GET /admin/assignments` has no counts endpoint and does not paginate | the whole array is read once and both the counts and the filtering are done on the client |
