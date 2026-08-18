@@ -8,6 +8,7 @@ using Sellevate.Learning.Features.Programs;
 using Sellevate.Learning.Features.Reference;
 using Sellevate.Learning.Features.SkillTree;
 using Sellevate.Learning.Features.Techniques;
+using Sellevate.Learning.Features.TeamInsights;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Identity;
 
@@ -32,6 +33,7 @@ public static class LearningServiceCollectionExtensions
         services.AddLessonFeatureServices();
         services.AddProgramFeatureServices();
         services.AddAssignmentFeatureServices(configuration);
+        services.AddTeamInsightsFeatureServices();
         services.AddExerciseFeatureServices();
         services.AddExerciseDialogServices(configuration);
         services.AddReferenceFeatureServices();
