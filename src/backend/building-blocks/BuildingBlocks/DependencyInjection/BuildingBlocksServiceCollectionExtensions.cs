@@ -33,6 +33,13 @@ public static class BuildingBlocksServiceCollectionExtensions
     /// resolve <see cref="ITenantContext"/> to stamp the current organization onto every
     /// enqueued event.
     /// </para>
+    ///
+    /// <para>
+    /// <see cref="KafkaTopicProvisioner"/> is registered <b>first</b> so its <c>StartAsync</c>
+    /// creates all topics before any consumer subscribes — otherwise a broker with auto-create
+    /// disabled fails the consume loop with "Unknown topic or partition" and no events are ever
+    /// delivered. Do not reorder these registrations.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddSellevateEventing(this IServiceCollection services, IConfiguration configuration)
     {
@@ -40,9 +47,6 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.Configure<ConsumerResilienceSettings>(configuration.GetSection(ConsumerResilienceSettings.SectionName));
         services.Configure<OutboxSettings>(configuration.GetSection(OutboxSettings.SectionName));
 
-        // Registered first so its StartAsync creates all topics before any consumer subscribes —
-        // otherwise a broker with auto-create disabled fails the consume loop with
-        // "Unknown topic or partition" and no events are ever delivered.
         services.AddHostedService<KafkaTopicProvisioner>();
         services.AddSingleton<KafkaEventPublisher>();
         services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());

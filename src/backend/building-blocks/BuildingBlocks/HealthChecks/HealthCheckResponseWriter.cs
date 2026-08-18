@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -13,9 +14,14 @@ public static class HealthCheckResponseWriter
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Serializes <paramref name="report"/> onto the response. Deliberately does not set a status
+    /// code: the health-check middleware has already chosen one from the aggregate status, and
+    /// overwriting it here would decouple the body from the code a probe reads.
+    /// </summary>
     public static Task WriteAsync(HttpContext httpContext, HealthReport report)
     {
-        httpContext.Response.ContentType = "application/json";
+        httpContext.Response.ContentType = MediaTypeNames.Application.Json;
 
         var payload = new HealthReportResponse(
             report.Status.ToString(),

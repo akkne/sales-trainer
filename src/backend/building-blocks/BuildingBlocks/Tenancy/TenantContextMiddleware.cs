@@ -23,6 +23,18 @@ public sealed class TenantContextMiddleware(RequestDelegate next)
     /// (docs/DECISIONS.md, 2026-08-16) — never an organization's `org_role`.</summary>
     private static readonly string[] PlatformRoles = ["Admin", "SuperAdmin"];
 
+    /// <summary>
+    /// Resolves the organization and platform-wide mode onto <paramref name="tenantContext"/>, then
+    /// gates the request if the endpoint is marked <see cref="TenantScopedAttribute"/> and neither
+    /// could be established.
+    ///
+    /// <para>
+    /// Platform staff normally hold no membership and therefore no organization header, so a
+    /// tenant-scoped route must not turn them away: their scope is <em>every</em> organization,
+    /// which is a wider answer to "which tenant is this?" rather than a missing one. Only a caller
+    /// who is neither scoped to an organization nor platform staff gets 403.
+    /// </para>
+    /// </summary>
     public async Task InvokeAsync(HttpContext httpContext, TenantContext tenantContext)
     {
         var organizationIdHeaderValue = httpContext.Request.Headers[IdentityHeaders.OrganizationId].ToString();
@@ -39,9 +51,6 @@ public sealed class TenantContextMiddleware(RequestDelegate next)
             tenantContext.EnterPlatformMode();
         }
 
-        // Platform staff normally hold no membership and therefore no organization header, so a
-        // tenant-scoped route must not turn them away: their scope is every organization, which is
-        // a wider answer to "which tenant is this?" rather than a missing one.
         var routeRequiresTenantScope = httpContext.GetEndpoint()?.Metadata.GetMetadata<TenantScopedAttribute>() is not null;
         if (routeRequiresTenantScope && !organizationIdWasResolved && !callerIsPlatformStaff)
         {

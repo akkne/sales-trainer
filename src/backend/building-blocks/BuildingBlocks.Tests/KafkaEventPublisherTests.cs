@@ -18,11 +18,14 @@ public class KafkaEventPublisherTests
 {
     private const int PublishTimeoutSeconds = 2;
 
+    /// <summary>
+    /// A publisher aimed at port 1, where nothing listens, so a produce can never be acknowledged.
+    /// That is what lets these tests assert the timeout and fire-and-forget behaviour without a broker.
+    /// </summary>
     private static KafkaEventPublisher CreatePublisherPointedAtNothing() =>
         new(
             Options.Create(new KafkaSettings
             {
-                // Port 1 has nothing listening — the produce can never be acknowledged.
                 BootstrapServers = "127.0.0.1:1",
                 PublishTimeoutSeconds = PublishTimeoutSeconds,
             }),

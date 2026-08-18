@@ -17,6 +17,9 @@ internal sealed class MailerSendEmailSender : IEmailSender
 {
     public const string HttpClientName = "MailerSend";
     private const string SendEmailPath = "/v1/email";
+    private const string AuthenticationScheme = "Bearer";
+    private const string EnvironmentInjectionPlaceholderPrefix = "INJECTED";
+    private const string SamplePlaceholderPrefix = "YOUR_";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<MailerSendConfiguration> _mailerSendOptions;
@@ -36,8 +39,8 @@ internal sealed class MailerSendEmailSender : IEmailSender
     private string? ApiToken => _mailerSendOptions.Value.ApiToken?.Trim();
 
     private static bool IsPlaceholder(string token) =>
-        token.StartsWith("INJECTED", StringComparison.OrdinalIgnoreCase)
-        || token.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+        token.StartsWith(EnvironmentInjectionPlaceholderPrefix, StringComparison.OrdinalIgnoreCase)
+        || token.StartsWith(SamplePlaceholderPrefix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A real MailerSend token is a single opaque string — internal whitespace means the
     /// env value has extra content appended (e.g. from-email/name on the same line).</summary>
@@ -54,6 +57,20 @@ internal sealed class MailerSendEmailSender : IEmailSender
         }
     }
 
+    /// <summary>
+    /// Sends <paramref name="message"/>, or logs and returns when the API token is unusable.
+    ///
+    /// <para>
+    /// A genuinely-unset placeholder token (expected in local dev) logs a warning, while a
+    /// malformed one — a real misconfiguration that would otherwise silently 401 — logs an error.
+    /// Keeping the two distinct is what maps the production symptom "emails don't arrive" onto an
+    /// actionable log line instead of a shrug.
+    /// </para>
+    ///
+    /// <para>
+    /// A non-success HTTP response throws; only an unconfigured sender is silent.
+    /// </para>
+    /// </summary>
     public async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -62,9 +79,6 @@ internal sealed class MailerSendEmailSender : IEmailSender
 
         if (!IsConfigured)
         {
-            // Distinguish a genuinely-unset placeholder (expected in local dev) from a malformed
-            // token (a real misconfiguration that would otherwise silently 401), so the prod
-            // symptom "emails don't arrive" maps to an actionable log line.
             if (!string.IsNullOrWhiteSpace(apiToken) && HasInternalWhitespace(apiToken) && !IsPlaceholder(apiToken))
             {
                 _logger.LogError(
@@ -99,7 +113,7 @@ internal sealed class MailerSendEmailSender : IEmailSender
         {
             Content = JsonContent.Create(requestPayload)
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue(AuthenticationScheme, apiToken);
 
         var response = await _httpClientFactory.CreateClient(HttpClientName)
             .SendAsync(request, cancellationToken);

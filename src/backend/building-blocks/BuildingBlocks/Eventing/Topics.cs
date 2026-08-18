@@ -13,13 +13,11 @@ namespace Sellevate.BuildingBlocks.Eventing;
 /// </summary>
 public static class Topics
 {
-    // ── Identity (produces) ────────────────────────────────────────────────
     public const string UserRegistered = "user.registered";
     public const string UserUpdated = "user.updated";
     public const string UserDeleted = "user.deleted";
     public const string UserAvatarChanged = "user.avatar.changed";
 
-    // ── Learning (produces) ────────────────────────────────────────────────
     public const string ExerciseCompleted = "exercise.completed";
     public const string LessonCompleted = "lesson.completed";
     public const string SkillCompleted = "skill.completed";
@@ -61,10 +59,6 @@ public static class Topics
     public const string AssignmentDeadlineDigest = "assignment.deadline.digest";
 
     /// <summary>
-    /// Phase 40.25. The РОП selected a fragment of this person's practice conversation and commented
-    /// on it (docs/TENANCY/ASSIGNMENTS.md §4.1). Addressed to the manager whose conversation it was.
-    /// </summary>
-    /// <summary>
     /// Phase 40.25. One person's standing on one assignment moved between the four funnel states
     /// (docs/TENANCY/ASSIGNMENTS.md §4). Published by the threshold evaluator in the transaction that
     /// writes the row, so a transition cannot exist without its notice.
@@ -78,6 +72,10 @@ public static class Topics
     /// </summary>
     public const string AssignmentProgressChanged = "assignment.progress.changed";
 
+    /// <summary>
+    /// Phase 40.25. The РОП selected a fragment of this person's practice conversation and commented
+    /// on it (docs/TENANCY/ASSIGNMENTS.md §4.1). Addressed to the manager whose conversation it was.
+    /// </summary>
     public const string DialogReviewCommented = "dialog.review.commented";
 
     /// <summary>
@@ -95,26 +93,21 @@ public static class Topics
     /// </summary>
     public const string DialogReviewDisputed = "dialog.review.disputed";
 
-    // ── AI Engine (produces) ───────────────────────────────────────────────
     public const string DialogEvaluated = "dialog.evaluated";
 
-    // ── Gamification (produces) ────────────────────────────────────────────
     public const string XpGranted = "xp.granted";
     public const string AchievementUnlocked = "achievement.unlocked";
     public const string StreakMilestone = "streak.milestone";
     public const string GamificationDialogWeightsUpdated = "gamification.dialog-weights.updated";
 
-    // ── Social (produces) ──────────────────────────────────────────────────
     public const string FriendRequestReceived = "friend.request.received";
     public const string FriendRequestAccepted = "friend.request.accepted";
     public const string ChatMessageSent = "chat.message.sent";
     public const string ChatMessageRead = "chat.message.read";
     public const string DiscussReplyCreated = "discuss.reply.created";
 
-    // ── Company (produces) ─────────────────────────────────────────────────
     public const string CompanyFollowUpDue = "company.followup.due";
 
-    // ── Organization (produces) ────────────────────────────────────────────
     public const string OrganizationCreated = "organization.created";
     public const string OrganizationUpdated = "organization.updated";
     public const string OrganizationSuspended = "organization.suspended";
@@ -141,12 +134,17 @@ public static class Topics
     /// All declared base topic names (excludes the <see cref="DeadLetterSuffix"/> helper and any
     /// dead-letter companions). Reflected once from the <c>const string</c> fields so a newly
     /// added topic is automatically picked up by the startup provisioner.
+    ///
+    /// <para>
+    /// The leading-dot filter is what excludes <see cref="DeadLetterSuffix"/> itself: a real topic
+    /// name never starts with a dot, so any future suffix constant declared here is skipped for
+    /// free rather than having to be listed by name.
+    /// </para>
     /// </summary>
     public static IReadOnlyCollection<string> All { get; } = typeof(Topics)
         .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
         .Where(field => field.IsLiteral && field.FieldType == typeof(string))
         .Select(field => (string)field.GetRawConstantValue()!)
-        // Skip the ".dlt" suffix constant; real topic names never start with a dot.
         .Where(value => !value.StartsWith('.'))
         .Distinct()
         .ToArray();

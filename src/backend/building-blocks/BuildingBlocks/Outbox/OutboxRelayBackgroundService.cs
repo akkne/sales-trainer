@@ -26,6 +26,13 @@ namespace Sellevate.BuildingBlocks.Outbox;
 /// </summary>
 public sealed class OutboxRelayBackgroundService : BackgroundService
 {
+    /// <summary>
+    /// Floor applied to <see cref="OutboxSettings.PollingIntervalMilliseconds"/>, so a
+    /// misconfigured (or zero) interval degrades to a fast poll rather than to a busy loop that
+    /// pins a core and hammers the database.
+    /// </summary>
+    private const int MinimumPollingIntervalMilliseconds = 100;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly OutboxSettings _settings;
     private readonly ILogger<OutboxRelayBackgroundService> _logger;
@@ -40,9 +47,21 @@ public sealed class OutboxRelayBackgroundService : BackgroundService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Polls until cancellation. Each tick opens a fresh scope and declares system mode on it
+    /// <b>before</b> the <c>DbContext</c> is resolved, never after: the connection interceptor
+    /// decides whether to emit <c>SET LOCAL app.organization_id</c> the first time a transaction
+    /// opens on that context, so the mode has to be settled while the scope is still empty.
+    ///
+    /// <para>
+    /// A failed tick is logged and the loop continues — a transient database or broker outage must
+    /// not take the relay down, since the unsent rows are still there on the next tick.
+    /// </para>
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var interval = TimeSpan.FromMilliseconds(Math.Max(100, _settings.PollingIntervalMilliseconds));
+        var interval = TimeSpan.FromMilliseconds(
+            Math.Max(MinimumPollingIntervalMilliseconds, _settings.PollingIntervalMilliseconds));
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -50,9 +69,6 @@ public sealed class OutboxRelayBackgroundService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
 
-                // Before the DbContext is resolved, not after: the connection interceptor decides
-                // whether to emit SET LOCAL app.organization_id the first time a transaction opens
-                // on that context, so the mode has to be settled while the scope is still empty.
                 scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
 
                 var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();

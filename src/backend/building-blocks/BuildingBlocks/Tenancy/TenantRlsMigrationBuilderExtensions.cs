@@ -14,6 +14,8 @@ public static class TenantRlsMigrationBuilderExtensions
 {
     public const string DefaultOrganizationIdColumnName = "OrganizationId";
 
+    private const string PolicyNameSuffix = "_tenant_isolation";
+
     /// <summary>
     /// Enables RLS for a table where every row belongs to exactly one organization
     /// (<c>OrganizationId NOT NULL</c>) — user progress, attempts, dialog sessions, assignments,
@@ -72,7 +74,7 @@ public static class TenantRlsMigrationBuilderExtensions
         string tableName)
     {
         var quotedTable = QuoteIdentifier(tableName);
-        var quotedPolicy = QuoteIdentifier($"{tableName}_tenant_isolation");
+        var quotedPolicy = QuoteIdentifier($"{tableName}{PolicyNameSuffix}");
 
         return migrationBuilder.Sql($"""
             DROP POLICY IF EXISTS {quotedPolicy} ON {quotedTable};
@@ -123,7 +125,7 @@ public static class TenantRlsMigrationBuilderExtensions
         bool admitPlatformStaff)
     {
         var quotedTable = QuoteIdentifier(tableName);
-        var quotedPolicy = QuoteIdentifier($"{tableName}_tenant_isolation");
+        var quotedPolicy = QuoteIdentifier($"{tableName}{PolicyNameSuffix}");
         var readComparison = admitPlatformStaff
             ? $"{BuildPlatformModeComparison()} OR {comparison}"
             : comparison;

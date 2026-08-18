@@ -25,6 +25,25 @@ public sealed class TenantConnectionInterceptor(ITenantContext tenantContext) : 
 {
     public const string OrganizationIdSettingName = "app.organization_id";
 
+    /// <summary>
+    /// The Postgres session variable that tells a tenant policy's <c>USING</c> clause the caller is
+    /// validated platform staff and may read every organization's rows. Set only from
+    /// <see cref="ITenantContext.IsPlatformWide"/>, which in a request comes only from the `role`
+    /// claim of a validated token (see <see cref="TenantContextMiddleware"/>) — never from a
+    /// header, body, query or route value a client could write.
+    ///
+    /// <para>
+    /// It widens reads alone. The <c>WITH CHECK</c> half of every policy ignores it, so a platform
+    /// administrator still cannot write a row into an organization they did not name explicitly.
+    /// </para>
+    /// </summary>
+    public const string PlatformModeSettingName = "app.platform_mode";
+
+    /// <summary>
+    /// Synchronous counterpart of <see cref="TransactionStartedAsync"/>, for the code paths EF Core
+    /// still runs synchronously. Emits nothing when
+    /// <see cref="BuildSetLocalCommandText()"/> has nothing to set.
+    /// </summary>
     public DbTransaction TransactionStarted(DbConnection connection, TransactionEndEventData eventData, DbTransaction result)
     {
         var commandText = BuildSetLocalCommandText();
@@ -37,6 +56,11 @@ public sealed class TenantConnectionInterceptor(ITenantContext tenantContext) : 
         return result;
     }
 
+    /// <summary>
+    /// Emits the tenant <c>SET LOCAL</c> statements on the transaction EF Core has just opened, which
+    /// is the only window in which they can take effect. The statements run <b>inside</b> the new
+    /// transaction, so they are rolled back with it and can never outlive it on a pooled connection.
+    /// </summary>
     public async ValueTask<DbTransaction> TransactionStartedAsync(
         DbConnection connection,
         TransactionEndEventData eventData,
@@ -52,20 +76,6 @@ public sealed class TenantConnectionInterceptor(ITenantContext tenantContext) : 
 
         return result;
     }
-
-    /// <summary>
-    /// The Postgres session variable that tells a tenant policy's <c>USING</c> clause the caller is
-    /// validated platform staff and may read every organization's rows. Set only from
-    /// <see cref="ITenantContext.IsPlatformWide"/>, which in a request comes only from the `role`
-    /// claim of a validated token (see <see cref="TenantContextMiddleware"/>) — never from a
-    /// header, body, query or route value a client could write.
-    ///
-    /// <para>
-    /// It widens reads alone. The <c>WITH CHECK</c> half of every policy ignores it, so a platform
-    /// administrator still cannot write a row into an organization they did not name explicitly.
-    /// </para>
-    /// </summary>
-    public const string PlatformModeSettingName = "app.platform_mode";
 
     /// <summary>
     /// Returns the <c>SET LOCAL</c> statements for the current tenant context, or
