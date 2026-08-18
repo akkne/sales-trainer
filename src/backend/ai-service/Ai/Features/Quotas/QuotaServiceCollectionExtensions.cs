@@ -19,6 +19,7 @@ public static class QuotaServiceCollectionExtensions
 
         services.AddScoped<IAiQuotaService, AiQuotaService>();
         services.AddScoped<IAiSpendMeter, AiSpendMeter>();
+        services.AddExceptionHandler<AiQuotaExceptionHandler>();
 
         return services;
     }

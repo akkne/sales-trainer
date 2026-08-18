@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
@@ -14,6 +16,7 @@ internal sealed class OpenAiChatService : IOpenAiChatService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<OpenAiConfiguration> _openAiOptions;
+    private readonly IAiSpendMeter _spendMeter;
     private readonly ILogger<OpenAiChatService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_OPENAI_API_KEY";
@@ -133,10 +136,12 @@ endCall: false ЗАПРЕЩЕНО.
     public OpenAiChatService(
         IHttpClientFactory httpClientFactory,
         IOptions<OpenAiConfiguration> openAiOptions,
+        IAiSpendMeter spendMeter,
         ILogger<OpenAiChatService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _openAiOptions = openAiOptions;
+        _spendMeter = spendMeter;
         _logger = logger;
     }
 
@@ -195,6 +200,14 @@ endCall: false ЗАПРЕЩЕНО.
         var chatModel = _openAiOptions.Value.DialogModel;
         var maxTokens = _openAiOptions.Value.MaximumDialogTokenCount;
 
+        // Phase 40.33. The gate on the streaming path. The charge is at the bottom of this method and
+        // is an *estimate*: an SSE stream carries no `usage` block, and asking for one via
+        // `stream_options` is a request shape not every OpenAI-compatible gateway accepts — breaking
+        // every voice call to make the cheapest call in the product exact is a bad trade. Dialog
+        // turns are capped at MaximumDialogTokenCount (500) each; the expensive calls are all
+        // non-streaming and all measured.
+        await _spendMeter.EnsureLlmAllowanceAsync($"streaming chat ({chatModel})", cancellationToken);
+
         var (httpClient, apiUrl) = CreateConfiguredClient();
 
         var messages = BuildMessages(systemPrompt + StructuredReplyInstruction, conversationHistory);
@@ -222,14 +235,26 @@ endCall: false ЗАПРЕЩЕНО.
             throw TranslateProviderError(response.StatusCode, errorBody, "streaming chat");
         }
 
+        var promptLength = systemPrompt.Length + StructuredReplyInstruction.Length
+                           + conversationHistory.Sum(message => message.Content.Length);
+        var replyLength = 0;
+
         var contentType = response.Content.Headers.ContentType?.MediaType;
         if (!string.Equals(contentType, "text/event-stream", StringComparison.OrdinalIgnoreCase))
         {
             var fullBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogInformation("Provider returned non-SSE chat completion ({ContentType}); yielding it as a single delta", contentType);
-            var fullContent = ExtractContentFromCompletionResponse(fullBody, _logger);
-            if (!string.IsNullOrEmpty(fullContent))
-                yield return fullContent;
+            var completion = ExtractCompletion(fullBody, _logger);
+            await ChargeAsync(
+                chatModel,
+                completion.Usage,
+                new AiCompletionUsage(
+                    _spendMeter.EstimateTokensFromLength(promptLength),
+                    _spendMeter.EstimateTokens(completion.Content)),
+                cancellationToken);
+
+            if (!string.IsNullOrEmpty(completion.Content))
+                yield return completion.Content;
             yield break;
         }
 
@@ -238,14 +263,14 @@ endCall: false ЗАПРЕЩЕНО.
 
         while (!reader.EndOfStream)
         {
-            if (cancellationToken.IsCancellationRequested) yield break;
+            if (cancellationToken.IsCancellationRequested) break;
 
             var line = await reader.ReadLineAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(line)) continue;
             if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
 
             var payload = line["data:".Length..].Trim();
-            if (payload == "[DONE]") yield break;
+            if (payload == "[DONE]") break;
 
             string? delta = null;
             try
@@ -268,9 +293,22 @@ endCall: false ЗАПРЕЩЕНО.
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(delta))
-                yield return delta;
+            if (string.IsNullOrEmpty(delta)) continue;
+
+            replyLength += delta.Length;
+            yield return delta;
         }
+
+        // Charged after the stream ends, including when it ends early — a client that hangs up
+        // mid-turn has still been billed by the provider for everything the model produced up to
+        // that point, and pretending otherwise would let a flapping client run free.
+        await ChargeAsync(
+            chatModel,
+            reported: null,
+            new AiCompletionUsage(
+                _spendMeter.EstimateTokensFromLength(promptLength),
+                _spendMeter.EstimateTokensFromLength(replyLength)),
+            CancellationToken.None);
     }
 
     public async Task<FeedbackResult> GenerateFeedbackAsync(
@@ -445,6 +483,11 @@ endCall: false ЗАПРЕЩЕНО.
         if (!IsConfigured)
             throw new InvalidOperationException("OpenAI API is not configured");
 
+        // Phase 40.33. The gate, on the one path every non-streaming completion in this service takes
+        // — dialog replies, feedback, personas, briefings, structuring, generation, rewrite, review.
+        // It runs before the request is built, so a refused organization pays nothing at all.
+        await _spendMeter.EnsureLlmAllowanceAsync($"chat completion ({model})", cancellationToken);
+
         var (httpClient, apiUrl) = CreateConfiguredClient();
 
         var requestBody = new Dictionary<string, object>
@@ -469,7 +512,48 @@ endCall: false ЗАПРЕЩЕНО.
 
         _logger.LogDebug("OpenAI API response: {Response}", responseContent);
 
-        return ExtractContentFromCompletionResponse(responseContent, _logger);
+        var completion = ExtractCompletion(responseContent, _logger);
+
+        // The charge. A non-streaming completion carries the provider's own `usage` block, so this
+        // number is a measurement rather than an estimate — and these are the expensive calls: a
+        // generated lesson, a structured deck, sixty rewritten exercises.
+        await ChargeAsync(model, completion.Usage, EstimateUsage(systemPrompt, conversationHistory, completion.Content), cancellationToken);
+
+        return completion.Content;
+    }
+
+    /// <summary>
+    /// Phase 40.33. Writes one completion to the meter, preferring the provider's reported token
+    /// counts and falling back to an estimate when it reported none.
+    ///
+    /// <para>
+    /// The fallback matters because not every OpenAI-compatible gateway returns <c>usage</c>, and a
+    /// call recorded as zero tokens is worse than a call recorded approximately: zero reads as "this
+    /// was free" on the spend report, and the month would quietly understate itself. Estimated calls
+    /// are counted separately so nobody mistakes one for the other.
+    /// </para>
+    /// </summary>
+    private async Task ChargeAsync(
+        string model,
+        AiCompletionUsage? reported,
+        AiCompletionUsage estimated,
+        CancellationToken cancellationToken)
+    {
+        var usage = reported ?? estimated;
+        await _spendMeter.RecordLlmUsageAsync(
+            model,
+            usage.PromptTokens,
+            usage.CompletionTokens,
+            wasEstimated: reported is null,
+            cancellationToken);
+    }
+
+    private AiCompletionUsage EstimateUsage(string systemPrompt, List<DialogMessage> history, string reply)
+    {
+        var promptLength = systemPrompt.Length + history.Sum(message => message.Content.Length);
+        return new AiCompletionUsage(
+            _spendMeter.EstimateTokensFromLength(promptLength),
+            _spendMeter.EstimateTokens(reply));
     }
 
     /// <summary>
@@ -500,6 +584,15 @@ endCall: false ЗАПРЕЩЕНО.
     }
 
     private static string ExtractContentFromCompletionResponse(string responseContent, ILogger logger)
+        => ExtractCompletion(responseContent, logger).Content;
+
+    /// <summary>
+    /// Phase 40.33. Same tolerant content extraction as before, plus the <c>usage</c> block this
+    /// service used to drop on the floor. It is the only place the provider tells us what a call
+    /// cost, and reading it here rather than counting characters is the difference between a spend
+    /// report and a guess.
+    /// </summary>
+    private static CompletionResult ExtractCompletion(string responseContent, ILogger logger)
     {
         JsonDocument responseJson;
         try
@@ -515,6 +608,7 @@ endCall: false ЗАПРЕЩЕНО.
 
         using var _ = responseJson;
         var root = responseJson.RootElement;
+        var usage = OpenAiUsageReader.Read(root);
 
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
@@ -522,33 +616,35 @@ endCall: false ЗАПРЕЩЕНО.
             if (firstChoice.TryGetProperty("message", out var message) &&
                 message.TryGetProperty("content", out var content))
             {
-                return content.GetString() ?? string.Empty;
+                return new CompletionResult(content.GetString() ?? string.Empty, usage);
             }
         }
 
         if (root.TryGetProperty("message", out var directMessage) &&
             directMessage.TryGetProperty("content", out var messageContent))
         {
-            return messageContent.GetString() ?? string.Empty;
+            return new CompletionResult(messageContent.GetString() ?? string.Empty, usage);
         }
 
         if (root.TryGetProperty("content", out var directContent))
-            return directContent.GetString() ?? string.Empty;
+            return new CompletionResult(directContent.GetString() ?? string.Empty, usage);
 
         if (root.TryGetProperty("text", out var textContent))
-            return textContent.GetString() ?? string.Empty;
+            return new CompletionResult(textContent.GetString() ?? string.Empty, usage);
 
         if (root.TryGetProperty("result", out var result))
         {
             if (result.TryGetProperty("content", out var resultContent))
-                return resultContent.GetString() ?? string.Empty;
+                return new CompletionResult(resultContent.GetString() ?? string.Empty, usage);
             if (result.TryGetProperty("text", out var resultText))
-                return resultText.GetString() ?? string.Empty;
+                return new CompletionResult(resultText.GetString() ?? string.Empty, usage);
         }
 
         logger.LogWarning("Unable to parse OpenAI response format: {Response}", RedactAndTruncate(responseContent));
         throw new OpenAiRequestException("AI provider returned an unexpected response format");
     }
+
+    private sealed record CompletionResult(string Content, AiCompletionUsage? Usage);
 
     private static string RedactAndTruncate(string body)
     {

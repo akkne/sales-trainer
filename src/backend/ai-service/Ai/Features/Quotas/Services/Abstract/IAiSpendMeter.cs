@@ -50,6 +50,9 @@ public interface IAiSpendMeter
     /// <summary>Counts a completion whose tokens the provider did not report, from the text on both ends.</summary>
     int EstimateTokens(string text);
 
+    /// <summary>The same estimate from a character count, for prompts assembled out of many parts.</summary>
+    int EstimateTokensFromLength(int characterCount);
+
     /// <summary>
     /// The organization-wide half of the voice gate, layered under the per-user one that has existed
     /// since the feature shipped. Reserving here is what makes the roadmap's «один клиент, гоняющий

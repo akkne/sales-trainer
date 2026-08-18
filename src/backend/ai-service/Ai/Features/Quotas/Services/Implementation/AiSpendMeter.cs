@@ -177,15 +177,17 @@ return newval";
             wasEstimated: false,
             cancellationToken);
 
-    public int EstimateTokens(string text)
+    public int EstimateTokens(string text) => EstimateTokensFromLength(text?.Length ?? 0);
+
+    public int EstimateTokensFromLength(int characterCount)
     {
-        if (string.IsNullOrEmpty(text))
+        if (characterCount <= 0)
         {
             return 0;
         }
 
         var charactersPerToken = Math.Max(1, _quotaOptions.Value.EstimatedCharactersPerToken);
-        return (int)Math.Ceiling(text.Length / (double)charactersPerToken);
+        return (int)Math.Ceiling(characterCount / (double)charactersPerToken);
     }
 
     public async Task ReserveVoiceSecondsAsync(int seconds, CancellationToken cancellationToken = default)

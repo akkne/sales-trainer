@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Transcription.Models;
+using Sellevate.Ai.Features.Quotas.Models;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Features.Transcription.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 
@@ -11,6 +13,7 @@ internal sealed class WhisperTranscriptionService(
     IHttpClientFactory httpClientFactory,
     IOptions<WhisperConfiguration> whisperOptions,
     IOptions<OpenAiConfiguration> openAiOptions,
+    IAiSpendMeter spendMeter,
     ILogger<WhisperTranscriptionService> logger) : ITranscriptionService
 {
     public async Task<TranscriptionResult> TranscribeAsync(
@@ -81,6 +84,13 @@ internal sealed class WhisperTranscriptionService(
 
         logger.LogInformation("Whisper transcription succeeded. Language={Language}, Length={Length}",
             detectedLanguage, text.Length);
+
+        // Phase 40.33. Recorded, deliberately not gated. Whisper bills per second of audio and this
+        // endpoint never learns the duration — it forwards a file it does not decode — so the only
+        // honest unit here is transcribed characters, which is a proxy good enough to see a spike in
+        // the report and not good enough to refuse a call on. Recorded in docs/DONT_FORGET.md.
+        await spendMeter.RecordSpeechUsageAsync(
+            AiUsageKinds.Stt, configuration.Model, text.Length, cancellationToken);
 
         return new TranscriptionResult(text, detectedLanguage);
     }
