@@ -533,3 +533,220 @@ Preconditions: a `TenancyAdmin`, and a team with at least one graded conversatio
 | Manager names on O5/O6 | `AdminDialogSessionSummaryDto` carries `userId` only — ai-service holds no user replica | `GET /admin/team/skill-map` through `useTeamMemberNames`, and «Без имени · {8 символов id}» for anybody it does not know |
 | Three filtered reads for O7's three tabs | `GET /admin/dialog-reviews` does not paginate, and there is no by-id route for `?note=` | one unfiltered read; tabs, counts and the deep link are resolved from it |
 | «Открытые 2» counting only what is addressed to *this* administrator | the queue is the organization's; the endpoint has no author filter, and «Мои заметки» is `kind=coaching_note`, which is every administrator's | both tabs are the organization's, and each turn of a thread is labelled «это вы» when it is the reader's |
+
+---
+
+## Slice 5 — O9/O10/O11 «Конвейер генерации контента» (`/org/content`, `/org/content/generation`)
+
+The hub page, the list of runs, and the one screen that serves all six states of a run. Semantics:
+[docs/CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md). Design:
+[docs/TENANCY/ADMIN_UI_DESIGN.md → O9–O11](../TENANCY/ADMIN_UI_DESIGN.md).
+
+**Endpoints, per screen.**
+
+| Screen | Calls |
+|---|---|
+| O9 `/org/content` | `GET /admin/content-generation`, `GET /admin/content/adaptations`, `GET /admin/content/overrides` — counters only, nothing else read |
+| O10 `/org/content/generation` | `GET /admin/content-generation?status=`, `POST /admin/content-generation` |
+| O11 `/org/content/generation/{jobId}` | `GET /admin/content-generation/{jobId}` (polled), `PUT …/structure`, `POST …/material`, `POST …/approve`, `POST …/retry`; plus `GET /admin/lessons` + `PUT /admin/lessons/{id}` behind «Показать команде» |
+
+**Two things the design asked for that the backend cannot serve, and what happens instead.**
+
+- **`POST /organizations/profile/draft` is not called from O11.** «Заполнить профиль компании из
+  этой структуры» writes the reviewed structure into O8's own `sessionStorage` slot
+  (`PROFILE_DRAFT_HANDOFF_STORAGE_KEY`) and navigates to `/org/profile`, which previews the draft
+  against the live profile and applies only what a person ticks. Calling the preview route from here
+  would render the four merge decisions on a screen that cannot apply them.
+- **There is no `GET /admin/lessons/{id}`, and the list DTO carries no `isArchived`.** So
+  «Показать команде» reads `GET /admin/lessons`, finds the produced row for its required `title` and
+  `orderInTopic`, and then `PUT`s `isArchived: false`. The consequence is visible: **the screen
+  cannot show whether the lesson is already visible to the team** — it can only perform the
+  un-archive and confirm it for the current sitting. The action is idempotent, so pressing it twice
+  costs nothing.
+- **O3 does not yet read `contentGenerationJobId`.** «Создать задание по этому уроку» links to
+  `/org/assignments/new?contentGenerationJobId={jobId}`; the parameter is inert until slice 1 reads
+  it. The backend side is real — `POST /admin/assignments` derives `sourceType`/`sourceRef` from the
+  run and ignores a client's — so nothing here needs changing when it does.
+
+### Automated (vitest, from `src/frontend`)
+
+```
+npx tsc --noEmit
+npx vitest run
+```
+
+| File | Covers |
+|---|---|
+| `__tests__/orgContentGenerationState.test.ts` | the job state machine: six statuses → five layouts, the checkpoint gate, the polling rule, the refusal's shape, the 409 body, and the start form's two validations |
+| `__tests__/orgContentGenerationStructure.test.ts` | the checkpoint document — draft ↔ payload, blank-row dropping, the four caps, autosave change detection — and O9's counter copy |
+| `__tests__/OrgContentGenerationScreens.test.tsx` | `InsufficiencyPanel`, `RunProgressPanel`, `StructureEditor`, `CompletedRunPanel`, `FailedRunPanel`, `ContentQueueCard` rendered with `@testing-library/react` |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **There is no «сгенерировать всё равно», and the test proves the negative.** The rendered refusal
+  is scanned for «всё равно», «принудительно», «игнорировать» and «пропустить проверку», and its
+  button list is asserted to be exactly «Добавить» + «Открыть структуру». The checkpoint and the
+  sufficiency threshold are the two blocks that stop money being spent on unusable material; one
+  bypass button cancels both, and the backend has no route behind it either.
+- **Approval is offered in exactly one state.** `canApproveStructure` is filtered over all six
+  statuses and must return `["awaiting_review"]` — in particular **not** `insufficient`. The
+  threshold is arguable, not waivable.
+- **The refusal is a list of bullets and never a paragraph**, and **the model's `note` never
+  reaches the DOM** — it is a developer's diagnostic, and the customer's text is the gaps.
+- **A gap with neither a known code nor a sentence is dropped**, not rendered as an empty bullet —
+  the same closed-vocabulary rule the backend applies to a code a model invented. A blank message on
+  a *known* code falls back to that code's own sentence.
+- **«Открыть структуру» appears only at `stage: "structure"`.** At `stage: "material"` nothing was
+  extracted, so offering an editor over `null` would be offering to invent the reading. Pinned
+  including the case where a structure somehow survives on a material-stage refusal.
+- **Polling is three seconds while `structuring`/`generating`, `false` in every other state, and
+  `false` behind a hidden tab** — mid-generation included. It also does not poll before the first
+  response has said what the status is.
+- **Thin material is not a form error.** `validateStartMaterial("три слайда")` returns `null`; only
+  emptiness and the 60 000-character ceiling are refused client-side. Refusing thin material here
+  would replace an answerable run with a red field and teach nobody anything.
+- **A blank field is sent as `null`, never `""`.** A gap stays a gap: the generation prompt reads
+  the two differently, and 40.29's promotion would copy an empty string over a value a human typed.
+- **The autosave issues no `PUT` for a change that is not one.** An added-but-empty row and trailing
+  whitespace both compare equal, so «сохранено 14:22» only ever appears after a real write.
+- **The four caps are the server's own** (10 / 12 / 30 / 20, 2000 characters per value) and the same
+  numbers drive both the «7 из 10» counter and the disabled «+ добавить». An empty list reads
+  «Запрещённые обещания (0 из 20) — пусто» rather than being hidden.
+- **A queue whose counter failed to load says so.** O9 shows «Не удалось прочитать очередь» instead
+  of a zero it did not measure — a card reading «0 ждёт проверки» sends somebody away from work that
+  is there. Each of the three counters fails independently.
+- **A completed run with `producedExerciseCount: 0` does not offer «Показать команде»** and says out
+  loud that nothing passed validation, and the finished layout offers no per-item accept/reject —
+  that is O13 and a separate life.
+- **No gamification.** The four layouts are rendered together and the DOM is asserted to contain no
+  `xp`, `опыт`, `стрик`, `streak`, `лига`, `league`.
+
+### Manual — O9, O10, O11
+
+Preconditions: a `TenancyAdmin`, learning-service and ai-service up, and a way to reach the
+`insufficient` and `failed` states (three slides of unrelated text for the first; stopping
+ai-service mid-run for the second).
+
+| Scenario | Expect |
+|---|---|
+| Open `/org/content` in a fresh organization | three cards, each explaining its section — no «0» anywhere |
+| Stop learning-service, open `/org/content` | the cards still render, with «Не удалось прочитать очередь» in place of numbers; no red error page |
+| «Сделать урок из материалов» on O9 | lands on `/org/content/generation?new=1` with the form already open |
+| Submit the form with an empty textarea | refused on the client, with the sentence naming what to paste; no request is sent |
+| Paste three slides of a cake recipe | the run is **created**, not refused by the form; the screen lands on O11 showing «Похоже, этот материал не про продажи» |
+| Paste a real deck | O11 shows «Разбираем материал…» and says the page may be closed |
+| Close the tab during structuring, come back a minute later | the run is at the checkpoint; the list shows «Ждёт проверки» |
+| Watch the network tab while `structuring` | one `GET` every three seconds; switch to another browser tab → the polling stops; switch back → it resumes |
+| Watch the network tab at the checkpoint | no polling at all |
+| Edit the product field, wait two seconds | one `PUT …/structure`; the line reads «Сохранено HH:MM» |
+| Add an empty objection row and wait | **no** request is sent |
+| Add ten objections | «+ добавить» goes grey and the counter reads «10 из 10» |
+| Delete everything and press «Сгенерировать упражнения» | 409 → the screen becomes the refusal layout with the gap list, without a page reload |
+| Look for any way to generate anyway | there is none, on any of the six states |
+| On a refused run, paste the objections list into «Добавить материал» | the run returns to «Разбираем материал…», then to the checkpoint, and the structure it already had is still there plus what the added text produced |
+| On a refused run at `stage: "structure"`, press «Открыть структуру», type four objections | the editor saves; the run returns to «Ждёт проверки» on its own |
+| On a refused run at `stage: "material"` | «Открыть структуру» is absent — there is nothing to open |
+| «Заполнить профиль компании из этой структуры» | `/org/profile` opens the draft preview with nothing pre-ticked; the run itself is unchanged, and no profile write happened |
+| Approve a good structure | «Собираем упражнения…», then the finished layout with the exercise count |
+| «Показать команде» | the lesson leaves the archive; the line becomes «Урок показан команде» |
+| «Открыть урок» | `/org/content/lessons/{producedLessonId}` — a 404 until slice 7 lands |
+| Stop ai-service and let a run burn its three attempts | the failed layout, the recorded reason, and «Повторить» resuming the half that failed |
+| Open `/org/content/generation/{a-random-guid}` | «Прогон не найден» with a way back — not an error banner |
+| Press «Сделать контент по этому провалу» on `/org` | lands on this same O11, with «с дашборда» in the header and the composed material readable under «Исходный материал» |
+| Filter the list by «Материала не хватает» | each row shows its first gap under the title |
+
+---
+
+## Slice 6 — Пакетная адаптация и ИИ-ревью (O12, O13)
+
+Screens: `/org/content/adaptations`, `/org/content/adaptations/[jobId]`.
+Code: `src/frontend/features/org-content-adaptation/**`,
+`src/frontend/app/(org)/org/content/adaptations/**`.
+The semantics these screens are drawn against: [CONTENT_PIPELINE.md §6a](../CONTENT_PIPELINE.md).
+
+Endpoints, and nothing else:
+
+| Screen | Reads | Writes |
+|---|---|---|
+| O12 | `GET /admin/content/adaptations` (unfiltered — one read, two tabs), `GET /skills/stages` for the stage names | `POST /admin/content/adaptations {mode, stageKey}` |
+| O13 | `GET /admin/content/adaptations/{jobId}` (polled every 5 s while `preparing`), `GET …/items/{itemId}`, `GET /skills/stages` | `POST …/items/{itemId}/accept`, `POST …/items/{itemId}/reject`, `POST …/retry` |
+
+**There is no bulk verb on either screen, and its absence is the feature.** The backend has no route
+that answers more than one item, and the design refuses to grow one (§7): a batch is worth running
+only because a person reads each rewrite before it becomes their team's content.
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgContentAdaptationLogic.test.ts` | the proposal state machine, queue order, the seven review codes, the two status dictionaries, and the refusals coming back from `POST /admin/content/adaptations` and from accept/reject |
+| `__tests__/OrgContentAdaptationComponents.test.tsx` | `ProposalDiffView`, `FindingList`, `ProposalQueueList`, `ProposalDetailPanel` — including that no rendering of the queue contains a bulk-apply control |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **Three separate reasons «Принять» can be impossible, and they never collapse into one.** A review
+  finding has nothing to apply *ever*, a stale rewrite would be refused with 409, and an answered
+  item is simply done. Each has its own sentence; a single greyed-out button would leave a person
+  guessing which of the three they are looking at.
+- **In `quality_review` the «Принять» button does not exist at all** — not disabled, absent — and the
+  two controls that replace it are «Открыть упражнение» and «Переписать этот этап под нас».
+- **The publishing caveat is printed under every accept.** Accepting writes the exercise draft; the
+  team meets it only after somebody publishes a lesson version.
+- **The diff is never computed on the client.** `changes[]` is rendered as it arrived; when the
+  server sends a proposal with an empty change list, the screen says so and points at the editor
+  instead of comparing two documents itself.
+- **A blocking finding rises to the top of its own lesson and no further** — the reading order of the
+  rest of the queue is what makes it answerable.
+- **`awaitingReviewCount`, never `pendingCount`, is the headline number.** A batch is not done when
+  the model finishes.
+- **`… ещё N` collapses a long change list** rather than dumping forty leaves into the panel.
+- **A code outside the closed vocabulary of seven prints as the code**, never blank and never mapped
+  onto the nearest known label.
+- **`retry` is rendered only when `failedCount > 0`**, because it answers 409 when nothing failed.
+
+### Manual — O12 `/org/content/adaptations`
+
+| Scenario | Expect |
+|---|---|
+| Open with no batches at all | the tab's own explanation of what the section does — «Пакетов правки ещё нет…» — not «0» |
+| Switch to «Проверить, что написали руками» | a different explanation, about what the review reports and that fixing is still yours |
+| A batch with nine unanswered proposals | the tab badge counts the batch, and the row reads `9 / 23` under «Ждут ответа» |
+| A batch the model has finished and nobody has answered | status «Ждёт вашего ответа», not «Готово» |
+| «Переписать этап под свой продукт» → a stage with 412 exercises | «В этапе 412 упражнений — это дорого и это очередь, которую никто не разберёт. Выберите этап поуже.» as advice, and no English anywhere |
+| The same stage twice | «По этому этапу уже идёт пакет» plus a working link to that batch |
+| An empty stage | «В этом этапе нет упражнений — переписывать нечего.» |
+| Stop learning-service | `ErrorState` with a retry, never an empty table pretending there are no batches |
+
+### Manual — O13 `/org/content/adaptations/[jobId]`
+
+| Scenario | Expect |
+|---|---|
+| Open a batch the sweep is still working on | the queue renders *and* a progress bar «Готовим предложения 12 / 23» above it, with «страницу можно закрыть»; it advances every five seconds without a reload |
+| Leave the tab and come back | polling resumed; no burst of catch-up requests |
+| Open a `tone_rewrite` item | the model's sentence first, the changed leaves under it, `path` in the monospace face |
+| Item with seven changed leaves | four shown, «… ещё 3» reveals the rest |
+| Press «Принять» | the item resolves and the panel moves to the next one still waiting |
+| Press «Принять» on the last unanswered item | it resolves and «Следующее →» is gone rather than pointing at itself |
+| An item whose exercise was edited elsewhere (`isStale`) | «Принять» disabled, and the sentence about re-running the batch above it |
+| Accept anyway through the API and refresh | 409 handled as «Запустите пакет заново», never as a merge attempt |
+| Open a `quality_review` item | findings only: severity chip, the short title, the server's Russian sentence, and the quoted fragment in monospace |
+| A review item with a blocking finding | `⚠` in the list, first inside its lesson, and the blocking finding first in the panel |
+| A review item the model had no complaints about | «Замечаний нет» phrased as the expected answer |
+| Look for «Принять» in review mode | it is not there; «Открыть упражнение» and «Переписать этот этап под нас» are |
+| «Переписать этот этап под нас» | the start dialog opens with this batch's stage already selected and the mode fixed to the rewrite |
+| A batch with three failed items | the red panel with «Повторить неудавшиеся»; on a batch with none, no button at all |
+| The last answer in the batch | «Все предложения разобраны: принято 11, отклонено 2, без изменений 1» plus links to the lessons that now need publishing |
+| A batch where the model changed nothing anywhere | «Разбирать нечего: модель не предложила ни одной правки.» — not three zeroes |
+| An unknown job id | «Пакет не найден», not an empty two-column layout |
+| Look for «Применить всё», XP, streaks or leagues | none of them exist |
+
+### What the backend cannot serve, and what the screens do instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| «В этапе 412 упражнений…» as a Russian sentence | the ceiling refusal is `ContentAdaptationValidationException` — English developer prose in `{message}`, with no machine-readable payload the way `POST /admin/content-generation/{id}/approve` has one | the count is recovered from the sentence with a pattern, the Russian advice is written on the client, and the English is never shown; a refusal shape the client does not recognise degrades to a generic Russian sentence |
+| A link to the batch a 409 is refusing in favour of | the conflict message names the job id only inside its English prose | the live batch is found in the list already read (same `mode` + `stageKey`, status `preparing`/`awaiting_review`); if the list has not caught up, the message is shown without a link rather than with a guessed one |
+| «Открыть упражнение» → the exercise inside the lesson editor | O19 (`/org/content/lessons/[lessonId]`, slice 7) is the editor, and no route addresses a single exercise inside it | the link points at the lesson; there is no exercise anchor, because inventing a query parameter would be inventing a contract |
+| «Ссылка на публикацию затронутых уроков» | nothing publishes from this block, and there is no «publish these lessons» route | the lessons with accepted items are listed as links to O19, where publishing lives |
+| Per-status counts on the two tabs | `GET /admin/content/adaptations` does not paginate and has no counts endpoint | one unfiltered read; both tabs, their badges and the totals are computed from it |
+| Russian stage names | `stageKey` is a `Skill.Stage` value and the batch DTOs carry no label | `GET /skills/stages`, with `getStageMeta` falling back to the raw key |
