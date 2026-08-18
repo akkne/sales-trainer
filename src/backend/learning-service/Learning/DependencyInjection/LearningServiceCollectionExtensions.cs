@@ -2,6 +2,7 @@ using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Assignments;
 using Sellevate.Learning.Features.Content;
+using Sellevate.Learning.Features.DialogReviews;
 using Sellevate.Learning.Features.Exercises;
 using Sellevate.Learning.Features.Lessons;
 using Sellevate.Learning.Features.Programs;
@@ -34,6 +35,7 @@ public static class LearningServiceCollectionExtensions
         services.AddProgramFeatureServices();
         services.AddAssignmentFeatureServices(configuration);
         services.AddTeamInsightsFeatureServices();
+        services.AddDialogReviewFeatureServices();
         services.AddExerciseFeatureServices();
         services.AddExerciseDialogServices(configuration);
         services.AddReferenceFeatureServices();

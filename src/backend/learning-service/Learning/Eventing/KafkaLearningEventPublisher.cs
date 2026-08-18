@@ -51,4 +51,24 @@ internal sealed class KafkaLearningEventPublisher(IOutboxWriter outboxWriter) : 
         outboxWriter.Enqueue(Topics.AssignmentReminder, payload.UserId.ToString(), Topics.AssignmentReminder, payload);
         return Task.CompletedTask;
     }
+
+    public Task PublishDialogReviewCommentedAsync(
+        DialogReviewCommentedEvent payload,
+        CancellationToken cancellationToken = default)
+    {
+        outboxWriter.Enqueue(
+            Topics.DialogReviewCommented, payload.UserId.ToString(), Topics.DialogReviewCommented, payload);
+
+        return Task.CompletedTask;
+    }
+
+    public Task PublishDialogReviewResolvedAsync(
+        DialogReviewResolvedEvent payload,
+        CancellationToken cancellationToken = default)
+    {
+        outboxWriter.Enqueue(
+            Topics.DialogReviewResolved, payload.UserId.ToString(), Topics.DialogReviewResolved, payload);
+
+        return Task.CompletedTask;
+    }
 }

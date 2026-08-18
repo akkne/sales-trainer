@@ -22,4 +22,11 @@ public static class NotificationActionRoutes
     /// parameter is carried now so that link keeps working when it does.
     /// </summary>
     public static string Assignment(Guid assignmentId) => $"/tree?assignment={assignmentId}";
+
+    /// <summary>
+    /// Phase 40.25. A coaching note and a dispute verdict both open the same list — everything said
+    /// about the recipient's conversations, with the row in question named. One screen rather than
+    /// two, because a manager who has to look in two places will look in neither.
+    /// </summary>
+    public static string DialogReview(Guid noteId) => $"/dialog-reviews?note={noteId}";
 }

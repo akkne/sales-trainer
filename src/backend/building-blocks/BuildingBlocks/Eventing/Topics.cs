@@ -45,6 +45,19 @@ public static class Topics
     /// </summary>
     public const string AssignmentReminder = "assignment.reminder";
 
+    /// <summary>
+    /// Phase 40.25. The РОП selected a fragment of this person's practice conversation and commented
+    /// on it (docs/TENANCY/ASSIGNMENTS.md §4.1). Addressed to the manager whose conversation it was.
+    /// </summary>
+    public const string DialogReviewCommented = "dialog.review.commented";
+
+    /// <summary>
+    /// Phase 40.25. The РОП has ruled on a disputed AI score. Addressed to the manager who filed it,
+    /// whether it was upheld or rejected: a dispute closed in silence is the black box the mechanism
+    /// exists to open.
+    /// </summary>
+    public const string DialogReviewResolved = "dialog.review.resolved";
+
     // ── AI Engine (produces) ───────────────────────────────────────────────
     public const string DialogEvaluated = "dialog.evaluated";
 

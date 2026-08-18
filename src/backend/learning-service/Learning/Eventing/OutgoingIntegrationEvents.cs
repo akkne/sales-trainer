@@ -48,3 +48,39 @@ public sealed record AssignmentReminderEvent(
     string Title,
     DateTime? Deadline,
     DateTime RequestedAt);
+
+/// <summary>
+/// Phase 40.25. The РОП commented on a fragment of this person's conversation
+/// (docs/TENANCY/ASSIGNMENTS.md §4.1).
+///
+/// <para>
+/// The quoted fragment travels with the event rather than being fetched by the consumer.
+/// notification-service has no database of its own beyond its inbox and no business reading
+/// learning-db, and the whole value of the notice is that it opens with the three lines being talked
+/// about — a notification saying "you have a comment" is one more thing to ignore.
+/// </para>
+/// </summary>
+public sealed record DialogReviewCommentedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string? QuotedText,
+    string Comment);
+
+/// <summary>
+/// Phase 40.25. The РОП ruled on a disputed AI score.
+///
+/// <para>
+/// <see cref="Outcome"/> travels because the two outcomes read completely differently to the person
+/// who filed the dispute, and a notice that says only "your dispute was reviewed" would recreate the
+/// black box §4.1 exists to open.
+/// </para>
+/// </summary>
+public sealed record DialogReviewResolvedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string Outcome,
+    int? DisputedScore,
+    int? AdjustedScore,
+    string? Resolution);

@@ -4,6 +4,7 @@ using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Content.Models;
 using Sellevate.Learning.Features.DailyQuotes.Models;
+using Sellevate.Learning.Features.DialogReviews.Models;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.Programs.Models;
@@ -47,6 +48,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<Assignment> Assignments => Set<Assignment>();
     public DbSet<AssignmentProgress> AssignmentProgressRecords => Set<AssignmentProgress>();
     public DbSet<UserDialogScore> UserDialogScores => Set<UserDialogScore>();
+    public DbSet<DialogReviewNote> DialogReviewNotes => Set<DialogReviewNote>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -99,6 +101,10 @@ public sealed class LearningDbContext : DbContext
         // global one, so plain equality again.
         modelBuilder.Entity<UserDialogScore>()
             .HasQueryFilter(score => _tenantContext.IsPlatformWide || score.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.25. A coaching note and a disputed score are things one organization's people said
+        // to each other about one organization's conversation. Plain equality, no global branch.
+        modelBuilder.Entity<DialogReviewNote>()
+            .HasQueryFilter(note => _tenantContext.IsPlatformWide || note.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
         // is no global profile, and a null owner would read as "every organization's product name".
         modelBuilder.Entity<OrganizationProfileReplica>()
