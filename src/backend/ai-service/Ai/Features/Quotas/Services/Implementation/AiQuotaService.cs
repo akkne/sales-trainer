@@ -96,12 +96,16 @@ internal sealed class AiQuotaService : IAiQuotaService
         var periodKey = AiUsagePeriod.Current();
         var quota = await ResolveAsync(cancellationToken);
 
-        // Explicit organization predicate for the same reason as LoadRowAsync below: the query
-        // filter admits every row in platform-wide mode, so a report meant for one customer would
-        // otherwise total the installation. Review, 40.34.
+        // Constrained to the caller's organization *when there is one*, and left to the query filter
+        // when there is not. The distinction is the whole point. A platform administrator carrying no
+        // organization is meant to read the installation-wide total, and does. A platform
+        // administrator who also holds a membership is asking about that membership's organization —
+        // but the filter reads `IsPlatformWide || …`, so without this predicate they were shown the
+        // installation total under their own organization's heading. Review, 40.34.
         var organizationId = _tenantContext.OrganizationId;
         var rows = await _databaseContext.AiUsageRecords
-            .Where(record => record.OrganizationId == organizationId && record.PeriodKey == periodKey)
+            .Where(record => record.PeriodKey == periodKey)
+            .Where(record => organizationId == null || record.OrganizationId == organizationId)
             .OrderBy(record => record.Model)
             .ToListAsync(cancellationToken);
 
