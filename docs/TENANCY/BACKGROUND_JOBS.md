@@ -526,6 +526,49 @@ what the lease is for.
 
 ---
 
+### 4j. Phase 40.33 — the quota meter added no worker, and that is the finding
+
+Per-organization AI quotas (roadmap 40.33, [AI_QUOTAS.md](../AI_QUOTAS.md)) are enforced entirely on
+the request path: the gate runs inside the call that is about to spend money and the charge runs
+inside the call that just did. **No `BackgroundService`, no Hangfire job, no Kafka consumer and no
+new topic** — so §2 gains no row and every count above is unchanged:
+
+**The counts after 40.33 are still: 30 `AddHostedService` registrations, nine workers in §2.1, seven
+`IgnoreQueryFilters()` call sites.** Verified by the three greps in §5.
+
+Three shapes were considered and each would have added a worker; each was rejected for a reason worth
+recording, because the obvious next block will be tempted by all three.
+
+- **A nightly rollup job** that aggregates spend into a monthly table. Unnecessary: `AiUsageRecords`
+  *is* the monthly table, written incrementally by one
+  `INSERT … ON CONFLICT DO UPDATE SET x = x + excluded.x` per call. A job that recomputed it would be
+  a second source of truth for a number the first source already has exactly.
+- **A sweep that emails or flags organizations crossing the soft threshold.** That is a notification
+  feature with an audience question (the РОП? platform sales? both?) and a deduplication question
+  (once per month? once per crossing?), and inventing answers to those inside a metering block is how
+  a worker with no owner appears. The threshold is on the spend report as `quotaState: "warning"` and
+  on `ai_quota_refusals_total` in Prometheus; whoever wants the email owns the block that sends it.
+- **A consumer projecting spend into analytics-service.** Refused for the standing reason (40.16,
+  re-confirmed four times): analytics is Redis-only and its metrics carry no organization label. The
+  platform-wide counters live in ai-service instead — see [MONITORING.md](../MONITORING.md).
+
+What 40.33 *did* change about the two existing sweeps is where they ask a question, not what mode
+they run in. `ContentGenerationSweepService` and `ContentAdaptationSweepService` now call
+`GET /ai/quota/preflight?workload=batch` **inside the per-organization scope they already open**,
+before resolving the step runner, and `continue` to the next organization when the answer is no. Both
+remain **per-organization iteration over a system enumeration**, both still need `BYPASSRLS` for the
+enumeration only, and both still declare their mode at the same lines. The preflight reads and never
+writes, so it cannot double-count against the charge the meter makes later.
+
+One property of that call is deliberate and worth stating next to the modes: **it fails open.** An
+unreachable preflight lets the sweep proceed exactly as it did before 40.33 existed, because the real
+gate is in ai-service on the other side of the hop and cannot be skipped by a network blip. Treating
+an unreachable preflight as "no allowance" would let one flapping connection stop every customer's
+content pipeline while their budgets sat untouched — a worker failing closed on a question it only
+asked as an optimisation.
+
+---
+
 ## 5. How to keep this registry true
 
 The registry rots the moment someone adds a hosted service. Three cheap checks:
