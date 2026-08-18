@@ -33,8 +33,6 @@ public sealed class TrackingControllerTests
         _factory.Dispose();
     }
 
-    // ── POST /tracking/events ─────────────────────────────────────────────
-
     [Test]
     public async Task TrackEvent_Unauthenticated_Returns401()
     {
@@ -59,13 +57,14 @@ public sealed class TrackingControllerTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// An empty body must never reach <c>TryRecord(null)</c>: the endpoint answers 400, not 500.
+    /// </summary>
     [Test]
     public async Task TrackEvent_NullBody_Returns400()
     {
         var client = _factory.CreateAuthenticatedClient();
 
-        // Send an empty body with no Content-Type — should not reach TryRecord(null)
-        // and must return 400 (not 500).
         var response = await client.PostAsync(
             "/tracking/events",
             new StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json"));
@@ -85,8 +84,6 @@ public sealed class TrackingControllerTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
-    // ── POST /tracking/presence/ping ──────────────────────────────────────
-
     [Test]
     public async Task Ping_Unauthenticated_Returns401()
     {
@@ -97,10 +94,12 @@ public sealed class TrackingControllerTests
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// Simulates the API gateway injecting <c>X-User-Id</c>; the presence tracker is stubbed.
+    /// </summary>
     [Test]
     public async Task Ping_WithXUserIdHeader_Returns204()
     {
-        // Simulate the API gateway injecting X-User-Id (presence tracker is stubbed).
         var client = _factory.CreateAuthenticatedClient();
         client.DefaultRequestHeaders.Add("X-User-Id", Guid.NewGuid().ToString());
         client.DefaultRequestHeaders.Add("X-Organization-Id", OrganizationId.ToString());
@@ -112,10 +111,12 @@ public sealed class TrackingControllerTests
             OrganizationId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// No <c>X-User-Id</c> header — identity must be resolved from the validated JWT subject.
+    /// </summary>
     [Test]
     public async Task Ping_AuthenticatedViaJwt_Returns204()
     {
-        // No X-User-Id header — identity must be resolved from the validated JWT subject.
         var userId = Guid.NewGuid();
         var client = _factory.CreateAuthenticatedClient(userId);
         client.DefaultRequestHeaders.Add("X-Organization-Id", OrganizationId.ToString());

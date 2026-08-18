@@ -67,13 +67,15 @@ public class FunnelEventRecorderTests
         wasRecorded.Should().BeFalse();
     }
 
+    /// <summary>
+    /// A negative or zero amount must be silently ignored — not forwarded to <c>Counter.Inc()</c>,
+    /// which would throw and send the Kafka message to the dead-letter queue.
+    /// </summary>
     [TestCase(0)]
     [TestCase(-1)]
     [TestCase(-1000)]
     public void Record_XpGrantedWithNonPositiveAmount_ReturnsFalseWithoutThrowingOrIncrementingCounter(int amount)
     {
-        // A negative/zero amount must be silently ignored — not forwarded to Counter.Inc()
-        // which would throw and send the Kafka message to the DLQ.
         var recorder = new FunnelEventRecorder();
         var before = AppMetrics.ExperiencePointsGranted.Value;
         var envelope = EventEnvelope.Create(
@@ -88,10 +90,12 @@ public class FunnelEventRecorderTests
         AppMetrics.ExperiencePointsGranted.Value.Should().Be(before);
     }
 
-    // AN3(c) — keep Prometheus label cardinality bounded.
-    // These sets map directly to label values in Prometheus counters; unbounded growth
-    // causes memory pressure and query fan-out. The cap is intentionally generous (< 50)
-    // to allow natural growth while catching accidental bulk additions.
+    /// <summary>
+    /// AN3(c) — keep Prometheus label cardinality bounded. The tracked-event sets map directly to
+    /// label values in Prometheus counters; unbounded growth causes memory pressure and query
+    /// fan-out. The cap is intentionally generous to allow natural growth while catching accidental
+    /// bulk additions.
+    /// </summary>
     private const int MaxAllowedLabelCardinality = 50;
 
     [Test]

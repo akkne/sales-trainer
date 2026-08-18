@@ -16,11 +16,14 @@ namespace Sellevate.Analytics.Tests.Unit;
 [TestFixture]
 public sealed class IncomingEventContractTests
 {
+    /// <summary>
+    /// The payload built here is the exact producer wire shape from
+    /// <c>Learning/Eventing/OutgoingIntegrationEvents.cs</c>.
+    /// </summary>
     [Test]
     public void ExerciseCompleted_LearningWirePayload_DeserializesWithAllFieldsPopulated()
     {
         var userId = Guid.NewGuid();
-        // Exact producer wire shape (Learning/Eventing/OutgoingIntegrationEvents.cs).
         var envelope = EventEnvelope.Create(
             Topics.ExerciseCompleted,
             new { userId, exerciseType = "spot_mistake", score = 80, isCorrect = true });
@@ -34,11 +37,14 @@ public sealed class IncomingEventContractTests
         payload.IsCorrect.Should().BeTrue();
     }
 
+    /// <summary>
+    /// The payload built here is the exact producer wire shape from
+    /// <c>Gamification/Eventing/OutgoingIntegrationEvents.cs</c>.
+    /// </summary>
     [Test]
     public void XpGranted_GamificationWirePayload_DeserializesWithAllFieldsPopulated()
     {
         var userId = Guid.NewGuid();
-        // Exact producer wire shape (Gamification/Eventing/OutgoingIntegrationEvents.cs).
         var envelope = EventEnvelope.Create(
             Topics.XpGranted,
             new { userId, amount = 40, source = "exercise" });

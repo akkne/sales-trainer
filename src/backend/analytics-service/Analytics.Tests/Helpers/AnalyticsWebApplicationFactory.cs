@@ -4,14 +4,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using Sellevate.Analytics.Common.Constants;
 using Sellevate.Analytics.Features.Presence.Services.Abstract;
 using StackExchange.Redis;
 
 namespace Sellevate.Analytics.Tests.Helpers;
 
 /// <summary>
-/// Test host for analytics-service integration tests.
-/// Redis and Kafka are stubbed so tests run without Docker.
+/// Test host for analytics-service integration tests. Both the Redis multiplexer and the presence
+/// tracker that talks to it are replaced with substitutes, so the suite needs no Docker and no
+/// broker: what is under test here is the HTTP pipeline — authentication, tenancy and model
+/// binding — not Redis.
 /// </summary>
 public sealed class AnalyticsWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -26,20 +29,19 @@ public sealed class AnalyticsWebApplicationFactory : WebApplicationFactory<Progr
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Redis"] = "localhost:6379,abortConnect=false",
+                [$"ConnectionStrings:{ConfigurationKeys.RedisConnectionName}"] = "localhost:6379,abortConnect=false",
                 ["Kafka:BootstrapServers"] = "localhost:9092",
                 ["Kafka:ConsumerGroupId"] = "analytics-tests",
-                ["Jwt:Key"] = JwtTestHelper.JwtKey,
-                ["Jwt:Issuer"] = JwtTestHelper.JwtIssuer,
-                ["Jwt:Audience"] = JwtTestHelper.JwtAudience,
-                ["Frontend:Url"] = "http://localhost:3000",
-                ["Logging:Loki:Url"] = "http://localhost:1/loki"
+                [ConfigurationKeys.JwtKey] = JwtTestHelper.JwtKey,
+                [ConfigurationKeys.JwtIssuer] = JwtTestHelper.JwtIssuer,
+                [ConfigurationKeys.JwtAudience] = JwtTestHelper.JwtAudience,
+                [ConfigurationKeys.FrontendUrl] = "http://localhost:3000",
+                [ConfigurationKeys.LokiUrl] = "http://localhost:1/loki"
             });
         });
 
         builder.ConfigureServices(services =>
         {
-            // Replace the real Redis connection with a stub so tests never need Docker.
             var stubRedis = Substitute.For<IConnectionMultiplexer>();
             var stubDb = Substitute.For<IDatabase>();
             stubRedis.GetDatabase(Arg.Any<int>(), Arg.Any<object?>()).Returns(stubDb);
@@ -47,7 +49,6 @@ public sealed class AnalyticsWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IConnectionMultiplexer>();
             services.AddSingleton(stubRedis);
 
-            // Replace the real presence tracker (which talks to Redis) with our stub.
             services.RemoveAll<IPresenceTracker>();
             services.AddSingleton(PresenceTracker);
         });

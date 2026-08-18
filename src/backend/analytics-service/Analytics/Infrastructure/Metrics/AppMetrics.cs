@@ -2,35 +2,53 @@ using Prometheus;
 
 namespace Sellevate.Analytics.Infrastructure.Metrics;
 
+/// <summary>
+/// The service's Prometheus metric catalogue, declared once in one place so nothing creates a metric
+/// inline.
+///
+/// <para>
+/// <b>Every name, label name and help string here is an invariant, not a setting.</b> Renaming a
+/// metric or a label silently empties the Grafana dashboards and alert rules that select on it,
+/// leaving a flat graph rather than an error — so a change here is a change to docs/MONITORING.md and
+/// the dashboards, in the same commit. That is also why none of this belongs in configuration.
+/// </para>
+///
+/// <para>
+/// No metric carries an organization label, and none may be given one. A customer id would put
+/// customer identities into the metrics store and make cardinality grow with the customer list, to
+/// answer a question that belongs in a product report. The only labels used are drawn from sets
+/// compiled into the platform, which is what bounds them.
+/// </para>
+/// </summary>
 public static class AppMetrics
 {
-    public static readonly Gauge UsersOnline = Prometheus.Metrics.CreateGauge(
+    public static Gauge UsersOnline { get; } = Prometheus.Metrics.CreateGauge(
         "app_users_online",
         "Number of distinct users active within the presence window.");
 
-    public static readonly Counter AuthenticatedRequests = Prometheus.Metrics.CreateCounter(
+    public static Counter AuthenticatedRequests { get; } = Prometheus.Metrics.CreateCounter(
         "app_authenticated_requests_total",
         "Total authenticated backend requests (excludes infra paths like /metrics).");
 
-    public static readonly Counter PageViews = Prometheus.Metrics.CreateCounter(
+    public static Counter PageViews { get; } = Prometheus.Metrics.CreateCounter(
         "app_page_views_total",
         "Total frontend page views.",
         new CounterConfiguration { LabelNames = ["page"] });
 
-    public static readonly Counter Events = Prometheus.Metrics.CreateCounter(
+    public static Counter Events { get; } = Prometheus.Metrics.CreateCounter(
         "app_events_total",
         "Total frontend UI events (clicks/actions).",
         new CounterConfiguration { LabelNames = ["event", "page"] });
 
-    public static readonly Counter Registrations = Prometheus.Metrics.CreateCounter(
+    public static Counter Registrations { get; } = Prometheus.Metrics.CreateCounter(
         "app_registrations_total",
         "Total completed registrations (email verified).");
 
-    public static readonly Counter ExercisesCompleted = Prometheus.Metrics.CreateCounter(
+    public static Counter ExercisesCompleted { get; } = Prometheus.Metrics.CreateCounter(
         "app_exercises_completed_total",
         "Total exercises completed across all users.");
 
-    public static readonly Counter ExperiencePointsGranted = Prometheus.Metrics.CreateCounter(
+    public static Counter ExperiencePointsGranted { get; } = Prometheus.Metrics.CreateCounter(
         "app_experience_points_granted_total",
         "Total experience points granted across all users.");
 
@@ -45,7 +63,7 @@ public static class AppMetrics
     /// where the progress rows are — see docs/ANALYTICS_SERVICE.md.
     /// </para>
     /// </summary>
-    public static readonly Counter AssignmentsIssued = Prometheus.Metrics.CreateCounter(
+    public static Counter AssignmentsIssued { get; } = Prometheus.Metrics.CreateCounter(
         "app_assignments_issued_total",
         "Total assignment issues across all organizations (one per recipient).");
 
@@ -60,7 +78,7 @@ public static class AppMetrics
     /// cannot answer "which team", because that question belongs in a product report.
     /// </para>
     /// </summary>
-    public static readonly Counter AssignmentProgressTransitions = Prometheus.Metrics.CreateCounter(
+    public static Counter AssignmentProgressTransitions { get; } = Prometheus.Metrics.CreateCounter(
         "app_assignment_progress_total",
         "Assignment progress state transitions across all organizations.",
         new CounterConfiguration { LabelNames = ["state"] });

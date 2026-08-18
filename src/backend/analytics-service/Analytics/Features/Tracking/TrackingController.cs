@@ -10,6 +10,11 @@ using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.Analytics.Features.Tracking;
 
+/// <summary>
+/// The two write-only endpoints the frontend calls to report what it is doing. Neither returns data:
+/// both answer <c>204</c>, and every failure that is not the caller's fault is swallowed, because
+/// analytics is best-effort and must never break the request a user is actually making.
+/// </summary>
 [ApiController]
 [Route(RouteConstants.TrackingBase)]
 [Authorize]

@@ -1,5 +1,16 @@
 namespace Sellevate.Analytics.Features.Tracking.Constants;
 
+/// <summary>
+/// The server-side whitelist of page and event names the frontend is allowed to report.
+///
+/// <para>
+/// <b>This is a cardinality cap, not a validation list.</b> Both sets become Prometheus label values
+/// on <c>app_page_views_total</c> and <c>app_events_total</c>, so every entry added here costs a
+/// permanent time series and every entry <i>not</i> here costs nothing but a 400. A unit test asserts
+/// both sets stay under the cap; before adding a name, read the cardinality rules in
+/// docs/MONITORING.md and prefer reusing an existing one.
+/// </para>
+/// </summary>
 public static class TrackedEvents
 {
     public const string PageViewEvent = "page_view";
