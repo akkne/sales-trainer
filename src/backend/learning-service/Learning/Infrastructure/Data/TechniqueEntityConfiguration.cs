@@ -4,6 +4,21 @@ using Sellevate.Learning.Features.Techniques.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps a technique, which may be a global library row or one organization's override of one.
+///
+/// <para>
+/// Phase 40.18. The parent foreign key is <c>Restrict</c>, not <c>Cascade</c>: a global technique three
+/// customers have overridden must not be deletable in one click, and <c>SetNull</c> would silently
+/// promote the overrides to standalone techniques, losing the fact that they were ever derived. Same
+/// call as <c>Lesson.ParentLessonId</c> in 40.15.
+/// </para>
+///
+/// <para>
+/// Phase 40.10. The slug is unique <b>per organization</b>, with a partial unique index over the global
+/// rows — same reasoning as <see cref="SkillEntityConfiguration"/>.
+/// </para>
+/// </summary>
 public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Technique>
 {
     public void Configure(EntityTypeBuilder<Technique> builder)
@@ -14,10 +29,6 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
 
         builder.Property(technique => technique.OrganizationId);
 
-        // Phase 40.18. Restrict, not cascade: a global technique three customers have overridden
-        // must not be deletable in one click, and SetNull would silently promote the overrides to
-        // standalone techniques, losing the fact that they were ever derived. Same call as
-        // Lesson.ParentLessonId in 40.15.
         builder.HasOne<Technique>()
             .WithMany()
             .HasForeignKey(technique => technique.ParentTechniqueId)
@@ -36,7 +47,6 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
             .IsRequired()
             .HasMaxLength(120);
 
-        // Phase 40.10, same reasoning as SkillEntityConfiguration.
         builder.HasIndex(technique => new { technique.OrganizationId, technique.Slug })
             .IsUnique();
         builder.HasIndex(technique => technique.Slug)

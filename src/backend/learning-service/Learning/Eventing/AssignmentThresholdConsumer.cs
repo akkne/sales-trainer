@@ -87,6 +87,14 @@ internal sealed class AssignmentThresholdConsumer : KafkaConsumerBackgroundServi
     /// taking the evaluation that follows down with it. The index is still the guarantee; this is
     /// only the cheap path.
     /// </para>
+    ///
+    /// <para>
+    /// A conversation published by a producer that predates 40.22 carries no mode key, and there is no
+    /// way to recover one. Recording a score under an empty key would make it match no assignment
+    /// while still counting as an attempt — a person credited with a try they cannot be judged on. The
+    /// score is therefore dropped, and the user id is still returned so that any exercise work of
+    /// theirs is not held up by it.
+    /// </para>
     /// </summary>
     private static async Task<Guid?> RecordDialogScoreAsync(
         EventEnvelope envelope,
@@ -99,11 +107,6 @@ internal sealed class AssignmentThresholdConsumer : KafkaConsumerBackgroundServi
             return null;
         }
 
-        // A conversation published by a producer that predates 40.22 carries no mode key, and there
-        // is no way to recover one. Recording a score under an empty key would make it match no
-        // assignment while still counting as an attempt — a person credited with a try they cannot
-        // be judged on. The score is dropped and the user is still re-evaluated, so any exercise
-        // work of theirs is not held up by it.
         if (string.IsNullOrWhiteSpace(payload.ModeKey))
         {
             return payload.UserId;

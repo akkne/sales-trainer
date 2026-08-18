@@ -25,6 +25,13 @@ namespace Sellevate.Learning.Infrastructure.Identity;
 /// and nobody discovers it until the РОП wonders why the funnel says nine people instead of forty.
 /// A raised exception surfaces as a refused issue that a human can retry.
 /// </para>
+///
+/// <para>
+/// Phase 40.26. The administrator list is passed through <b>preserving absent versus empty</b>: an
+/// absent list means "this identity-service does not report administrators" and stays
+/// <see langword="null"/> all the way to the caller, an empty one means "this organization has none".
+/// See <see cref="OrganizationRoster"/> for why the two must not collapse into each other.
+/// </para>
 /// </summary>
 internal sealed class IdentityOrganizationMemberDirectory : IOrganizationMemberDirectory
 {
@@ -85,9 +92,6 @@ internal sealed class IdentityOrganizationMemberDirectory : IOrganizationMemberD
             .Distinct()
             .ToList();
 
-        // Phase 40.26. An absent list means "this identity-service does not report administrators"
-        // and stays null all the way to the caller; an empty one means "this organization has none".
-        // See OrganizationRoster for why the two must not collapse into each other.
         var administratorIds = payload.AdministratorUserIds is null
             ? null
             : payload.AdministratorUserIds

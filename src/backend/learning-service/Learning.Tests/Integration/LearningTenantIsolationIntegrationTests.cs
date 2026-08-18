@@ -64,6 +64,20 @@ public class LearningTenantIsolationIntegrationTests
     private static readonly Guid OrganizationAAttemptId = new("a0000000-0000-4000-8000-0000000000e3");
     private static readonly Guid OrganizationBAttemptId = new("b0000000-0000-4000-8000-0000000000e4");
 
+    /// <summary>
+    /// Builds a throwaway database, then an application role that is <b>NOBYPASSRLS</b>.
+    ///
+    /// <para>
+    /// That flag is the whole point: <c>FORCE ROW LEVEL SECURITY</c> still lets a superuser — and, without
+    /// <c>FORCE</c>, the table owner — read everything, so isolation tested as the admin role would pass no
+    /// matter what the policies said.
+    /// </para>
+    ///
+    /// <para>
+    /// The schema comes from the real migrations, run as the owner, exactly how production gets its tables
+    /// and its RLS policies. Nothing in this fixture writes DDL of its own.
+    /// </para>
+    /// </summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -83,9 +97,6 @@ public class LearningTenantIsolationIntegrationTests
             await ExecuteAsync(maintenanceConnection, $"DROP DATABASE IF EXISTS {LocalLearningPostgresTestSettings.TestDatabaseName};");
             await ExecuteAsync(maintenanceConnection, $"DROP ROLE IF EXISTS {LocalLearningPostgresTestSettings.ApplicationRoleName};");
             await ExecuteAsync(maintenanceConnection, $"CREATE DATABASE {LocalLearningPostgresTestSettings.TestDatabaseName};");
-            // NOBYPASSRLS is the whole point: FORCE ROW LEVEL SECURITY still lets a superuser (and,
-            // without FORCE, the table owner) read everything, so isolation tested as the admin
-            // role would pass no matter what the policies said.
             await ExecuteAsync(maintenanceConnection, $"""
                 CREATE ROLE {LocalLearningPostgresTestSettings.ApplicationRoleName}
                     WITH LOGIN PASSWORD '{LocalLearningPostgresTestSettings.ApplicationRolePassword}'
@@ -97,8 +108,6 @@ public class LearningTenantIsolationIntegrationTests
                 """);
         }
 
-        // The real migrations, run as the owner — exactly how production gets its schema and its
-        // RLS policies. Nothing in this fixture writes DDL of its own.
         await using (var migrationContext = CreateAdminContext())
         {
             await migrationContext.Database.MigrateAsync();
@@ -119,6 +128,9 @@ public class LearningTenantIsolationIntegrationTests
         await SeedAsync(testDatabaseConnection);
     }
 
+    /// <summary>
+    /// Best-effort cleanup of a throwaway fixture: teardown never fails the run.
+    /// </summary>
     [OneTimeTearDown]
     public async Task OneTimeTearDownAsync()
     {
@@ -140,7 +152,6 @@ public class LearningTenantIsolationIntegrationTests
         }
         catch
         {
-            // Best-effort cleanup of a throwaway fixture — never fail the run over teardown.
         }
     }
 
@@ -167,7 +178,6 @@ public class LearningTenantIsolationIntegrationTests
         exercises.Select(exercise => exercise.Id)
             .Should().BeEquivalentTo(new[] { GlobalExerciseId, OrganizationAExerciseId });
 
-        // Every hop of the chain, not only the entity the query started from.
         exercises.Select(exercise => exercise.Lesson!.Id)
             .Should().NotContain(OrganizationBLessonId);
         exercises.Select(exercise => exercise.Lesson!.Topic!.Id)
@@ -276,6 +286,10 @@ public class LearningTenantIsolationIntegrationTests
         await transaction.CommitAsync();
     }
 
+    /// <summary>
+    /// <c>IgnoreQueryFilters</c> strips the EF-level guard <b>on purpose</b>: what is under test is what
+    /// survives when the convenience layer is gone, which is the RLS policy in Postgres.
+    /// </summary>
     [Test]
     public async Task ExecuteUpdate_cannot_touch_another_organizations_progress()
     {
@@ -285,8 +299,6 @@ public class LearningTenantIsolationIntegrationTests
         {
             await using var transaction = await context.Database.BeginTransactionAsync();
 
-            // IgnoreQueryFilters strips the EF-level guard on purpose: what is under test is what
-            // survives when the convenience layer is gone.
             var updatedRowCount = await context.UserLessonProgressRecords
                 .IgnoreQueryFilters()
                 .Where(progress => progress.Id == OrganizationBLessonProgressId)
@@ -545,13 +557,15 @@ public class LearningTenantIsolationIntegrationTests
         return new LearningDbContext(options, tenantContext);
     }
 
+    /// <summary>
+    /// Issues the statement <c>TenantConnectionInterceptor</c> issues in platform mode. As with the
+    /// organization setting below, the name comes from the interceptor's public constant so a rename cannot
+    /// silently desynchronise the two.
+    /// </summary>
     private static async Task SetPlatformModeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        // The statement TenantConnectionInterceptor issues in platform mode. As with the
-        // organization GUC above, the name comes from the interceptor's public constant so a rename
-        // cannot silently desynchronise the two.
         command.CommandText = $"SET LOCAL {TenantConnectionInterceptor.PlatformModeSettingName} = 'on'";
         await command.ExecuteNonQueryAsync();
     }
@@ -580,13 +594,15 @@ public class LearningTenantIsolationIntegrationTests
         return (TValue)(await command.ExecuteScalarAsync())!;
     }
 
+    /// <summary>
+    /// The same statement <c>TenantConnectionInterceptor</c> issues on <c>TransactionStarted</c>. Its own
+    /// builder is internal to BuildingBlocks, so the statement is restated here; the setting name is not,
+    /// and comes from the interceptor's public constant so a rename cannot silently desynchronise the two.
+    /// </summary>
     private static async Task SetOrganizationAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, Guid organizationId)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        // Same statement TenantConnectionInterceptor issues on TransactionStarted. Its own builder
-        // is internal to BuildingBlocks, so it is restated here; the GUC name is not, and comes from
-        // the interceptor's public constant so a rename cannot silently desynchronise the two.
         command.CommandText =
             $"SET LOCAL {TenantConnectionInterceptor.OrganizationIdSettingName} = '{organizationId:D}'";
         await command.ExecuteNonQueryAsync();

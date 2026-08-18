@@ -5,6 +5,25 @@ using Sellevate.Learning.Features.ContentAdaptation.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps one proposed rewrite inside an adaptation batch.
+///
+/// <para>
+/// The content hash is lowercase hex SHA-256, the width <c>LessonVersion.ContentHash</c> uses. The
+/// proposed body is <c>jsonb</c> like <c>Exercise.SerializedContent</c>, because this column holds a
+/// body that may become one; the findings are <c>jsonb</c> like <c>ContentGenerationJobs.Insufficiency</c>
+/// and for the same reason — it is a list of codes with a shape, and the flat alternative would put the
+/// code and its sentence in two places that can disagree.
+/// </para>
+///
+/// <para>
+/// The indexes answer: the worker's query — which items of a claimed batch still owe a call, oldest
+/// first; the queue as the screen walks it, in the learner's order so a reviewer reads a lesson's
+/// exercises in the order the lesson plays them; and «есть ли на это упражнение живое предложение»,
+/// asked when a second batch would otherwise propose a rewrite of an exercise somebody has not answered
+/// about yet.
+/// </para>
+/// </summary>
 public sealed class ContentAdaptationItemEntityConfiguration : IEntityTypeConfiguration<ContentAdaptationItem>
 {
     public void Configure(EntityTypeBuilder<ContentAdaptationItem> builder)
@@ -19,7 +38,6 @@ public sealed class ContentAdaptationItemEntityConfiguration : IEntityTypeConfig
 
         builder.Property(item => item.ExerciseType).IsRequired().HasMaxLength(50);
 
-        // Lowercase hex SHA-256, the width LessonVersion.ContentHash uses.
         builder.Property(item => item.BaseContentHash).IsRequired().HasMaxLength(64);
 
         builder.Property(item => item.Status)
@@ -27,27 +45,18 @@ public sealed class ContentAdaptationItemEntityConfiguration : IEntityTypeConfig
             .HasMaxLength(20)
             .HasDefaultValue(ContentAdaptationItemStatuses.Pending);
 
-        // jsonb, like Exercise.SerializedContent — this column holds a body that may become one.
         builder.Property(item => item.ProposedContent).HasColumnType("jsonb");
 
-        // jsonb, like ContentGenerationJobs.Insufficiency and for the same reason: it is a list of
-        // codes with a shape, and the flat alternative would put the code and its sentence in two
-        // places that can disagree.
         builder.Property(item => item.Findings).HasColumnType("jsonb");
 
         builder.Property(item => item.ChangeSummary).HasMaxLength(500);
 
         builder.Property(item => item.FailureReason).HasMaxLength(1000);
 
-        // The worker's query: which items of a claimed batch still owe a call, oldest first.
         builder.HasIndex(item => new { item.OrganizationId, item.JobId, item.Status });
 
-        // The queue as the screen walks it — the learner's order, so a reviewer reads a lesson's
-        // exercises in the order the lesson plays them.
         builder.HasIndex(item => new { item.OrganizationId, item.JobId, item.LessonId, item.OrderInLesson });
 
-        // «Есть ли на это упражнение живое предложение» — asked when a second batch would otherwise
-        // propose a rewrite of an exercise somebody has not answered about yet.
         builder.HasIndex(item => new { item.OrganizationId, item.ExerciseId, item.Status });
     }
 }

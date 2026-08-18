@@ -43,6 +43,12 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         return Ok(result);
     }
 
+    /// <summary>
+    /// Phase 40.18. An exercise belongs to whoever owns its lesson, so its organization is copied from
+    /// the lesson rather than from the caller. Left null — as it was while every lesson was global — an
+    /// exercise added to an organization's override would land in the shared library and appear inside
+    /// that lesson for every other customer.
+    /// </summary>
     [HttpPost("admin/lessons/{lessonId:guid}/exercises")]
     public async Task<ActionResult<AdminExerciseDto>> Create(
         Guid lessonId, [FromBody] CreateExerciseRequestDto requestDto, CancellationToken cancellationToken = default)
@@ -60,9 +66,6 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         var exercise = new Exercise
         {
             Id = Guid.NewGuid(),
-            // Phase 40.18. An exercise belongs to whoever owns its lesson. Left null — as it was
-            // while every lesson was global — an exercise added to an organization's override would
-            // land in the shared library and appear inside that lesson for every other customer.
             OrganizationId = owningLesson.OrganizationId,
             LessonId = lessonId,
             Type = requestDto.Type,

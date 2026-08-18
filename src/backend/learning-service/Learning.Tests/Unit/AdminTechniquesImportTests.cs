@@ -20,14 +20,16 @@ namespace Sellevate.Learning.Tests.Unit;
 [TestFixture]
 public sealed class AdminTechniquesImportTests
 {
-    private static AdminTechniquesController CreateController(LearningDbContext db) =>
-        new(db, NullLogger<AdminTechniquesController>.Instance)
+    /// <summary>
+    /// Phase 40.18: the controller admits organization administrators too, and refuses import/create to
+    /// anyone who is not Sellevate platform staff. These tests exercise the platform-staff path, so the
+    /// principal has to say so.
+    /// </summary>
+    private static AdminTechniquesController CreateController(LearningDbContext databaseContext) =>
+        new(databaseContext, NullLogger<AdminTechniquesController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
-                // Phase 40.18: the controller now admits organization administrators too, and
-                // refuses import/create to anyone who is not Sellevate platform staff. These tests
-                // exercise the platform-staff path, so the principal has to say so.
                 HttpContext = new DefaultHttpContext { User = PlatformAdministrator() },
             },
         };
@@ -57,30 +59,30 @@ public sealed class AdminTechniquesImportTests
                 : coach ?? new AdminTechniqueCoachDto("dana", coachName, "Coach", "Quote", null));
 
     private static async Task<AdminTechniqueImportResultDto> ImportAsync(
-        LearningDbContext db, params AdminTechniqueWriteRequestDto[] payload)
+        LearningDbContext databaseContext, params AdminTechniqueWriteRequestDto[] payload)
     {
-        var result = await CreateController(db).Import(payload, CancellationToken.None);
+        var result = await CreateController(databaseContext).Import(payload, CancellationToken.None);
         return ((result.Result as OkObjectResult)!.Value as AdminTechniqueImportResultDto)!;
     }
 
     [Test]
     public async Task Import_TechniqueWithCoach_IsReImportable()
     {
-        await using var db = LearningDbContextFactory.CreateInMemory();
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
 
-        var created = await ImportAsync(db, BuildPayload());
+        var created = await ImportAsync(databaseContext, BuildPayload());
         created.CreatedCount.Should().Be(1);
         created.FailedCount.Should().Be(0);
 
-        var updated = await ImportAsync(db, BuildPayload(coachName: "Dana Cross II"));
+        var updated = await ImportAsync(databaseContext, BuildPayload(coachName: "Dana Cross II"));
 
         updated.UpdatedCount.Should().Be(1);
         updated.CreatedCount.Should().Be(0);
         updated.FailedCount.Should().Be(0);
         updated.Errors.Should().BeEmpty();
 
-        db.Techniques.Should().HaveCount(1);
-        var coaches = await db.TechniqueCoaches.ToListAsync();
+        databaseContext.Techniques.Should().HaveCount(1);
+        var coaches = await databaseContext.TechniqueCoaches.ToListAsync();
         coaches.Should().ContainSingle();
         coaches[0].Name.Should().Be("Dana Cross II");
     }
@@ -88,49 +90,52 @@ public sealed class AdminTechniquesImportTests
     [Test]
     public async Task Import_WithoutCoach_RemovesTheExistingCoach()
     {
-        await using var db = LearningDbContextFactory.CreateInMemory();
-        await ImportAsync(db, BuildPayload());
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
+        await ImportAsync(databaseContext, BuildPayload());
 
-        var result = await ImportAsync(db, BuildPayload(withoutCoach: true));
+        var result = await ImportAsync(databaseContext, BuildPayload(withoutCoach: true));
 
         result.FailedCount.Should().Be(0);
-        db.TechniqueCoaches.Should().BeEmpty();
+        databaseContext.TechniqueCoaches.Should().BeEmpty();
     }
 
     [Test]
     public async Task Import_AdditionalSkills_AreSyncedWithoutDuplicates()
     {
-        await using var db = LearningDbContextFactory.CreateInMemory();
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
         var keptSkillId = Guid.NewGuid();
         var droppedSkillId = Guid.NewGuid();
         var addedSkillId = Guid.NewGuid();
-        db.Skills.AddRange(
+        databaseContext.Skills.AddRange(
             new Skill { Id = keptSkillId, IconicName = "kept", Title = "Kept" },
             new Skill { Id = droppedSkillId, IconicName = "dropped", Title = "Dropped" },
             new Skill { Id = addedSkillId, IconicName = "added", Title = "Added" });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        await ImportAsync(db, BuildPayload(additionalSkillIds: [keptSkillId, droppedSkillId]));
+        await ImportAsync(databaseContext, BuildPayload(additionalSkillIds: [keptSkillId, droppedSkillId]));
 
-        var result = await ImportAsync(db, BuildPayload(additionalSkillIds: [keptSkillId, addedSkillId]));
+        var result = await ImportAsync(databaseContext, BuildPayload(additionalSkillIds: [keptSkillId, addedSkillId]));
 
         result.FailedCount.Should().Be(0);
-        var links = await db.TechniqueSkills.Select(link => link.SkillId).ToListAsync();
+        var links = await databaseContext.TechniqueSkills.Select(link => link.SkillId).ToListAsync();
         links.Should().BeEquivalentTo(new[] { keptSkillId, addedSkillId });
     }
 
+    /// <summary>
+    /// A difficulty outside 1..4 fails validation before anything is written, so the row is counted as
+    /// failed exactly once and never as both failed and created.
+    /// </summary>
     [Test]
     public async Task Import_CountsFailedRowsOnlyOnce()
     {
-        await using var db = LearningDbContextFactory.CreateInMemory();
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
 
-        // Difficulty outside 1..4 fails validation before anything is written.
         var invalid = BuildPayload() with { Difficulty = 9 };
-        var result = await ImportAsync(db, invalid);
+        var result = await ImportAsync(databaseContext, invalid);
 
         result.FailedCount.Should().Be(1);
         result.CreatedCount.Should().Be(0);
         result.UpdatedCount.Should().Be(0);
-        db.Techniques.Should().BeEmpty();
+        databaseContext.Techniques.Should().BeEmpty();
     }
 }

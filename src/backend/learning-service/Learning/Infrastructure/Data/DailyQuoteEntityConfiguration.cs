@@ -4,6 +4,11 @@ using Sellevate.Learning.Features.DailyQuotes.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps the daily quote. Global content with no organization column, and unique on the date: exactly one
+/// quote is shown per day to everybody, so a second row for the same date would make the choice
+/// nondeterministic.
+/// </summary>
 public sealed class DailyQuoteEntityConfiguration : IEntityTypeConfiguration<DailyQuote>
 {
     public void Configure(EntityTypeBuilder<DailyQuote> builder)

@@ -4,6 +4,22 @@ using Sellevate.Learning.Features.Programs.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps the programme version one learner is standing on.
+///
+/// <para>
+/// A <b>real foreign key</b>, unlike the references in <c>ProgramItem</c>, because both sides are strict
+/// tenant data under the same plain-equality policy and are always in the same organization.
+/// <c>Restrict</c> rather than <c>Cascade</c>: a programme version somebody is standing on is not
+/// something to delete, and refusing the delete is a far better answer than silently unpinning a learner
+/// mid-course.
+/// </para>
+///
+/// <para>
+/// <b>One pin per learner per organization.</b> The same person may legitimately belong to two
+/// organizations (memberships, 40.6) and then holds one enrollment in each.
+/// </para>
+/// </summary>
 public sealed class ProgramEnrollmentEntityConfiguration : IEntityTypeConfiguration<ProgramEnrollment>
 {
     public void Configure(EntityTypeBuilder<ProgramEnrollment> builder)
@@ -19,18 +35,11 @@ public sealed class ProgramEnrollmentEntityConfiguration : IEntityTypeConfigurat
         builder.Property(enrollment => enrollment.EnrolledAt).IsRequired();
         builder.Property(enrollment => enrollment.SwitchedAt);
 
-        // A real foreign key, unlike the references in ProgramItem, because both sides are strict
-        // tenant data under the same plain-equality policy and always in the same organization.
-        // Restrict rather than Cascade: a programme version somebody is standing on is not something
-        // to delete, and refusing the delete is a far better answer than silently unpinning a
-        // learner mid-course.
         builder.HasOne(enrollment => enrollment.ProgramVersion)
             .WithMany()
             .HasForeignKey(enrollment => enrollment.ProgramVersionId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // One pin per learner per organization. The same person may legitimately belong to two
-        // organizations (memberships, 40.6) and then holds one enrollment in each.
         builder.HasIndex(enrollment => new { enrollment.OrganizationId, enrollment.UserId })
             .IsUnique();
 

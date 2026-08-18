@@ -4,6 +4,10 @@ using Sellevate.Learning.Features.SkillTree.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps the skill-tree stage vocabulary. Platform-wide with no organization column, and unique on the key
+/// because the key — not the surrogate id — is what <c>Skill.Stage</c> and every gap suggestion refer to.
+/// </summary>
 public sealed class SkillStageEntityConfiguration : IEntityTypeConfiguration<SkillStage>
 {
     public void Configure(EntityTypeBuilder<SkillStage> builder)

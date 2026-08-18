@@ -125,6 +125,10 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         return Ok(new SkillsImportResultDto(state.SkillsCreated, state.SkillsUpdated, state.Errors));
     }
 
+    /// <summary>
+    /// Phase 40.19: the new row's organization is stated as <see langword="null"/>, not left to the
+    /// default. A row the seeder writes belongs to the shared library and to no customer.
+    /// </summary>
     private void UpsertSkill(string iconicName, string title, string? description, int orderInTree, string? stage,
         Dictionary<string, Skill> existingSkills, SkillsImportState state)
     {
@@ -144,8 +148,6 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             var skill = new Skill
             {
                 Id = Guid.NewGuid(),
-                // Phase 40.19: stated, not left to the default. A row the seeder writes belongs to
-                // the shared library and to no customer.
                 OrganizationId = null,
                 IconicName = iconicName,
                 Title = title,
@@ -615,6 +617,11 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             "Seeder export ({Kind}): {Count} root items by ActorId={ActorId}",
             kind, count, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
+    /// <summary>
+    /// Phase 40.15: the seeder feeds the global library, whose lessons need a stable slug like any
+    /// other. It is derived from the id, because a bundle file names lessons by title and titles are
+    /// Russian prose — see <c>LessonSlugGenerator</c> for why nothing transliterates them.
+    /// </summary>
     private Lesson UpsertLesson(Guid topicId, string title, int orderInTopic,
         List<Lesson> existingLessons, LessonsImportState state)
     {
@@ -626,9 +633,6 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             return existing;
         }
 
-        // Phase 40.15: the seeder feeds the global library, whose lessons need a stable slug like
-        // any other. Derived from the id, because a bundle file names lessons by title and titles
-        // are Russian prose — see LessonSlugGenerator for why nothing transliterates them.
         var lessonId = Guid.NewGuid();
         var lesson = new Lesson
         {

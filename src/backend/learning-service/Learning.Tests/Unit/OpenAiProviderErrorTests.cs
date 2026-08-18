@@ -66,12 +66,14 @@ public class OpenAiProviderErrorTests
         exception.Should().BeAssignableTo<OpenAiException>();
     }
 
+    /// <summary>
+    /// ai-service redacts and drops the provider body before it answers; the failure it names carries a code
+    /// and a status and nothing a key could hide in. This asserts the far end of that promise — whatever
+    /// arrives, the exception message stays the generic one.
+    /// </summary>
     [Test]
     public async Task InvalidRequest_DoesNotLeakTheProviderBody()
     {
-        // ai-service redacts and drops the provider body before it answers; the failure it names
-        // carries a code and a status and nothing a key could hide in. This asserts the far end of
-        // that promise — whatever arrives, the exception message stays the generic one.
         var service = CreateService(
             HttpStatusCode.ServiceUnavailable,
             """{"code":"provider_rejected","upstreamStatusCode":400,"detail":"sk-secret-key-leak"}""");
@@ -100,13 +102,15 @@ public class OpenAiProviderErrorTests
         (await act.Should().ThrowAsync<Exception>()).Which.Should().BeOfType(expectedException);
     }
 
+    /// <summary>
+    /// Phase 40.33. The organization spent its allowance. It is not a provider failure and it has no failure
+    /// code, but the exercise chat must degrade the same way rather than 500 — so it arrives as the
+    /// rate-limit exception, which <c>GenerateAiResponseAsync</c> already answers with a neutral reply
+    /// instead of a broken screen.
+    /// </summary>
     [Test]
     public async Task OrganizationQuotaRefusal_DegradesAsARateLimit()
     {
-        // Phase 40.33. The organization spent its allowance. It is not a provider failure and it has
-        // no failure code, but the exercise chat must degrade the same way rather than 500 — so it
-        // arrives as the rate-limit exception, which GenerateAiResponseAsync already answers with a
-        // neutral reply instead of a broken screen.
         var service = CreateService(
             HttpStatusCode.TooManyRequests,
             """{"error":"Organization AI quota reached","resource":"llm_tokens"}""");
@@ -116,10 +120,12 @@ public class OpenAiProviderErrorTests
         await act.Should().ThrowAsync<OpenAiRateLimitException>();
     }
 
+    /// <summary>
+    /// A proxy that answers 200 with an HTML error page must not crash the request.
+    /// </summary>
     [Test]
     public async Task NonJsonBodyOnSuccess_ThrowsTypedRequestException()
     {
-        // A proxy that answers 200 with an HTML error page must not crash the request.
         var service = CreateService(HttpStatusCode.OK, "<html><body>502 Bad Gateway</body></html>", "text/html");
 
         var act = async () => await CallAsync(service);
@@ -127,11 +133,13 @@ public class OpenAiProviderErrorTests
         await act.Should().ThrowAsync<OpenAiRequestException>();
     }
 
+    /// <summary>
+    /// Controllers catch <see cref="OpenAiException"/>; a new failure mode must never bypass them —
+    /// including one ai-service adds later and this client has never heard of.
+    /// </summary>
     [Test]
     public async Task EveryProviderFailure_IsCatchableAsTheSharedBaseType()
     {
-        // Controllers catch OpenAiException; a new failure mode must never bypass them — including
-        // one ai-service adds later and this client has never heard of.
         var service = CreateService(HttpStatusCode.BadGateway, """{"code":"something_new"}""");
 
         var act = async () => await CallAsync(service);

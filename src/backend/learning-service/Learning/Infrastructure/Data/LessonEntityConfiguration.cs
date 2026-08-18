@@ -4,6 +4,23 @@ using Sellevate.Learning.Features.Lessons.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps a lesson, which may be a global library row or one organization's override of one.
+///
+/// <para>
+/// Phase 40.15. The base-lesson foreign key is <c>Restrict</c>, not <c>Cascade</c>: a global lesson that
+/// three customers have overridden must not be deletable in one click, and silently promoting the
+/// overrides to standalone lessons (<c>SetNull</c>) would lose the fact that they were ever derived.
+/// Nothing creates an override until 40.18, so today this constrains nothing.
+/// </para>
+///
+/// <para>
+/// Phase 40.15, the trap already paid for once in 40.10: <b>in a composite unique index Postgres treats
+/// nulls as distinct</b>, so (organization, slug) does <b>not</b> stop two global lessons sharing a slug.
+/// The partial unique index over the global rows is what preserves that guarantee, exactly as for
+/// <c>Skill.IconicName</c>, <c>Topic.IconicName</c> and <c>Technique.Slug</c>.
+/// </para>
+/// </summary>
 public sealed class LessonEntityConfiguration : IEntityTypeConfiguration<Lesson>
 {
     public void Configure(EntityTypeBuilder<Lesson> builder)
@@ -26,10 +43,6 @@ public sealed class LessonEntityConfiguration : IEntityTypeConfiguration<Lesson>
             .HasForeignKey(lesson => lesson.TopicId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Phase 40.15. Restrict, not cascade: a global lesson that three customers have overridden
-        // must not be deletable in one click, and silently promoting the overrides to standalone
-        // lessons (SetNull) would lose the fact that they were ever derived. Nothing creates an
-        // override until 40.18, so today this constrains nothing.
         builder.HasOne(lesson => lesson.ParentLesson)
             .WithMany()
             .HasForeignKey(lesson => lesson.ParentLessonId)
@@ -37,10 +50,6 @@ public sealed class LessonEntityConfiguration : IEntityTypeConfiguration<Lesson>
 
         builder.HasIndex(lesson => new { lesson.OrganizationId, lesson.TopicId, lesson.OrderInTopic });
 
-        // Phase 40.15, the trap already paid for once in 40.10: in a composite unique index Postgres
-        // treats NULLs as distinct, so ("OrganizationId", "Slug") does NOT stop two global lessons
-        // sharing a slug. The partial index over the global rows is what preserves that guarantee,
-        // exactly as for Skill.IconicName / Topic.IconicName / Technique.Slug.
         builder.HasIndex(lesson => new { lesson.OrganizationId, lesson.Slug })
             .IsUnique();
         builder.HasIndex(lesson => lesson.Slug)

@@ -3,6 +3,16 @@ using Sellevate.BuildingBlocks.Outbox;
 
 namespace Sellevate.Learning.Eventing;
 
+/// <summary>
+/// Stages every outgoing learning event through the transactional outbox instead of producing to
+/// Kafka directly, so an event is never visible unless the rows it describes committed with it.
+///
+/// <para>
+/// <b>The partition key is always the recipient.</b> Per-recipient ordering exists only if the
+/// recipient is the key, so learner-facing notices are keyed by the learner and the two РОП-facing
+/// ones — the deadline digest and a filed dispute — by the administrator, not by the assignment.
+/// </para>
+/// </summary>
 internal sealed class KafkaLearningEventPublisher(IOutboxWriter outboxWriter) : ILearningEventPublisher
 {
     public Task PublishExerciseCompletedAsync(ExerciseCompletedEvent payload, CancellationToken cancellationToken = default)
@@ -56,9 +66,6 @@ internal sealed class KafkaLearningEventPublisher(IOutboxWriter outboxWriter) : 
         AssignmentDeadlineDigestEvent payload,
         CancellationToken cancellationToken = default)
     {
-        // Keyed by the administrator, not by the assignment: the partition key is the recipient
-        // everywhere in this system, and per-recipient ordering only exists if the recipient is the
-        // key.
         outboxWriter.Enqueue(
             Topics.AssignmentDeadlineDigest,
             payload.AdministratorUserId.ToString(),

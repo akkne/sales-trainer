@@ -156,13 +156,20 @@ public sealed class AdminTechniquesController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Platform staff only: import writes the global library wholesale — it is the seeder's sibling. An
+    /// organization customizing its own techniques does that one row at a time through <c>Update</c>.
+    ///
+    /// <para>
+    /// Each item is committed on its own and counted only after the row is actually persisted, so a
+    /// failed item never shows up as both "updated" and "failed".
+    /// </para>
+    /// </summary>
     [HttpPost("admin/techniques/import")]
     public async Task<ActionResult<AdminTechniqueImportResultDto>> Import(
         [FromBody] AdminTechniqueWriteRequestDto[] payload,
         CancellationToken cancellationToken)
     {
-        // Import writes the global library wholesale — it is the seeder's sibling. An organization
-        // customizing its own techniques does that one row at a time through Update.
         if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
 
         var createdCount = 0;
@@ -213,8 +220,6 @@ public sealed class AdminTechniquesController(
 
                 await databaseContext.SaveChangesAsync(cancellationToken);
 
-                // Counted only after the row is actually persisted, so a failed item
-                // never shows up as both "updated" and "failed".
                 if (isNewRecord) createdCount++;
                 else updatedCount++;
             }
@@ -306,6 +311,12 @@ public sealed class AdminTechniquesController(
             .ToDictionaryAsync(projection => projection.Id, cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.18: the slug clash is looked for <b>inside one owner</b>, not across the visible set. A
+    /// technique override deliberately carries its base's slug — that is what keeps the URL stable — so a
+    /// check spanning "global or mine" would report a conflict with the very row this override is a copy
+    /// of, and no override would ever be editable.
+    /// </summary>
     private async Task<ActionResult?> ValidatePayloadAsync(
         AdminTechniqueWriteRequestDto payload,
         Guid? existingTechniqueId,
@@ -318,10 +329,6 @@ public sealed class AdminTechniquesController(
         if (payload.Difficulty is < TechniqueLevels.Novice or > TechniqueLevels.Master)
             return BadRequest(new { error = "Difficulty must be between 1 and 4." });
 
-        // Phase 40.18: the clash is looked for inside one owner, not across the visible set. A
-        // technique override deliberately carries its base's slug — that is what keeps the URL
-        // stable — so a check spanning "global or mine" would report a conflict with the very row
-        // this override is a copy of, and no override would ever be editable.
         var slugClashExists = await databaseContext.Techniques.AnyAsync(
             candidate => candidate.Slug == payload.Slug
                          && candidate.OrganizationId == owningOrganizationId
@@ -359,10 +366,12 @@ public sealed class AdminTechniquesController(
         SyncCoach(technique, payload.Coach);
     }
 
-    // Child rows are reconciled in place rather than deleted and re-inserted: a delete
-    // plus an insert carrying the same key inside one SaveChanges makes EF fail with a
-    // concurrency error (TechniqueCoaches has a unique TechniqueId, TechniqueSkills a
-    // composite key), which broke every re-import of an existing technique.
+    /// <summary>
+    /// Child rows are reconciled in place rather than deleted and re-inserted: a delete plus an insert
+    /// carrying the same key inside one <c>SaveChanges</c> makes EF fail with a concurrency error
+    /// (<c>TechniqueCoaches</c> has a unique <c>TechniqueId</c>, <c>TechniqueSkills</c> a composite key),
+    /// which broke every re-import of an existing technique.
+    /// </summary>
     private void SyncAdditionalSkills(Technique technique, Guid[]? additionalSkillIds)
     {
         var desiredSkillIds = (additionalSkillIds ?? Array.Empty<Guid>()).Distinct().ToHashSet();

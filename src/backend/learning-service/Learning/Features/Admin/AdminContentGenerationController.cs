@@ -159,7 +159,16 @@ public sealed class AdminContentGenerationController(
         }
     }
 
-    /// <summary>«Всё верно» — the only door into generation, and the only transition no worker can make.</summary>
+    /// <summary>
+    /// «Всё верно» — the only door into generation, and the only transition no worker can make.
+    ///
+    /// <para>
+    /// Insufficient material answers 409 rather than 400: the request was well-formed and the caller was
+    /// not wrong about the world — the answer is simply no. The body carries the list of what is missing,
+    /// not a paragraph, because a refusal the РОП can act on in five minutes is worth more than the
+    /// lesson they asked for.
+    /// </para>
+    /// </summary>
     [HttpPost("admin/content-generation/{jobId:guid}/approve")]
     public async Task<ActionResult<ContentGenerationJobDto>> Approve(
         Guid jobId,
@@ -179,9 +188,6 @@ public sealed class AdminContentGenerationController(
         }
         catch (ContentGenerationInsufficientMaterialException insufficientMaterialException)
         {
-            // 409 rather than 400: the request was well-formed and the caller was not wrong about the
-            // world — the answer is simply no. The body carries the list, not a paragraph, because a
-            // refusal the РОП can act on in five minutes is worth more than the lesson they asked for.
             return Conflict(new
             {
                 message = insufficientMaterialException.Message,

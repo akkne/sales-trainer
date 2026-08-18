@@ -13,47 +13,47 @@ namespace Sellevate.Learning.Tests.Unit;
 [TestFixture]
 public sealed class AdminSeederExportTests
 {
-    private static AdminSeederController CreateController(LearningDbContext db) =>
-        new(db, NullLogger<AdminSeederController>.Instance)
+    private static AdminSeederController CreateController(LearningDbContext databaseContext) =>
+        new(databaseContext, NullLogger<AdminSeederController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
 
     private static async Task<LearningDbContext> SeedTreeAsync()
     {
-        var db = LearningDbContextFactory.CreateInMemory();
+        var databaseContext = LearningDbContextFactory.CreateInMemory();
         var skillId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
         var lessonId = Guid.NewGuid();
 
-        db.Skills.Add(new Skill
+        databaseContext.Skills.Add(new Skill
         {
             Id = skillId, IconicName = "cold-calling", Title = "Cold Calling",
             Description = "desc", OrderInTree = 1, Stage = "preparation",
         });
-        db.Topics.Add(new Topic
+        databaseContext.Topics.Add(new Topic
         {
             Id = topicId, SkillId = skillId, IconicName = "cc-basics", Title = "Basics", OrderInSkill = 1,
         });
-        db.Lessons.Add(new Lesson
+        databaseContext.Lessons.Add(new Lesson
         {
             Id = lessonId, TopicId = topicId, Title = "Opening the call", OrderInTopic = 1,
         });
-        db.Exercises.Add(new Exercise
+        databaseContext.Exercises.Add(new Exercise
         {
             Id = Guid.NewGuid(), LessonId = lessonId, Type = "choose_option", OrderInLesson = 1,
             SerializedContent = """{"layout":"text","title":"Hi"}""", CustomAiPrompt = null,
         });
-        await db.SaveChangesAsync();
-        return db;
+        await databaseContext.SaveChangesAsync();
+        return databaseContext;
     }
 
     [Test]
     public async Task ExportSkills_ReturnsImportableShape()
     {
-        await using var db = await SeedTreeAsync();
+        await using var databaseContext = await SeedTreeAsync();
 
-        var result = await CreateController(db).ExportSkills();
+        var result = await CreateController(databaseContext).ExportSkills();
 
         var payload = (result.Result as OkObjectResult)!.Value as IReadOnlyList<SkillExportDto>;
         payload.Should().ContainSingle();
@@ -65,9 +65,9 @@ public sealed class AdminSeederExportTests
     [Test]
     public async Task ExportTopics_ResolvesSkillIconicName()
     {
-        await using var db = await SeedTreeAsync();
+        await using var databaseContext = await SeedTreeAsync();
 
-        var result = await CreateController(db).ExportTopics();
+        var result = await CreateController(databaseContext).ExportTopics();
 
         var payload = (result.Result as OkObjectResult)!.Value as IReadOnlyList<TopicExportDto>;
         payload.Should().ContainSingle();
@@ -76,12 +76,16 @@ public sealed class AdminSeederExportTests
         payload[0].OrderInSkill.Should().Be(1);
     }
 
+    /// <summary>
+    /// Exercise content is emitted as a JSON object, not as a string: the seeder import reads it back as a
+    /// document, so a quoted string would round-trip into double-encoded content.
+    /// </summary>
     [Test]
     public async Task ExportLessons_ResolvesTopicIconicName_AndNestsExercises()
     {
-        await using var db = await SeedTreeAsync();
+        await using var databaseContext = await SeedTreeAsync();
 
-        var result = await CreateController(db).ExportLessons();
+        var result = await CreateController(databaseContext).ExportLessons();
 
         var payload = (result.Result as OkObjectResult)!.Value as IReadOnlyList<LessonExportDto>;
         payload.Should().ContainSingle();
@@ -89,7 +93,6 @@ public sealed class AdminSeederExportTests
         payload[0].Exercises.Should().ContainSingle();
         var exercise = payload[0].Exercises[0];
         exercise.Type.Should().Be("choose_option");
-        // content is emitted as a JSON object, not a string.
         exercise.Content.Should().NotBeNull();
         exercise.Content!["layout"]!.GetValue<string>().Should().Be("text");
     }
@@ -97,9 +100,9 @@ public sealed class AdminSeederExportTests
     [Test]
     public async Task ExportBundle_NestsSkillTopicLessonExercise()
     {
-        await using var db = await SeedTreeAsync();
+        await using var databaseContext = await SeedTreeAsync();
 
-        var result = await CreateController(db).ExportBundle();
+        var result = await CreateController(databaseContext).ExportBundle();
 
         var bundle = (result.Result as OkObjectResult)!.Value as BundleExportDto;
         bundle.Should().NotBeNull();
