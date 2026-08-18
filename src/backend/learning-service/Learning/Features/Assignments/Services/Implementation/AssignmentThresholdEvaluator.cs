@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Assignments.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Services.Implementation;
@@ -39,6 +40,7 @@ namespace Sellevate.Learning.Features.Assignments.Services.Implementation;
 /// </summary>
 internal sealed class AssignmentThresholdEvaluator(
     LearningDbContext databaseContext,
+    ILearningEventPublisher eventPublisher,
     ILogger<AssignmentThresholdEvaluator> logger) : IAssignmentThresholdEvaluator
 {
     public async Task<int> EvaluateForUserAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -159,11 +161,30 @@ internal sealed class AssignmentThresholdEvaluator(
             return false;
         }
 
+        var previousStatus = record.Status;
+
         record.Status = nextStatus;
         record.BestScore = nextBestScore;
         record.AttemptCount = measurement.AttemptCount;
         record.FirstOpenedAt = nextFirstOpenedAt;
         record.CompletedAt = nextCompletedAt;
+
+        // Phase 40.25. Only a state change is published, not every re-derivation: an attempt count
+        // ticking from three to four is not a funnel movement, and a counter that also counted those
+        // would answer a different question than the one it is named after. Staged in the caller's
+        // transaction like every other outbox write here, so the counter cannot drift from the rows.
+        if (nextStatus != previousStatus)
+        {
+            await eventPublisher.PublishAssignmentProgressChangedAsync(
+                new AssignmentProgressChangedEvent(
+                    assignment.Id,
+                    record.UserId,
+                    previousStatus,
+                    nextStatus,
+                    record.BestScore,
+                    record.AttemptCount),
+                cancellationToken);
+        }
 
         logger.LogInformation(
             "Assignment progress judged AssignmentId={AssignmentId} UserId={UserId} Rule={Kind} "

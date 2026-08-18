@@ -52,6 +52,19 @@ internal sealed class KafkaLearningEventPublisher(IOutboxWriter outboxWriter) : 
         return Task.CompletedTask;
     }
 
+    public Task PublishAssignmentProgressChangedAsync(
+        AssignmentProgressChangedEvent payload,
+        CancellationToken cancellationToken = default)
+    {
+        outboxWriter.Enqueue(
+            Topics.AssignmentProgressChanged,
+            payload.UserId.ToString(),
+            Topics.AssignmentProgressChanged,
+            payload);
+
+        return Task.CompletedTask;
+    }
+
     public Task PublishDialogReviewCommentedAsync(
         DialogReviewCommentedEvent payload,
         CancellationToken cancellationToken = default)

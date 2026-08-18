@@ -50,6 +50,26 @@ public sealed record AssignmentReminderEvent(
     DateTime RequestedAt);
 
 /// <summary>
+/// Phase 40.25. One person's standing on one assignment moved between the four funnel states
+/// (docs/TENANCY/ASSIGNMENTS.md §4).
+///
+/// <para>
+/// <b>It carries the transition, not the funnel.</b> The only consumer is analytics-service, which
+/// increments a platform-wide counter labelled by the new state and stores nothing — no user, no
+/// assignment, no organization (docs/ANALYTICS_SERVICE.md). The fields beyond
+/// <see cref="Status"/> travel because an event that cannot be read in a log is an event nobody can
+/// debug, not because anything downstream aggregates on them.
+/// </para>
+/// </summary>
+public sealed record AssignmentProgressChangedEvent(
+    Guid AssignmentId,
+    Guid UserId,
+    string PreviousStatus,
+    string Status,
+    int? BestScore,
+    int AttemptCount);
+
+/// <summary>
 /// Phase 40.25. The РОП commented on a fragment of this person's conversation
 /// (docs/TENANCY/ASSIGNMENTS.md §4.1).
 ///

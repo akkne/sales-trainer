@@ -49,6 +49,20 @@ public static class Topics
     /// Phase 40.25. The РОП selected a fragment of this person's practice conversation and commented
     /// on it (docs/TENANCY/ASSIGNMENTS.md §4.1). Addressed to the manager whose conversation it was.
     /// </summary>
+    /// <summary>
+    /// Phase 40.25. One person's standing on one assignment moved between the four funnel states
+    /// (docs/TENANCY/ASSIGNMENTS.md §4). Published by the threshold evaluator in the transaction that
+    /// writes the row, so a transition cannot exist without its notice.
+    ///
+    /// <para>
+    /// <b>The per-organization funnel is not built from this topic and must not be.</b> The РОП's
+    /// screen counts progress rows in learning-db, where the rows are; this event exists so
+    /// analytics-service can keep a platform-wide operational counter without holding attempts,
+    /// scores or a customer id — see docs/ANALYTICS_SERVICE.md.
+    /// </para>
+    /// </summary>
+    public const string AssignmentProgressChanged = "assignment.progress.changed";
+
     public const string DialogReviewCommented = "dialog.review.commented";
 
     /// <summary>
