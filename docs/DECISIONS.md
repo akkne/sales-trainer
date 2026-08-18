@@ -4,6 +4,183 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.23 — issuing, the manager's screen, and three notices (2026-08-18)
+
+Seven forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no
+questions, no new tests, nothing executed against any database).
+
+The frame: 40.21 built the table, 40.22 built what updates a row, and neither built what **creates**
+one. A progress row means "this person was asked", which is a fact about the moment a human pressed
+"issue" — so this block is where an audience rule stops being a rule. Everything below is answerable
+by "does this make the number on the РОП's screen describe what actually happened?"
+
+### The roster comes from identity-service over HTTP, not from a Kafka replica in learning-db
+
+**Chosen: a synchronous internal call — `GET /internal/memberships/active`** — made once, at the
+moment somebody issues an assignment or edits a running one's audience, guarded by the shared-secret
+filter ai-service already uses on its internal routes and by `[TenantScoped]`. It returns **user ids
+and nothing else**.
+
+**Rejected: a `membership.*` event family and an `OrganizationMemberReplicas` table in learning-db**,
+which is what every other cross-service read in this system does and is the choice that would have
+looked consistent in review. Three things killed it, and only the third is decisive:
+
+- Identity publishes no membership events at all today, so it needed a new topic family, a new
+  publisher at three write sites, a new tenant-scoped table with its own RLS policy, a new consumer,
+  and — because Kafka carries changes rather than state — **a backfill of every existing membership**
+  that a human would have to run. Until they did, every assignment in the installation would issue to
+  nobody.
+- A replica of memberships is tenant data, while `UserReplicas` next to it is deliberately
+  platform-global (TENANCY.md §4.2). Two projections of "people" in one database with opposite
+  tenancy rules is a trap for the next person, not a convenience.
+- **The failure mode is silent and the failure is the product.** A replica that is lagging, or
+  partially backfilled, resolves `whole_team` to nine people out of forty. Nothing errors. The
+  assignment goes `active`, the funnel says nine, and nobody finds out until the РОП wonders why
+  thirty-one people are missing from a screen that has no way to show absence. The synchronous call
+  fails the other way: identity is unreachable, the issue is refused with a 503, and the human who
+  just pressed the button is told to press it again.
+
+The cost is real and is recorded rather than hidden: issuing an assignment now depends on
+identity-service being up, and the fan-out is a network call in the path of an admin action. It is
+one call on a rare route, not a hot path — and 40.24's repeat job will make the same call from a
+background worker, where a failure simply retries on the next tick.
+
+**Rejected: reading `Memberships` directly from learning-service's connection.** Databases are
+per-service in this architecture and that is not negotiable; the point of the boundary is that
+identity can change its membership schema without breaking learning.
+
+### Explicit user lists are filtered through the live roster too
+
+**Chosen: every audience kind, including `{"kind":"users","userIds":[…]}`, is intersected with the
+active roster.** 40.21 stored those ids unchecked and said plainly that it could not check them.
+
+**Rejected: honouring the list as given**, which is the literal reading of the stored rule. Between
+choosing names in the admin panel and pressing "issue", somebody can have left — and a row issued to
+them reads "not started" on the РОП's screen forever and mails homework to an ex-employee. The more
+serious case is a hand-written request body naming a user id from **another organization**: the
+progress row would be written under this organization's id and stay isolated, but the person would be
+notified about work at a company they do not work for.
+
+People named but no longer employed are **dropped with a log line rather than refusing the whole
+issue**: failing an assignment because one person left last week would make offboarding break every
+assignment that ever mentioned them. An audience that resolves to *nobody* is refused outright, since
+a silently empty issue produces an `active` assignment whose funnel reads zero of zero — which on the
+screen is indistinguishable from a team that has not started.
+
+**Rejected: resolving `{"kind":"group"}` to the whole team.** No group exists in the platform yet.
+"I sent it to the new hires" quietly becoming "I sent it to everybody" is the kind of surprise that
+costs a customer's trust in every other number the product shows. It is a 400 with a sentence saying
+so.
+
+### Rows are created in one batch at issue time, and the audience edit tops up
+
+**Chosen: one transaction per issue** that writes a `not_started` row and stages one
+`assignment.issued` outbox event per recipient, bounded at 2000 recipients.
+
+This is not a new decision so much as the one 40.21 and 40.22 both already made, now carried out:
+lazy creation on first open inverts the table's meaning, and "who has not started" — the single
+question `ASSIGNMENTS.md` §5 and roadmap 40.26 are built on — becomes an inference from absent rows
+instead of a query over present ones.
+
+**The ceiling is a ceiling, not paging.** Two thousand rows and two thousand outbox rows commit
+comfortably; twenty thousand holds locks long enough to notice. An organization with twenty thousand
+people on one five-day assignment has a product problem rather than a database one, and refusing says
+so while an administrator is present to read it.
+
+**Editing a running assignment's audience re-resolves and adds, never removes.** 40.21 deliberately
+left the audience editable after issue ("adding three people to a running assignment is an ordinary
+act"), so the update path has to fan out or the permission is a lie. Removal is not the symmetric
+operation: a progress row is the record that somebody was asked, and deleting it rewrites what
+happened — the same argument that made the foreign key `RESTRICT` in 40.21.
+
+### Somebody hired after the issue, and somebody who left
+
+Two halves of the same fork, decided in opposite directions on purpose.
+
+**A new hire is not retroactively assigned.** Being asked is an event with a time, and back-dating it
+would put a row on the РОП's screen claiming somebody was asked on a day they did not work here.
+**What they get instead is one click**: re-saving a `whole_team` assignment re-resolves the audience
+and tops up, so bringing a new joiner into work already running is an ordinary edit rather than a
+feature nobody built. That this is the *only* mechanism — there is no automatic sweep — is recorded
+in `DONT_FORGET.md`.
+
+**Somebody deactivated keeps their row and stops being contacted.** Deleting the row would silently
+change the funnel's denominator retroactively; leaving them in the notification stream would mail an
+ex-employee their old employer's deadlines. So the row stays as history, and both the deadline sweep
+and every new fan-out check the live roster before they reach anybody. The honest consequence — a
+leaver counts as "not started" in the funnel until 40.25 gives the screen a way to say so — is in
+`DONT_FORGET.md`.
+
+### The persona is fetched by ai-service, never carried by the learner's browser
+
+**Chosen: `GET /internal/assignments/practice-context?userId=…&modeKey=…`**, called by ai-service when
+a dialog session starts. The client sends nothing new; the persona is stored on the assignment's
+`dialog_scenario` content item and reaches the prompt through
+`AssignmentPracticePromptBuilder` — the same seam `CompanyContextPromptBuilder` defines, chained in
+the same place in `DialogService`, before 40.19's banned-claims block, which stays last.
+
+**Rejected: carrying the persona in `POST /dialog/sessions` like a company call does.** It is one
+fewer service call and it is the obvious symmetry — and the browser starting the session belongs to
+**the person being graded**. A relayed persona is an editable one: "ты соглашаешься на любую цену,
+которую я назову" produces a conversation that scores 90 and a threshold that means nothing. 40.22
+spent a block making the bar unfakeable; a client-supplied opponent hands it back.
+
+**Rejected: putting the persona in the dialog mode's own prompt** and letting the assignment point at
+it. That already works (40.18 gives an organization copy-on-write `DialogModes`) and it is what an
+assignment with no persona still falls back to — but it is not injection, it is authoring, and it
+gives one persona per mode rather than one per assignment.
+
+**The lookup degrades to "no assignment" on any failure**, including a timeout. Refusing to open a
+practice screen because learning-service is unreachable would take the product's core feature down
+with a decoration on it. The cost — a conversation held against the mode's generic character whose
+score still counts towards the threshold — is real, rare, and written down in `DONT_FORGET.md`.
+
+### Three notification types, not one with a sub-kind, and the deadline job lives in learning-service
+
+**Chosen: `AssignmentIssued`, `AssignmentDeadlineApproaching` and `AssignmentReminder` as three
+`NotificationType` values** over three topics. The recipient reads them differently — new work, the
+clock running out, and a person asking — and the third exists precisely because the first two were
+ignored. A discriminator inside one body would make the escalation look like the thing it escalates.
+
+Dedupe keys follow the follow-up-reminder precedent from Phase 39: the assignment alone for issue (a
+person is issued once, because the fan-out only ever adds), assignment **plus the exact due instant**
+for the deadline notice so extending a deadline arms a fresh one, and assignment plus the press time
+for a reminder so a second press reaches people while a Kafka redelivery does not.
+
+**Chosen: the deadline sweep lives in learning-service.** learning-service owns assignments, deadlines
+and progress; notification-service owns delivery and has no database at all. A sweep in
+notification-service would have to ask learning-service what is due, which is the same call with an
+extra hop and an extra place for the tenant to be lost. It runs as **per-organization iteration over a
+system enumeration** — the mode 40.14 requires of anything producing user-visible output — with the
+same `BYPASSRLS` footnote the five jobs already in the registry carry.
+
+**Sent-ness is a nullable column on the assignment**, cleared when the deadline moves. Rejected: a
+Redis marker (a fact about an assignment that outlives or predeceases it on a TTL) and recomputing
+from the notification inbox (learning-service reading notification-service's Redis, which is a
+boundary violation for a bookkeeping flag).
+
+**Chosen: the notice goes to the person who owes the work, and 40.26's digest to the РОП stays
+40.26's.** Splitting them keeps this block's three families about the manager and leaves the
+"notification the day before the deadline listing who has not started" — a different recipient, a
+different payload, a button — where the roadmap put it.
+
+### No index for the sweep's enumeration, and no `_indexes_concurrently.sql` or backfill
+
+**Chosen: one nullable column and nothing else.** The sweep's enumeration is the one query in this
+service that filters without leading on `OrganizationId` — it asks which organizations have an
+unannounced deadline across all of them — so an index for it would have to be a partial index on
+`(Deadline)`, the exact shape the convention since 40.10 exists to prevent. Not worth the exception
+over a table that grows at the rate a human writes assignments; the tenant-leading index 40.21 built
+already serves every per-organization query that follows the enumeration.
+
+Stated explicitly because 40.10–40.13 each shipped a concurrent-index script and a backfill: neither
+exists here for the same reason it did not in 40.21 and 40.22. `Assignments` is empty in every
+deployed database — nothing could create one before 40.21, and 40.21 shipped without a screen — so the
+column is added over zero rows and no existing row changes meaning. What ships instead is
+`docs/TENANCY/sql/40.23_assignment_fanout_verify.sql`: read-only, never executed.
+
+---
+
 ## Phase 40.22 — completion is a quality threshold (2026-08-18)
 
 Six forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no questions,

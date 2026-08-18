@@ -1,9 +1,10 @@
 # Assignments: the РОП → manager loop, and AI inside the admin panel
 
-**Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD) and so
-is §1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation). Everything else on this
-page is still design: §2.1 repeats are 40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the
-dashboard is 40.25, §5's non-completion push is 40.26.
+**Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD), so is
+§1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation), and so is §1.3 (Phase 40.23 —
+issuing, the manager's screen and the three notices). Everything else on this page is still design:
+§2.1 repeats are 40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the dashboard is 40.25, §5's
+non-completion push is 40.26.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [CONTENT_MODEL.md](CONTENT_MODEL.md).
 Schema as built: [DB_SCHEMA.md](../DB_SCHEMA.md#assignments-assignmentprogressrecords).
@@ -83,10 +84,57 @@ the parts that change how the rest of this page should be read:
   harmless — and an attempt count that inflates while nobody practises would poison precisely the row
   the РОП is supposed to act on.
 
-The thing to carry into §4 and §5: **`AssignmentProgressRecords` still has no row *creator*.** 40.22
-wrote the updater — what moves a row between the four states — but a row's existence means "this
-person was asked", and that is 40.23's fan-out. Until it ships, the funnel counts below still read
-zero, and threshold evaluation runs over an empty set.
+The thing that carried into §1.3: **`AssignmentProgressRecords` had no row *creator*.** 40.22 wrote
+the updater — what moves a row between the four states — but a row's existence means "this person was
+asked", and that is 40.23's fan-out. It has since shipped, so the funnel counts below are real and
+threshold evaluation runs over a non-empty set.
+
+### 1.3 What 40.23 built: the moment a rule becomes people
+
+Three things at once, because they are one act seen from three sides — issuing, being told, and
+having somewhere to see it.
+
+**The audience is resolved by asking identity-service, once, at issue time.** learning-db holds
+`UserReplicas`, which is platform-global and says nothing about who belongs where, so it cannot
+answer "who works here" on its own. `GET /internal/memberships/active` returns the calling
+organization's active member ids — ids only, guarded by the shared-secret filter ai-service already
+uses on its internal routes and by `[TenantScoped]`. The whole-team rule becomes that list; a named
+list is **intersected** with it; a group is refused, because no group exists in the platform yet and
+"the new hires" quietly becoming "everybody" is not a surprise a product survives.
+
+The alternative — a `membership.*` Kafka family and a replica table in learning-db — is what every
+other cross-service read here does, and it was rejected on its failure mode rather than its shape: a
+replica that lags or has never been backfilled resolves the whole team to nine people out of forty,
+issues to nine, and reports success. Nothing errors, and nobody finds out. The synchronous call fails
+loudly instead — a 503 on the button that was just pressed. Full argument in
+[DECISIONS.md](../DECISIONS.md) (2026-08-18).
+
+**One `not_started` row and one `assignment.issued` event per recipient, in one transaction.** The
+outbox is what makes "was asked" and "was told" atomic. Editing a running assignment's audience
+re-resolves and **tops up**, never removes: 40.21 left the audience editable on purpose, and a
+progress row is the record that somebody was asked, which deleting would rewrite. That top-up is also
+the answer to a person hired after the issue — re-saving the assignment brings them in, and nothing
+back-dates them.
+
+Somebody who leaves keeps their row (history) and stops being contacted (the deadline sweep and every
+new fan-out check the live roster first). The honest cost is that a leaver counts as "not started" in
+the funnel until §4's screen has a way to say so — recorded in
+[DONT_FORGET.md](../DONT_FORGET.md).
+
+**The manager's screen is a strip above the learning path**, `GET /assignments/active`: their own
+unfinished assignments, soonest deadline first, naming the *bar* rather than a status word — a manager
+who cannot see the threshold cannot aim at it. `failed_threshold` is tinted rather than hidden, for
+the reason §1.1 gives. With no assignments the strip renders nothing at all and the home screen is
+byte-for-byte what it was, because the roadmap's requirement is that an assignment take the top of the
+screen, not that it replace it.
+
+**Three notification families** — issued, deadline approaching, reminder — as three types rather than
+one with a discriminator, since the recipient reads them differently and the third exists precisely
+because the first two were ignored. The deadline sweep lives in learning-service (which owns
+assignments, deadlines and progress; notification-service has no database) and runs as
+per-organization iteration over a system enumeration, per
+[BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) §4e. The notice goes to the person who owes the work; the
+РОП's "who has not started" digest is still §5's, i.e. 40.26's.
 
 ### 1.2 What 40.21 built, and the five forks it had to settle
 
@@ -114,10 +162,9 @@ open. All five are recorded with their rejected alternatives in [DECISIONS.md](.
   three people to a running assignment and extending a deadline are ordinary acts; rewriting the
   threshold under people who already have scores is not.
 
-The one thing to know when reading §2–§5 below: **`assignment_progress` has no row creator yet.**
-40.21 built the table, 40.22 wrote what updates a row, and nothing yet creates one — so every funnel
-count in §4 currently reads zero. That is deliberate scope, not an oversight — see
-[DONT_FORGET.md](../DONT_FORGET.md).
+The one thing to know when reading §2–§5 below: **`assignment_progress` had no row creator until
+40.23.** 40.21 built the table, 40.22 wrote what updates a row, and 40.23 (§1.3 above) writes the
+rows at issue time — so the funnel counts in §4 are now real numbers rather than honest zeroes.
 
 ---
 
@@ -254,10 +301,10 @@ their team. Design for that.
 
 | Existing | Reuse |
 |----------|-------|
-| `notification-service` | assignment issued / deadline approaching / reminder — a new event family on the existing Kafka + inbox |
-| ai-service dialog modes | the assignment's practice dialogue is a `DialogSession` with an injected persona — the same trick `company-call` already uses (`CompanyContextPromptBuilder`) |
+| `notification-service` | assignment issued / deadline approaching / reminder — **done in 40.23**: three topics, three `NotificationType` values, mapped in `NotificationEventMapper` onto the existing `org:{orgId}:` inbox and the generic email template |
+| ai-service dialog modes | the assignment's practice dialogue is a `DialogSession` with an injected persona — **done in 40.23**: `AssignmentPracticePromptBuilder`, the same seam `CompanyContextPromptBuilder` defines. The persona is stored on the `dialog_scenario` content item and **fetched by ai-service** rather than carried by the learner's browser, because the browser belongs to the person being graded against it |
 | `analytics-service` | assignment funnel metrics |
-| exercise types ([NEW_EXERCISE_TYPES.md](../NEW_EXERCISE_TYPES.md)) | the 11 existing types are the assignment's content vocabulary — no new renderer needed |
+| exercise types ([NEW_EXERCISE_TYPES.md](../NEW_EXERCISE_TYPES.md)) | the 11 existing types are the assignment's content vocabulary — **confirmed in 40.23**: a `lesson_version` item links to `/session/:lessonId`, the ordinary lesson screen, and no renderer was added |
 | `learning-service` grading | threshold evaluation reuses existing scoring — **done in 40.22**: `UserExerciseAttempt` rows for accuracy, ai-service's own feedback grade for conversations |
 
 Nothing here needs a new service. `Assignment` most naturally belongs to `learning-service`

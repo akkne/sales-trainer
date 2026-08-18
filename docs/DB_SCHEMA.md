@@ -498,7 +498,7 @@ before — see [DECISIONS.md](DECISIONS.md), 2026-08-17.
 
 ### `Assignments`, `AssignmentProgressRecords`
 
-Phase 40.21 (thresholds and their evaluation: 40.22), the first tables of Stage E. What the РОП asks their team to practise after an internal
+Phase 40.21 (thresholds and their evaluation: 40.22; issuing and the deadline notice: 40.23), the first tables of Stage E. What the РОП asks their team to practise after an internal
 training, and where each person stands on it (docs/TENANCY/ASSIGNMENTS.md §1).
 
 Both are **strict tenant data**, like the programme tables above and unlike the content tables: there
@@ -534,8 +534,22 @@ equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner 
 | `UpdatedAt` | `timestamptz` | NOT NULL | |
 | `ActivatedAt` | `timestamptz` | NULL | `CK_Assignments_ActivatedAt`: NOT NULL whenever the status is not `draft` |
 | `ClosedAt` | `timestamptz` | NULL | `CK_Assignments_ClosedAt`: NOT NULL whenever the status is `closed` |
+| `DeadlineNoticeSentAt` | `timestamptz` | NULL | **Phase 40.23.** When the "deadline is close" notice went out for the deadline this row *currently* has. Cleared whenever `Deadline` changes. No constraint: an assignment with no deadline simply never gets stamped |
 
 Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_OrganizationId_CreatedAt`.
+
+> **`DeadlineNoticeSentAt` got no index of its own, and that is a decision.** The deadline sweep's
+> enumeration is the one query in learning-service that filters without leading on `OrganizationId` —
+> "which organizations have an unannounced deadline coming", asked across all of them — so an index
+> for it would have to be a partial index on `(Deadline)`, the exact shape the convention since 40.10
+> exists to prevent. Over a table that grows at the rate a human writes assignments the scan is
+> cheaper than the exception; the tenant-leading index above serves every per-organization query that
+> follows the enumeration.
+
+> **The freeze trigger deliberately does not name it.** The sweep stamps active rows, so a frozen
+> `DeadlineNoticeSentAt` would make an announced deadline unrecordable and the sweep would re-announce
+> the same date every half hour, forever. `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` §2
+> asserts the trigger body does not mention the column.
 
 > **`CompletionRule` has no default, and that is the load-bearing decision of the whole block.** A
 > default would have to mean "no threshold", and an assignment that completes on a click is the
@@ -631,13 +645,30 @@ extending a deadline are ordinary acts of running a team, and a trigger that for
 40.23 and 40.24 have to break.
 
 **No backfill, and no maintenance window.** Both tables are created empty by the migration, nothing
-else filters on them, and no existing row anywhere gains a meaning it did not have.
-`AssignmentProgressRecords` additionally has **no row creator** until 40.23 resolves an audience into
-people — deliberate scope, recorded in [DECISIONS.md](DECISIONS.md), 2026-08-18 and
-[DONT_FORGET.md](DONT_FORGET.md). 40.22 wrote its *updater* (below), which changes rows that exist and
-never creates one: a row's existence means "this person was asked", which is a fact about issue time.
-Verification scripts: `docs/TENANCY/sql/40.21_assignments_verify.sql` and
-`docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (both read-only, never executed).
+else filters on them, and no existing row anywhere gains a meaning it did not have. The same holds for
+40.23's single added column: `Assignments` is empty in every deployed database, so it is added over
+zero rows.
+
+**Who writes `AssignmentProgressRecords`, as of 40.23 — two writers, disjoint by column.**
+
+- **40.23 creates rows and never updates one.** Issuing an assignment (and re-saving an active one's
+  audience) resolves the audience rule into people by asking identity-service who currently works
+  here, then inserts a `not_started` row per recipient and stages one `assignment.issued` outbox event
+  per recipient in the same transaction. It only ever *adds*: somebody removed from the audience keeps
+  their row, because the row is the record that they were asked and deleting it would rewrite what
+  happened — the same argument that made the foreign key `RESTRICT`.
+- **40.22 updates rows and never creates one.** `AssignmentThresholdEvaluator` moves `Status`,
+  `BestScore`, `AttemptCount`, `FirstOpenedAt` and `CompletedAt`, recomputed from attempt rows rather
+  than incremented.
+
+That split is what makes both idempotent: a re-run of the fan-out skips whoever has a row and cannot
+walk somebody halfway through back to `not_started`, and a redelivered Kafka event recomputes to the
+same numbers. Nothing on the learner's read path writes at all — there is deliberately no "mark as
+opened" route, which would be a third writer with a different idea of what "started" means.
+
+Verification scripts: `docs/TENANCY/sql/40.21_assignments_verify.sql`,
+`docs/TENANCY/sql/40.22_completion_threshold_verify.sql` and
+`docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (all read-only, never executed).
 
 **Who writes the four progress columns (40.22).** `AssignmentThresholdConsumer` in learning-service,
 reacting to `dialog.evaluated` and `exercise.completed`. `Status`, `BestScore`, `AttemptCount`,
@@ -1315,6 +1346,8 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddOrganizationProfileReplica` (learning-service) | 2026-08-17 | Phase 40.19, Stage D. One new table, `OrganizationProfileReplicas` — a read-only copy of organization-service's `OrganizationProfiles`, fed by the `organization.profile.updated` consumer. **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`**, and that is the interesting bit: every other table this folder added since 40.15 is content, where a NULL owner means "the shared library". Here a NULL owner would mean every organization's product name and banned claims at once, so the tenant column is the primary key and a row without an owner is unrepresentable. **No backfill, no maintenance window, no companion `_indexes_concurrently.sql`** — the table is created empty, is fed by events, holds at most one row per customer, and its only query is a lookup by that primary key, so there is no second access path to index. What *is* owed to a human is a one-time republish of profiles saved before this phase (`docs/DONT_FORGET.md`). Verification: `docs/TENANCY/sql/40.19_organization_profile_verify.sql` (read-only, never executed). |
 | `AddOrganizationProfileReplica` (ai-service) | 2026-08-17 | Phase 40.19, Stage D. The same table, in `ai`, for the same reason — persona and feedback prompts resolve `{{organization.*}}` and enforce `banned_claims` locally. **This is the first non-content table in ai-db**, which is exactly why the RLS flavour is worth stating: both neighbours (`DialogBundles`, `DialogModes`) legitimately use `IS NULL OR = current`, so copying the neighbouring policy is the natural mistake and would hand one customer's compliance list to everybody. Otherwise identical to the learning-service migration: catalog-only, empty table, no backfill, no window, no index script. |
 | `AddAssignments` (learning-service) | 2026-08-17 | Phase 40.21, **Stage E opens**. Two new **strict tenant** tables — `Assignments`, `AssignmentProgressRecords` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global assignment), fifteen check constraints, one `ON DELETE RESTRICT` foreign key and the `Assignments_reject_frozen_change` trigger. **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15/40.17/40.18 made: both tables are created empty by this very migration, so every index is built over zero rows, and one of them (one progress row per person per assignment) is a correctness constraint that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: nothing filters on the new tables and no existing row gains a meaning. The one constraint worth naming is `CK_Assignments_CompletionRule` — the column has no default and the API cannot omit it, so "completion means opening everything" has no resting place in the schema (docs/TENANCY/ASSIGNMENTS.md §1.1); its vocabulary stays 40.22's. `AssignmentProgressRecords` has **no writer at all** until 40.23 resolves an audience. Verification script: `docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed). |
+| `AddAssignmentThresholdEvaluation` (learning-service) | 2026-08-17 | Phase 40.22. One new **strict tenant** table, `UserDialogScores` — one row per graded practice conversation, unique on `(OrganizationId, UserId, SessionId)` — plus three check constraints. That uniqueness is the idempotency guarantee, not a performance choice: without it a redelivered `dialog.evaluated` writes a second row, `AttemptCount` climbs while nobody practised, and the line the РОП acts on ("tried 4 times and did not reach the bar") becomes a lie. No backfill is possible, let alone needed: `dialog.evaluated` carried no grade before this block, so conversations graded earlier are invisible to every assignment, permanently. Verification script: `docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (read-only, never executed). *(Recorded retroactively in 40.23 — the row was missing from this ledger.)* |
+| `AddAssignmentDeadlineNotice` (learning-service) | 2026-08-17 | Phase 40.23. **One nullable column**, `Assignments."DeadlineNoticeSentAt"` — when the "deadline is close" notice went out for the deadline the row currently has; cleared whenever the deadline changes. No index, no backfill, no `_indexes_concurrently.sql`, no maintenance window: `Assignments` is empty in every deployed database (nothing could create one before 40.21, and 40.21 shipped without a screen), so the column is added over zero rows and no existing row changes meaning. The index is omitted deliberately rather than forgotten — see the note in the `Assignments` section above. This is the migration behind the block that finally gives `AssignmentProgressRecords` a row **creator**: the audience fan-out. Verification script: `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (read-only, never executed). |
 | `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
 
 ---

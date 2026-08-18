@@ -676,7 +676,7 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
-### Assignments (Phase 40.21, thresholds 40.22)
+### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23)
 
 The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
 what counts as done, and who is where on it. Design:
@@ -692,14 +692,33 @@ what counts as done, and who is where on it. Design:
 | POST | /admin/assignments/:assignmentId/activate | — | `AssignmentDto` (409 if it is not a draft, or has no content) |
 | POST | /admin/assignments/:assignmentId/close | — | `AssignmentDto` (409 if it is not active) |
 | DELETE | /admin/assignments/:assignmentId | — | 204 (409 for anything that has been issued) |
+| POST | /admin/assignments/:assignmentId/remind | — | `AssignmentReminderResultDto` (409 if it is not active) |
+
+Learner-facing (`[Authorize]`, no admin gate, takes no user id — the caller is the token):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /assignments/active | — | `ActiveAssignmentDto[]`, soonest deadline first, `[]` when there are none |
+
+Service-to-service (no JWT; `X-Internal-Service-Secret` + `[TenantScoped]`, **not routed through the
+gateway**):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /internal/memberships/active *(identity-service)* | — | `{userIds: uuid[]}` — active memberships of the organization in the header |
+| GET | /internal/assignments/practice-context?userId=&modeKey= *(learning-service)* | — | `AssignmentPracticeContextDto`, or 204 when this person owes no conversation on that mode |
 
 `CreateAssignmentRequestDto` / `UpdateAssignmentRequestDto`:
 `{title, goal?, sourceType, sourceRef?, content?: AssignmentContentItemDto[], audience?, opensAt?, deadline?, completionRule, repeatSchedule?}`
-`AssignmentContentItemDto`: `{kind, reference, orderIndex}`
+`AssignmentContentItemDto`: `{kind, reference, orderIndex, persona?}` — `persona` (40.23) is `{name?, position?, personality?, difficulty?}`, meaningful only on a `dialog_scenario` item and silently dropped from every other kind
 `AssignmentAudienceDto`: `{kind, userIds?, groupId?}`
 `AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
 `AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
 `AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
+`AssignmentReminderResultDto`: `{notifiedCount}`
+`ActiveAssignmentDto`: `{id, title, goal, opensAt, deadline, completionRule, content: ActiveAssignmentItemDto[], status, bestScore, attemptCount, firstOpenedAt, completedAt}`
+`ActiveAssignmentItemDto`: `{kind, reference, orderIndex, title, lessonId}` — `title` is null when the referenced content was archived after the assignment was issued, `lessonId` is set only for `lesson_version`. **No persona is ever in this DTO** — see below.
+`AssignmentPracticeContextDto`: `{assignmentId, title, goal, personaName, personaPosition, personaPersonality, personaDifficulty}`
 
 **`completionRule` is required, has no default, and since 40.22 is checked against a closed
 vocabulary.** If completion could mean "opened everything", managers would click through in four
@@ -743,14 +762,31 @@ items arrive in, and a `lesson_version` or `reference_material` reference that i
 
 `audience` is the **rule**, not the resolved people: `{"kind":"whole_team"}`,
 `{"kind":"users","userIds":[…]}` or `{"kind":"group","groupId":…}`, defaulting to `whole_team`. The
-employee list lives in identity-service, so learning-service deliberately does not check the ids
-against membership — it cannot, and a stale copy would be worse than none. Resolving the rule into
-people and notifying them is 40.23; until then **nothing creates a progress row**, so
-`GET /admin/assignments/:id/progress` returns `[]` and every funnel count on the summary reads zero.
-40.22 wrote the *updater* — what moves a row between the four statuses — not the creator: a row's
-existence means "this person was asked", which is a fact about issue time.
-The `group` kind is accepted structurally so 40.23 needs no migration, but nothing in the platform
-defines a group yet.
+employee list lives in identity-service, so the column stores the rule and never a copy of it.
+
+**Issuing resolves the rule (40.23).** `POST /activate` asks identity-service for the organization's
+active member ids, turns the rule into named people, writes one `not_started` progress row per
+recipient and stages one `assignment.issued` notice per recipient — in one transaction, so "was
+asked" and "was told" cannot diverge. From this block on, `GET /admin/assignments/:id/progress`
+returns real rows and the summary's funnel counts are real numbers.
+
+Three consequences worth knowing before calling these routes:
+
+- **A named `userIds` list is intersected with the live roster.** Somebody who has left is dropped
+  (with a log line, not a refusal — one leaver must not break every assignment that mentioned them),
+  and a user id belonging to another organization is dropped outright. An audience that resolves to
+  **nobody** is a `400`: a silently empty issue produces an active assignment whose funnel reads zero
+  of zero, which on the screen is indistinguishable from a team that has not started.
+- **`{"kind":"group"}` is a `400`**, not a silent widening to the whole team. Nothing in the platform
+  defines a group yet; the kind is accepted structurally by the schema so 40.24+ needs no migration.
+- **`PUT` on an *active* assignment re-resolves the audience and tops up**, adding rows and notices
+  for anybody new and never removing anybody. That is how a person hired after the issue joins work
+  already running — nothing back-dates them automatically. A recipient who has since left keeps their
+  row (it is the record that they were asked) but is not contacted again.
+
+Both routes answer **`503`** when identity-service cannot be reached, with nothing written. That is
+deliberately not a `500`: nothing is wrong with the request or the assignment, and the honest
+instruction is "press it again".
 
 `sourceType` is `training`, `manual` or `gap_detected`, and `sourceRef` is read according to it: a
 `manual` assignment with a source reference is a 400. When the reference names library content it must
@@ -774,8 +810,29 @@ publishing has no analogue. The write routes refuse a caller with no organizatio
 owner is not a thing that can be written. As everywhere, the organization comes from the
 gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
-**No learner-facing routes yet.** The manager's own screen (`GET /assignments`, "the active assignment
-sits at the top until done") is 40.23, together with the audience resolution it depends on.
+**The learner's own screen (40.23).** `GET /assignments/active` returns the caller's unfinished
+assignments — the query is over *their progress rows*, so an assignment nobody issued to them cannot
+appear however active it is, and no second authorization gate is needed to make that true. Completed
+ones drop off ("пока не выполнено"); `failed_threshold` stays, because the work is finished and the
+bar was not met and hiding it would leave the person who most needs another attempt with no way back.
+An assignment whose `opensAt` has not arrived is absent. `completionRule` comes back verbatim so the
+screen can name the bar instead of a status word. **An empty array is the normal answer** and the
+client must render nothing for it — the assignment strip is an addition to the home screen, never a
+replacement for the skill tree.
+
+**Nothing on the learner path writes.** There is no "mark as opened" route, deliberately: it would
+make the read path a second writer of columns `AssignmentThresholdConsumer` owns, with a different
+idea of what "started" means (a screen opened rather than graded work done).
+
+**The practice conversation and its persona (40.23).** A `dialog_scenario` content item names an
+ai-service dialog mode key, and the assignment's practice dialogue is an ordinary `POST
+/dialog/sessions` on that mode. ai-service then calls
+`GET /internal/assignments/practice-context` itself and injects the assignment's framing and persona
+into the prompt through `AssignmentPracticePromptBuilder`. **The persona is never in a response the
+browser sees and never accepted in a request body**: the client starting the session belongs to the
+person being graded against that persona, and a persona they can send is one they can rewrite. The
+lookup degrades to "no assignment" on any failure, so a practice screen never fails to open because
+learning-service is down.
 
 **Progress moves on events, not on requests (40.22).** `AssignmentProgressDto.status` is written by
 `AssignmentThresholdConsumer`, which listens to `dialog.evaluated` and `exercise.completed` and

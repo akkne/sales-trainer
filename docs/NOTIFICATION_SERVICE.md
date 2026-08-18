@@ -108,11 +108,26 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
 - **Consumes (idempotent, dedupe on `eventId`):**
   - `NotificationEventConsumer` — `achievement.unlocked`, `streak.milestone`,
     `friend.request.received`, `friend.request.accepted`, `chat.message.sent`,
-    `chat.message.read`, `discuss.reply.created`. Each maps to a
+    `chat.message.read`, `discuss.reply.created`, `company.followup.due`, and the three
+    assignment topics added in Phase 40.23: `assignment.issued`,
+    `assignment.deadline.approaching`, `assignment.reminder`. Each maps to a
     notification written to the recipient's Redis inbox via `INotificationEventMapper`.
     `discuss.reply.created` also emails immediately; `chat.message.sent`
     schedules a delayed unread-email and `chat.message.read` cancels it. Unmappable or
     malformed payloads are skipped (logged), never crash the consumer.
+
+    The **assignment family** (produced by learning-service) is three types rather than one with a
+    sub-kind, because the recipient reads them differently — new work, the clock running out, and a
+    person asking — and the third exists precisely because the first two were ignored. All three are
+    emailed through the generic template; none needed a template of its own. Their dedupe keys follow
+    the `company.followup.due` precedent: the assignment alone for **issued** (a person is issued
+    once, because the fan-out only ever adds recipients), assignment plus the exact due instant for
+    **deadline approaching** so extending a deadline arms a fresh notice rather than being swallowed
+    by the notice for a date that no longer applies, and assignment plus the press time for
+    **reminder** so a second press reaches people while a Kafka redelivery does not. `actionUrl` is
+    `/tree?assignment={id}` for all three: 40.23's assignment surface *is* the card at the top of the
+    learning path, and sending the notification anywhere else would contradict the feature it
+    announces.
   - `UserReplicaConsumer` — `user.registered`/`user.updated`/`user.deleted`, projecting a
     minimal `{ email, displayName }` replica into Redis so recipients can be addressed by email.
 

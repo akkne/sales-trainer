@@ -367,7 +367,7 @@ from a row that cannot change mid-request. Platform-wide callers get the empty p
 mode the query filter admits every organization at once, so picking a row would show Sellevate staff
 a lesson with some customer's product name in it.
 
-### Assignments (Phase 40.21, thresholds 40.22)
+### Assignments (Phase 40.21, thresholds 40.22, issuing 40.23)
 
 `Assignments` / `AssignmentProgressRecords` ([ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1). Stage E
 opens here: the РОП turns an internal training session into short, dated, targeted practice for named
@@ -403,15 +403,15 @@ there is no such thing as a global assignment.
   are ordinary acts, and a trigger that forbade them is one 40.23 and 40.24 would have to break. The
   service refuses the same edits first, with a message naming the fields, because an administrator who
   believes they moved a threshold and did not is worse off than one who is told they cannot.
-- **`AssignmentProgressRecords` has no row *creator* until 40.23, and that is the honest state.**
-  Nothing fans out an audience yet, so every funnel count on the РОП's list reads zero and
-  `GET /admin/assignments/:id/progress` returns `[]`. The alternative — creating a row lazily when
-  somebody first does the work — would make "who has not started", the single most actionable question
-  in ASSIGNMENTS.md §5, an inference from absent rows instead of a query over present ones, and would
-  put anybody who happened to practise a referenced lesson on the РОП's screen as though they had been
-  assigned it. 40.22 wrote the *updater*, below.
-- **No learner-facing routes.** `GET /assignments` and the manager's home screen are 40.23, together
-  with the audience resolution they depend on.
+- **`AssignmentProgressRecords` gained its row *creator* in 40.23** (see below), and the shape of it
+  was settled here: a row exists because somebody was **asked**, never because somebody happened to
+  do the work. The rejected alternative — creating a row lazily on first activity — would make "who
+  has not started", the single most actionable question in ASSIGNMENTS.md §5, an inference from
+  absent rows instead of a query over present ones, and would put anybody who practised a referenced
+  lesson for their own reasons on the РОП's screen as though they had been assigned it. 40.22 wrote
+  the *updater*, below; 40.23 writes the rows.
+- **Learner-facing routes arrived in 40.23**: `GET /assignments/active`, together with the audience
+  resolution it depends on.
 
 ### Completion is a quality threshold (Phase 40.22)
 
@@ -460,6 +460,43 @@ read, the same asymmetry `AssignmentDocumentSerializer` uses for the other jsonb
   alone with a warning — fail-closed, because being short of a threshold is recoverable and a
   completion nobody measured is not.
 
+### Issuing an assignment to people (Phase 40.23)
+
+The row **creator** 40.21 and 40.22 both deliberately left out. `POST /admin/assignments/:id/activate`
+now does three things in one transaction: turn the audience rule into named people, write one
+`not_started` progress row per recipient, and stage one `assignment.issued` outbox event per
+recipient. The outbox is what makes "was asked" and "was told" atomic.
+
+- **The roster comes from identity-service over HTTP**, `GET /internal/memberships/active`, resolved
+  *before* the write transaction opens so a network round trip never sits inside a transaction
+  holding locks on the progress table. learning-db cannot answer the question itself: `UserReplicas`
+  is platform-global and says nothing about who belongs where. A Kafka membership replica was
+  rejected on its failure mode — a replica that lags or was never backfilled issues the assignment to
+  nine people out of forty and reports success ([DECISIONS.md](DECISIONS.md), 2026-08-18).
+- **Every audience kind is filtered through the live roster**, including an explicit `userIds` list.
+  Leavers are dropped with a log line; an audience resolving to nobody is a `400`; `group` is a `400`
+  because no group exists in the platform yet. When identity cannot be reached the whole issue is
+  refused with a **`503`** and nothing is written.
+- **Editing an active assignment's audience re-resolves and tops up**, adding rows and notices and
+  never removing anybody. That is how somebody hired after the issue joins work already running.
+- **Bounded at 2000 recipients per issue** — a ceiling rather than paging, because the number it
+  guards against is a mistake rather than a big customer.
+
+`GET /assignments/active` is the learner side: their own unfinished assignments, soonest deadline
+first, driven off *their progress rows* so an assignment nobody issued to them cannot appear. It
+carries `completionRule` verbatim so the screen names the bar rather than a status word, and it
+**writes nothing** — a "mark as opened" route would be a second writer of columns 40.22 owns, with a
+different idea of what "started" means.
+
+`GET /internal/assignments/practice-context` is the ai-service side: when a dialog session starts on a
+mode some open assignment names, ai-service fetches that assignment's framing and persona and injects
+them through `AssignmentPracticePromptBuilder`. The persona is deliberately **not** in
+`ActiveAssignmentDto` and **not** accepted in a request body — the browser starting the session
+belongs to the person being graded against it.
+
+`POST /admin/assignments/:id/remind` publishes `assignment.reminder` to everybody not `completed`,
+`failed_threshold` included: that is the row the РОП most needs to reach.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -468,9 +505,10 @@ read, the same asymmetry `AssignmentDocumentSerializer` uses for the other jsonb
 | `UserReplicaConsumer` | platform-global (`RequiresOrganization => false`) | Projects identity's cross-org user table; `UserReplicas` has no organization column. |
 | `OrganizationProfileConsumer` (40.19) | tenant from the envelope (`RequiresOrganization` inherited `true`) | Projects `organization.profile.updated` into `OrganizationProfileReplicas`, which is strict tenant data — so the write happens under ordinary tenant context, with no RLS widening. The first consumer here that does *not* opt out. |
 | `LessonVersionBackfill` (startup, once) | system | Mints "version 1" for never-published lessons; sees the global library only. |
+| `AssignmentDeadlineSweepService` (40.23) | **per-organization iteration** over a **system** enumeration | Warns everybody who has not finished an assignment whose deadline is inside the lead window (24h by default), then stamps `Assignments.DeadlineNoticeSentAt`. The enumeration reads one column — organization ids of rows already known to be due — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before warning anybody, so a progress row belonging to somebody who has left does not mail them their old employer's deadline. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4e and DONT_FORGET. |
 
-There is no per-organization iteration job in learning-service. An **unset tenant is an exception,
-never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
+Until 40.23 there was no per-organization iteration job in learning-service; the deadline sweep is
+the first. An **unset tenant is an exception, never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
 organization gets an envelope without one, the query filters resolve to "no rows" rather than "all
 rows", and `TenantSaveChangesInterceptor` throws on any tenant-scoped write with no context.
 
@@ -552,10 +590,19 @@ open once the current one is finished. Regression covered by
 | `lesson.completed` | a lesson transitions to completed | `{ userId, lessonId, bestScore }` |
 | `skill.completed` | the last lesson of a skill completes | `{ userId, skillId }` |
 | `technique.mastery.changed` | a user's technique mastery/level changes | `{ userId, techniqueId, level, masteryPercent }` |
+| `assignment.issued` (40.23) | one per recipient, when an assignment is issued or its running audience widens | `{ assignmentId, userId, title, goal, deadline }` |
+| `assignment.deadline.approaching` (40.23) | the deadline sweep, once per assignment per unfinished recipient | `{ assignmentId, userId, title, deadline }` |
+| `assignment.reminder` (40.23) | a РОП presses "remind" | `{ assignmentId, userId, title, deadline, requestedAt }` |
 
 The first three match the gamification-service consumer contract verbatim
 (`ExerciseCompletedEvent`, `LessonCompletedEvent`, `SkillCompletedEvent`). Consumed by
 Gamification (XP/streaks/achievements/league) and Analytics (`exercise.completed`).
+
+The three `assignment.*` topics are consumed by notification-service only. Every one of them is
+**per recipient rather than per assignment**: the partition key is the user id everywhere in this
+system, and notification-service's dedupe is per recipient, so a batch event would have to be
+unpacked into the same per-person keys inside the consumer — where a partial failure loses part of a
+batch instead of retrying one message.
 
 ## Events consumed
 
@@ -573,12 +620,24 @@ handler publishes nothing.
 of every lesson. Full payload every time, so a dropped message is repaired by the customer's next
 save rather than made permanent.
 
-## Synchronous dependency
+## Synchronous dependencies
 
 `Learning → AI`: `POST /ai/evaluate` for the 5 AI-graded exercise types
 (`spot_mistake`, `rewrite`, `ai_dialogue`, `evaluate_call`, `free_text`). The learner
 is waiting for the grade in real time, so this is REST, not an event. Configured via
 the `AiService:BaseUrl` option (`http://ai:8080` in compose).
+
+`Learning → Identity` (Phase 40.23): `GET /internal/memberships/active`, from the assignment fan-out
+and from the deadline sweep. Configured via `IdentityService:BaseUrl` (`http://identity:8080` in
+compose), authenticated with `InternalAuth:ServiceSecret`, organization in the `X-Organization-Id`
+header. **It raises rather than degrading**: an issue that cannot read the roster is refused with a
+503, because an empty list and "we could not find out" must never be the same value — one of them
+issues an assignment to nobody and reports success.
+
+`AI → Learning` (Phase 40.23, the reverse direction): `GET /internal/assignments/practice-context`,
+when a dialog session starts. Unlike the two above it **degrades to "no assignment"** on any failure:
+practising is the product and an assignment's persona is an improvement to it, so learning-service
+being down must not stop a practice screen from opening.
 
 ## Routes flipped at the gateway
 

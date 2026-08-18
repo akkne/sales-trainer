@@ -234,6 +234,42 @@ response contracts to the monolith (see [API_CONTRACTS.md](API_CONTRACTS.md)). J
 issuance, Google OAuth, MailerSend email verification and S3/MinIO avatar storage are all
 preserved verbatim.
 
+## Service-to-service surface (`internal/*`, Phase 40.23)
+
+One route, and it is the only thing in identity-service that another service may call directly.
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/internal/memberships/active` | `{ userIds: uuid[] }` — active memberships of the organization named in `X-Organization-Id` |
+
+It exists because learning-service has to turn an assignment's audience **rule** (`whole_team`, a
+list of people, a group) into named people, and it cannot: learning-db holds only the
+platform-global `UserReplicas`, which says nothing about who belongs where. See
+[ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1.3 and [DECISIONS.md](DECISIONS.md) (2026-08-18) for why
+this is a synchronous call rather than the Kafka replica every other cross-service read here uses —
+the short version is that a lagging replica issues an assignment to nine people out of forty and
+reports success, while an unreachable identity-service refuses the issue with a 503 the РОП can act
+on.
+
+Three properties are load-bearing and should survive any change to this route:
+
+- **Ids only.** No names, no emails, no roles. The caller already has display names in its own user
+  replica, so returning a directory here would put employee data behind a shared-secret header for
+  no gain.
+- **Active memberships only.** Leaving an organization is `status = deactivated`, never a row
+  deletion (Phase 40.7). Without this filter every assignment issued after somebody's last day would
+  still be issued to them — an email to an ex-employee, and a permanent "has not started" row on the
+  РОП's screen.
+- **No JWT, two gates instead.** The caller is a service and has no user, so the route carries
+  `[ServiceFilter(InternalServiceAuthFilter)]` (the `X-Internal-Service-Secret` shared secret,
+  copied from ai-service) and `[TenantScoped]` (the organization must arrive in the header — it is
+  never in the body, query or route, per [TENANCY.md](TENANCY/TENANCY.md) §1.3). The filter leaves
+  the route **open when no secret is configured**, which is the inherited dev behaviour and the one
+  thing to check before exposing the pod — recorded in [DONT_FORGET.md](DONT_FORGET.md).
+
+The route is deliberately **not** flipped at the gateway: it is reached over the docker network by
+name, and nothing outside the cluster should be able to address it.
+
 ## Kafka events produced (`user.*`)
 
 | Topic | When | Payload |
