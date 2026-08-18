@@ -534,7 +534,7 @@ equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner 
 | `UpdatedAt` | `timestamptz` | NOT NULL | |
 | `ActivatedAt` | `timestamptz` | NULL | `CK_Assignments_ActivatedAt`: NOT NULL whenever the status is not `draft` |
 | `ClosedAt` | `timestamptz` | NULL | `CK_Assignments_ClosedAt`: NOT NULL whenever the status is `closed` |
-| `DeadlineNoticeSentAt` | `timestamptz` | NULL | **Phase 40.23.** When the "deadline is close" notice went out for the deadline this row *currently* has. Cleared whenever `Deadline` changes. No constraint: an assignment with no deadline simply never gets stamped |
+| `DeadlineNoticeSentAt` | `timestamptz` | NULL | **Phase 40.23**, reused unchanged by 40.26. When the "deadline is close" notice went out for the deadline this row *currently* has — since 40.26 that means both the notices to the people who owe the work **and** the digest to the organization's administrators, because they are published in one transaction and announce the same date. Cleared whenever `Deadline` changes. No constraint: an assignment with no deadline simply never gets stamped |
 | `RepeatOfAssignmentId` | `uuid` | NULL | **Phase 40.24.** The assignment this row is a repeat of; null on anything a human created. FK → `Assignments.Id` **`ON DELETE RESTRICT`** (self-referencing). Always the *origin*, never another repeat |
 | `RepeatWaveIndex` | `int` | NULL | **Phase 40.24.** Which wave of the origin's schedule this is, 1-based. `CK_Assignments_RepeatWave`: null exactly when `RepeatOfAssignmentId` is, and ≥ 1 otherwise |
 
@@ -582,6 +582,20 @@ Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_Organi
 > `DeadlineNoticeSentAt` would make an announced deadline unrecordable and the sweep would re-announce
 > the same date every half hour, forever. `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` §2
 > asserts the trigger body does not mention the column.
+
+> **Phase 40.26 added no column, no index and no migration to this table, and that is a decision
+> rather than an omission.** The block sends the РОП a digest of who has not started, a day before the
+> deadline — which reads like it needs its own sent-ness column beside `DeadlineNoticeSentAt`. It does
+> not: the digest is published by the same sweep, in the same transaction, about the same date, so one
+> timestamp answers "has this deadline been announced" for both audiences and moving the deadline
+> re-arms both at once. A second column would have been a second answer to one question, with its own
+> chance of disagreeing. The one case a separate column would have handled — a tick that can read the
+> roster but not the administrators — is handled instead by skipping the organization entirely and
+> stamping nothing, which self-heals on the next tick. See
+> [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4g. There is therefore no
+> `docs/TENANCY/sql/40.26_*_indexes_concurrently.sql`, no maintenance window and nothing to back-fill;
+> the read-only `docs/TENANCY/sql/40.26_deadline_digest_verify.sql` exists only to let an operator see
+> what the sweep would send, because the РОП has no screen yet.
 
 > **`CompletionRule` has no default, and that is the load-bearing decision of the whole block.** A
 > default would have to mean "no threshold", and an assignment that completes on a click is the
