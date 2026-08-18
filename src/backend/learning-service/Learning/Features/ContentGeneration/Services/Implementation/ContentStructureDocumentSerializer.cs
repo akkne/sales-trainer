@@ -23,7 +23,14 @@ namespace Sellevate.Learning.Features.ContentGeneration.Services.Implementation;
 /// </summary>
 internal static class ContentStructureDocumentSerializer
 {
-    /// <summary>Matches ai-service's per-value cap, which matches the render path's (docs/AI_SERVICE.md).</summary>
+    /// <summary>
+    /// Matches ai-service's per-value cap (docs/AI_SERVICE.md). It does <b>not</b> match "the render
+    /// path's" — the claim this comment used to make. `OrganizationProfilePromptBuilder` caps the
+    /// *number* of objections it renders and bounds no individual value, so this class is the only
+    /// per-value limit in the system. That is why every route into a structure has to pass through
+    /// <see cref="Normalize"/>, including the one from the organization profile, whose own columns
+    /// are unbounded `text`/`jsonb`. Corrected in review, 40.34.
+    /// </summary>
     public const int MaximumValueLength = 2000;
 
     public const int MaximumObjectionCount = 10;

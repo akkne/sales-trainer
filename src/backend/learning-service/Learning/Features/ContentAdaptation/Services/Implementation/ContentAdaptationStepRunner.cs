@@ -7,6 +7,7 @@ using Sellevate.Learning.Features.Content.Services.Abstract;
 using Sellevate.Learning.Features.ContentAdaptation.Models;
 using Sellevate.Learning.Features.ContentAdaptation.Services.Abstract;
 using Sellevate.Learning.Features.ContentGeneration.Models;
+using Sellevate.Learning.Features.ContentGeneration.Services.Implementation;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
@@ -161,8 +162,12 @@ internal sealed class ContentAdaptationStepRunner(
         // Read once per tick, not once per item: it is one row and it does not change between two
         // calls a few seconds apart. An empty profile is passed as nothing at all rather than as an
         // object of nulls — the same rule 40.27 follows.
-        var profile = ContentStructureDto.FromProfile(
-            await organizationProfileProvider.GetCurrentAsync(cancellationToken));
+        // Normalized for the same reason as the generation runner: the profile columns carry no
+        // length limit of their own, and this value is repeated into as many as five hundred rewrite
+        // prompts in one batch. Review, 40.34.
+        var profile = ContentStructureDocumentSerializer.Normalize(
+            ContentStructureDto.FromProfile(
+                await organizationProfileProvider.GetCurrentAsync(cancellationToken)));
 
         var answeredCount = 0;
 
