@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Enforces the SalesTrainer CODESTYLE rules that dotnet format cannot check.
 
-Rule 9 — comments are forbidden entirely (no // line comments, no /* */ block
-comments, no /// XML doc prose). Rule 1 — a curated set of forbidden
-abbreviations may not appear as standalone identifiers.
+Rule 9 — `///` XML documentation is allowed (and required on service and
+infrastructure classes); `//` explanatory comments and `/* */` block comments
+are forbidden. Rule 1 — a curated set of forbidden abbreviations may not appear
+as standalone identifiers.
 
 Scope is passed as command-line paths (defaults to the identity service). Files
 under obj/, bin/, Migrations/, and generated files (*.g.cs, *.Designer.cs,
@@ -83,6 +84,8 @@ def strip_strings_and_find_comment(line: str):
             index += 1
             continue
         if character == "/" and following == "/":
+            if line[index:index + 3] == "///" and line[index:index + 4] != "////":
+                return None, "".join(code_characters)
             return index, "".join(code_characters)
         if character == "/" and following == "*":
             return index, "".join(code_characters)
@@ -106,7 +109,9 @@ def lint_file(path: pathlib.Path):
         comment_column, code = strip_strings_and_find_comment(line)
         if comment_column is not None:
             marker = line[comment_column:comment_column + 2]
-            violations.append((line_number, "comment forbidden (Rule 9)"))
+            violations.append(
+                (line_number,
+                 "explanatory comment forbidden, use /// XML documentation (Rule 9)"))
             if marker == "/*" and "*/" not in line[comment_column:]:
                 in_block_comment = True
         for match in IDENTIFIER_PATTERN.finditer(code):
