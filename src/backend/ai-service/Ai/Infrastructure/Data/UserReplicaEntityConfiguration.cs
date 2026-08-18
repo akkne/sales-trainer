@@ -4,6 +4,9 @@ using Sellevate.Ai.Identity;
 
 namespace Sellevate.Ai.Infrastructure.Data;
 
+/// <summary>
+/// Maps the replicated user. Deliberately carries no organization column: see <see cref="UserReplica"/>.
+/// </summary>
 public sealed class UserReplicaEntityConfiguration : IEntityTypeConfiguration<UserReplica>
 {
     public void Configure(EntityTypeBuilder<UserReplica> builder)

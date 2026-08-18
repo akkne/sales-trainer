@@ -27,4 +27,12 @@ public static class AiProviderFailureMessages
 
     /// <summary>No provider key is configured at all, so the feature is off rather than broken.</summary>
     public const string NotConfigured = "AI service is not configured";
+
+    /// <summary>
+    /// Body of the 503 every internal AI route answers with when the provider call could not be
+    /// completed. One sentence for twenty-seven catch clauses across seven controllers: the reason a
+    /// call failed is a log concern, and telling an internal caller which of them it was only spreads
+    /// provider detail into services that cannot act on it.
+    /// </summary>
+    public const string ServiceUnavailable = "AI service unavailable. Please try again later.";
 }

@@ -9,25 +9,31 @@ namespace Sellevate.Ai.Infrastructure.Http;
 /// warm, so the first dialog turn after an idle period does not pay the handshake
 /// cost (~100–300ms). A HEAD request is enough — any response means the connection
 /// is established and pooled.
+///
+/// <para>
+/// A provider with no real key is not warmed: there is nothing to warm it for, and sending an
+/// unauthenticated probe to a paid endpoint on a timer is noise in somebody else's logs.
+/// </para>
 /// </summary>
 internal sealed class UpstreamConnectionWarmup
 {
-    private static readonly TimeSpan PerTargetTimeout = TimeSpan.FromSeconds(5);
-
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<OpenAiConfiguration> _openAiOptions;
     private readonly IOptions<YandexTtsConfiguration> _yandexTtsOptions;
+    private readonly IOptions<UpstreamWarmupConfiguration> _warmupOptions;
     private readonly ILogger<UpstreamConnectionWarmup> _logger;
 
     public UpstreamConnectionWarmup(
         IHttpClientFactory httpClientFactory,
         IOptions<OpenAiConfiguration> openAiOptions,
         IOptions<YandexTtsConfiguration> yandexTtsOptions,
+        IOptions<UpstreamWarmupConfiguration> warmupOptions,
         ILogger<UpstreamConnectionWarmup> logger)
     {
         _httpClientFactory = httpClientFactory;
         _openAiOptions = openAiOptions;
         _yandexTtsOptions = yandexTtsOptions;
+        _warmupOptions = warmupOptions;
         _logger = logger;
     }
 
@@ -36,9 +42,9 @@ internal sealed class UpstreamConnectionWarmup
         var targets = new List<(string, string)>();
 
         if (IsApiKeyConfigured(_openAiOptions.Value.ApiKey))
-            targets.Add(("OpenAI", _openAiOptions.Value.BaseUrl));
+            targets.Add((AiProviderHttpConstants.OpenAiClientName, _openAiOptions.Value.BaseUrl));
         if (IsApiKeyConfigured(_yandexTtsOptions.Value.ApiKey))
-            targets.Add(("YandexTts", _yandexTtsOptions.Value.BaseUrl));
+            targets.Add((AiProviderHttpConstants.YandexTtsClientName, _yandexTtsOptions.Value.BaseUrl));
 
         return targets;
     }
@@ -53,7 +59,7 @@ internal sealed class UpstreamConnectionWarmup
             try
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(PerTargetTimeout);
+                timeout.CancelAfter(TimeSpan.FromSeconds(_warmupOptions.Value.PerTargetTimeoutSeconds));
 
                 using var request = new HttpRequestMessage(HttpMethod.Head, baseUrl);
                 using var response = await _httpClientFactory.CreateClient(clientName)
@@ -63,9 +69,10 @@ internal sealed class UpstreamConnectionWarmup
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                _logger.LogDebug(ex, "Connection warmup for {ClientName} ({BaseUrl}) failed", clientName, baseUrl);
+                _logger.LogDebug(
+                    exception, "Connection warmup for {ClientName} ({BaseUrl}) failed", clientName, baseUrl);
             }
         }
 

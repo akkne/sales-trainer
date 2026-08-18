@@ -2,6 +2,7 @@ using Sellevate.Ai.Features.Companies.Models;
 
 namespace Sellevate.Ai.Features.Companies.Services.Abstract;
 
+/// <summary>Extracts a structured call-log entry from free-form pasted notes. Stateless.</summary>
 public interface IParseLogService
 {
     /// <summary>

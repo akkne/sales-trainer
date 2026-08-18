@@ -5,6 +5,15 @@ using Sellevate.Ai.Features.Dialog.Services.Abstract;
 
 namespace Sellevate.Ai.Features.Companies.Services.Implementation;
 
+/// <summary>
+/// Asks the provider for the structured call record.
+///
+/// <para>
+/// The pasted notes are wrapped in explicit begin/end markers and declared to be data, because they are
+/// text a user pasted from somewhere else and the system prompt above them is the authority the model
+/// would otherwise let them override.
+/// </para>
+/// </summary>
 internal sealed class ParseLogService : IParseLogService
 {
     private const string SystemPrompt = @"Ты — ассистент менеджера по продажам. Ниже — сырые заметки или расшифровка звонка, которые пользователь вставил как есть. Извлеки из них структурированную запись о звонке.
@@ -46,11 +55,17 @@ internal sealed class ParseLogService : IParseLogService
         return ParseAiResponse(response);
     }
 
+    /// <summary>
+    /// Reads the structured call record out of the model's answer.
+    ///
+    /// <para>
+    /// The markdown fence is stripped before parsing because models occasionally ignore the "no code
+    /// blocks" instruction and wrap the JSON in one; without that a perfectly valid answer would degrade
+    /// to a 503. Same defence the dialog parser uses.
+    /// </para>
+    /// </summary>
     private ParsedCallLogDto ParseAiResponse(string aiResponseText)
     {
-        // Models occasionally ignore the "no code blocks" instruction and wrap the
-        // JSON in a ```json … ``` fence; strip it before parsing so a valid answer
-        // does not needlessly degrade to a 503 (same defense the dialog parser uses).
         var jsonText = StripMarkdownCodeFence(aiResponseText);
 
         JsonElement root;

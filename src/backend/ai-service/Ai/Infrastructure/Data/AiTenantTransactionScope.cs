@@ -41,12 +41,16 @@ internal sealed class AiTenantTransactionScope : IAsyncDisposable
         CancellationToken cancellationToken)
         => BeginAsync(databaseContext, cancellationToken);
 
+    /// <summary>
+    /// Opens a transaction, or hands back an inert scope. Inert in two cases: a transaction is already
+    /// open (the outermost scope owns the commit), or the provider is not relational — which is true
+    /// only for the in-memory provider the unit tests use, and that has neither transactions nor
+    /// row-level security.
+    /// </summary>
     private static async Task<AiTenantTransactionScope> BeginAsync(
         AiDbContext databaseContext,
         CancellationToken cancellationToken)
     {
-        // IsRelational() is false only for the in-memory provider the unit tests use, which has
-        // neither transactions nor row-level security.
         if (!databaseContext.Database.IsRelational() || databaseContext.Database.CurrentTransaction is not null)
         {
             return new AiTenantTransactionScope(null);

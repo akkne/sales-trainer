@@ -17,6 +17,13 @@ namespace Sellevate.Ai.Infrastructure.Learning;
 /// authenticated with the same internal shared secret ai-service's own internal routes expect from
 /// their callers.
 /// </para>
+///
+/// <para>
+/// <b>It degrades rather than fails.</b> Practising is the product; an assignment's persona is an
+/// improvement to it, and refusing to start a conversation because learning-service is unreachable would
+/// take the whole feature down with the one that decorates it. Every failure other than the caller's own
+/// cancellation returns null and logs a warning.
+/// </para>
 /// </summary>
 internal sealed class AssignmentPracticeContextClient : IAssignmentPracticeContextClient
 {
@@ -101,9 +108,6 @@ internal sealed class AssignmentPracticeContextClient : IAssignmentPracticeConte
         }
         catch (Exception exception)
         {
-            // Degrades rather than fails. Practising is the product; an assignment's persona is an
-            // improvement to it, and refusing to start a conversation because learning-service is
-            // unreachable would take the whole feature down with the one that decorates it.
             _logger.LogWarning(
                 exception,
                 "The assignment practice context for mode {ModeKey} could not be read; "

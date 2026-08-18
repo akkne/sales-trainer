@@ -2,6 +2,16 @@ using Npgsql;
 
 namespace Sellevate.Ai.Infrastructure.Data;
 
+/// <summary>
+/// Creates ai-db if it does not exist yet, before migrations run.
+///
+/// <para>
+/// It connects to the <c>postgres</c> maintenance database because a database cannot create itself, and it
+/// treats a concurrent creation as success: several service instances starting together would otherwise
+/// race and all but one would crash-loop on a duplicate-database error. Idempotent, and safe to call on
+/// every boot.
+/// </para>
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)

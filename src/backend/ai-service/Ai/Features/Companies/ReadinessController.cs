@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Abstract;
@@ -6,15 +7,27 @@ using Sellevate.Ai.Features.Evaluation;
 
 namespace Sellevate.Ai.Features.Companies;
 
+/// <summary>
+/// Scores how ready a seller is for a company, from the dialog sessions they have already held.
+///
+/// <para>
+/// The payload guard is defence in depth on a user-controlled body: it prevents runaway provider cost and
+/// latency even when an upstream caller fails to bound its own field sizes. The cap itself lives in
+/// <see cref="Sellevate.Ai.Common.Constants.AiRequestSizeLimits"/> so the several routes that apply "the
+/// same" bound cannot drift apart.
+/// </para>
+///
+/// <para>
+/// Every provider failure is answered as a 503 and never a 500: a rejected request, a spent quota or a bad
+/// credential is upstream state, and reporting it as a server fault here would send somebody looking
+/// through ai-service logs for a bug that is not in ai-service.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("ai")]
 [ServiceFilter(typeof(InternalServiceAuthFilter))]
 public sealed class ReadinessController : ControllerBase
 {
-    // Defense-in-depth cap on the number of session ids a single readiness request may pull
-    // feedback for, mirroring PersonaController's/BriefingController's input-size guards.
-    private const int MaxSessionIds = 50;
-
     private readonly IReadinessService _readinessService;
     private readonly ILogger<ReadinessController> _logger;
 
@@ -30,7 +43,7 @@ public sealed class ReadinessController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var sessionIdCount = request.SessionIds?.Count ?? 0;
-        if (sessionIdCount > MaxSessionIds)
+        if (sessionIdCount > AiRequestSizeLimits.MaximumSessionIdsPerRequest)
         {
             return BadRequest(new { message = "sessionIds exceeds maximum allowed size." });
         }
@@ -45,19 +58,24 @@ public sealed class ReadinessController : ControllerBase
         }
         catch (OpenAiException openAiException)
         {
-            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
             _logger.LogWarning(openAiException, "AI provider error during readiness generation");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             _logger.LogWarning(invalidOperationException, "Readiness generation failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             _logger.LogWarning(httpRequestException, "AI provider error during readiness generation");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 }

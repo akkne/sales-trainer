@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Sellevate.Ai.Features.Evaluation;
+using Sellevate.Ai.Features.Quotas.Constants;
 using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
@@ -42,7 +43,7 @@ public sealed class AiQuotaPreflightController(IAiSpendMeter spendMeter) : Contr
         [FromQuery] string? workload,
         CancellationToken cancellationToken)
     {
-        var workloadClass = string.Equals(workload, "batch", StringComparison.OrdinalIgnoreCase)
+        var workloadClass = string.Equals(workload, AiWorkloadClassNames.Batch, StringComparison.OrdinalIgnoreCase)
             ? AiWorkloadClass.Batch
             : AiWorkloadClass.Interactive;
 

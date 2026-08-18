@@ -1,14 +1,14 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Common.Constants;
-using Sellevate.Ai.Features.Transcription.Constants;
-using Sellevate.Ai.Features.Transcription.Models;
+using Sellevate.Ai.Common.Implementation;
 using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
+using Sellevate.Ai.Features.Transcription.Constants;
+using Sellevate.Ai.Features.Transcription.Models;
 using Sellevate.Ai.Features.Transcription.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
+using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Sellevate.Ai.Features.Transcription.Services.Implementation;
 
@@ -42,7 +42,6 @@ internal sealed class WhisperTranscriptionService(
     IAiSpendMeter spendMeter,
     ILogger<WhisperTranscriptionService> logger) : ITranscriptionService
 {
-    private const int MaximumLoggedBodyLength = 500;
     private const string FileFormFieldName = "file";
     private const string ModelFormFieldName = "model";
     private const string ResponseFormatFormFieldName = "response_format";
@@ -88,9 +87,9 @@ internal sealed class WhisperTranscriptionService(
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             if ((int)response.StatusCode >= LowestServerErrorStatusCode)
-                logger.LogError("Whisper API failed with {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
+                logger.LogError("Whisper API failed with {StatusCode}: {Body}", (int)response.StatusCode, ProviderResponseRedactor.RedactAndTruncate(errorBody));
             else
-                logger.LogWarning("Whisper API rejected the request with {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
+                logger.LogWarning("Whisper API rejected the request with {StatusCode}: {Body}", (int)response.StatusCode, ProviderResponseRedactor.RedactAndTruncate(errorBody));
             throw new InvalidOperationException("AI provider error");
         }
 
@@ -103,7 +102,7 @@ internal sealed class WhisperTranscriptionService(
         }
         catch (JsonException jsonException)
         {
-            logger.LogWarning(jsonException, "Whisper API returned a non-JSON body: {Body}", RedactAndTruncate(responseBody));
+            logger.LogWarning(jsonException, "Whisper API returned a non-JSON body: {Body}", ProviderResponseRedactor.RedactAndTruncate(responseBody));
             throw new InvalidOperationException("AI provider returned an unreadable response");
         }
 
@@ -122,17 +121,6 @@ internal sealed class WhisperTranscriptionService(
             AiUsageKinds.Stt, configuration.Model, text.Length, cancellationToken);
 
         return new TranscriptionResult(text, detectedLanguage);
-    }
-
-    /// <summary>
-    /// Strips anything key-shaped out of a provider body and bounds its length, so a provider that
-    /// echoes our request cannot put the credential — or a whole prompt — into the log.
-    /// </summary>
-    private static string RedactAndTruncate(string body)
-    {
-        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        return redacted.Length > MaximumLoggedBodyLength ? redacted[..MaximumLoggedBodyLength] + "…" : redacted;
     }
 
     private static string ResolveMimeType(string fileName)

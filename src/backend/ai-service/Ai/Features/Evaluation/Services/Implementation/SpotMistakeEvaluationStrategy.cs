@@ -8,6 +8,9 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Grades a spot-the-mistake exercise: which planted errors the learner found, and what they said about them.
+/// </summary>
 internal sealed class SpotMistakeEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,

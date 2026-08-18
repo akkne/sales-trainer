@@ -66,6 +66,10 @@ public sealed class AiUsageRecord : ITenantScoped
     public DateTime UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// The three kinds of spend the ledger distinguishes, and the value of <c>AiUsageRecord.Kind</c>. Persisted
+/// and grouped on by the spend report, so these strings must not change.
+/// </summary>
 public static class AiUsageKinds
 {
     public const string Llm = "llm";

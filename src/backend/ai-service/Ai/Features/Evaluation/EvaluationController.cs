@@ -1,11 +1,21 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Common.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Evaluation.Services.Abstract;
 
 namespace Sellevate.Ai.Features.Evaluation;
 
+/// <summary>
+/// The internal grading route learning-service calls when a learner submits an answer.
+///
+/// <para>
+/// Every provider failure is answered as a 503 and never a 500: a rejected request, a spent quota or a
+/// bad credential is upstream state, and reporting it as a server fault here would send somebody
+/// looking through ai-service logs for a bug that is not in ai-service.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("ai")]
 [ServiceFilter(typeof(InternalServiceAuthFilter))]
@@ -31,7 +41,7 @@ public sealed class EvaluationController : ControllerBase
         }
 
         var userAnswerJson = request.UserAnswer.GetRawText();
-        if (userAnswerJson.Length > 16000)
+        if (userAnswerJson.Length > AiRequestSizeLimits.MaximumPromptTextCharacters)
         {
             return BadRequest(new { message = "userAnswer exceeds maximum allowed size." });
         }
@@ -47,19 +57,24 @@ public sealed class EvaluationController : ControllerBase
         }
         catch (OpenAiException openAiException)
         {
-            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
             _logger.LogWarning(openAiException, "AI provider error during evaluation");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (InvalidOperationException invalidOperationException)
         {
             _logger.LogWarning(invalidOperationException, "Evaluation failed for exercise type {ExerciseType}", request.ExerciseType);
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             _logger.LogWarning(httpRequestException, "AI provider error during evaluation for exercise type {ExerciseType}", request.ExerciseType);
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 }

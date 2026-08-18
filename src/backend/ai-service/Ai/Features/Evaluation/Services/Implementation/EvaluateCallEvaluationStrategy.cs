@@ -8,6 +8,10 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Grades an "evaluate this call" exercise: the learner judges a transcript, and the model judges the
+/// judgement.
+/// </summary>
 internal sealed class EvaluateCallEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,

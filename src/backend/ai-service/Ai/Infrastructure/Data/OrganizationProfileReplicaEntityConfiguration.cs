@@ -4,6 +4,12 @@ using Sellevate.Ai.Features.Organizations;
 
 namespace Sellevate.Ai.Infrastructure.Data;
 
+/// <summary>
+/// Maps the replicated organization profile. The tenant column is the primary key — there is no global
+/// profile — and every jsonb column is NOT NULL with an empty-collection default, so a consumer that
+/// received a message missing a field writes an empty list rather than a null the prompt builders would
+/// have to guard.
+/// </summary>
 public sealed class OrganizationProfileReplicaEntityConfiguration : IEntityTypeConfiguration<OrganizationProfileReplica>
 {
     public void Configure(EntityTypeBuilder<OrganizationProfileReplica> builder)

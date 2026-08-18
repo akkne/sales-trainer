@@ -2,6 +2,7 @@ using Sellevate.Ai.Features.Companies.Models;
 
 namespace Sellevate.Ai.Features.Companies.Services.Abstract;
 
+/// <summary>Invents a buyer persona to practise a call against. Stateless.</summary>
 public interface IPersonaService
 {
     /// <summary>

@@ -171,6 +171,10 @@ internal sealed class ExerciseGenerationService(
         return promptBuilder.ToString();
     }
 
+    /// <summary>
+    /// Reads the generated lesson out of the completion. Every <see cref="JsonElement"/> kept is cloned,
+    /// because the document it belongs to is disposed at the end of the caller's <c>using</c> block.
+    /// </summary>
     private static GeneratedLessonDto ReadLesson(JsonElement root, int maximumExerciseCount)
     {
         var title = AiJsonResponseReader.ReadStringOrNull(root, "title") ?? "Сгенерированный урок";
@@ -206,7 +210,6 @@ internal sealed class ExerciseGenerationService(
                 continue;
             }
 
-            // Cloned out of the document being disposed at the end of the caller's using block.
             exercises.Add(new GeneratedExerciseDto(type, content.Clone()));
         }
 

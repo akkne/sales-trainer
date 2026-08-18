@@ -3,6 +3,10 @@ using Sellevate.Ai.Features.Evaluation.Services.Abstract;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Validates the request and hands it to the strategy for its exercise type. Holds no grading logic of its
+/// own by design — a rule that lived here would apply to every exercise type and belong to none.
+/// </summary>
 internal sealed class ExerciseEvaluationService : IExerciseEvaluationService
 {
     private readonly ExerciseEvaluationFactory _evaluationFactory;

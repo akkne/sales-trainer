@@ -1,16 +1,17 @@
-using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Common.Implementation;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Features.Quotas.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
+using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
@@ -48,7 +49,6 @@ namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 /// </summary>
 internal sealed class OpenAiChatService : IOpenAiChatService
 {
-    private const int MaximumLoggedBodyLength = 500;
     private const string SseDataFieldPrefix = "data:";
     private const string SseStreamTerminator = "[DONE]";
     private const string ChatReplySchemaName = "chat_reply";
@@ -615,7 +615,7 @@ endCall: false ЗАПРЕЩЕНО.
     /// </summary>
     private Exception TranslateProviderError(System.Net.HttpStatusCode statusCode, string responseBody, string operation)
     {
-        var redactedBody = RedactAndTruncate(responseBody);
+        var redactedBody = ProviderResponseRedactor.RedactAndTruncate(responseBody);
 
         if ((int)statusCode >= LowestServerErrorStatusCode)
             _logger.LogError("AI provider failed on {Operation}: {StatusCode} - {Content}", operation, statusCode, redactedBody);
@@ -649,7 +649,7 @@ endCall: false ЗАПРЕЩЕНО.
         }
         catch (JsonException jsonException)
         {
-            logger.LogWarning(jsonException, "AI provider returned a non-JSON body: {Response}", RedactAndTruncate(responseContent));
+            logger.LogWarning(jsonException, "AI provider returned a non-JSON body: {Response}", ProviderResponseRedactor.RedactAndTruncate(responseContent));
             throw new OpenAiRequestException("AI provider returned an unreadable response");
         }
 
@@ -687,22 +687,11 @@ endCall: false ЗАПРЕЩЕНО.
                 return new CompletionResult(resultText.GetString() ?? string.Empty, usage);
         }
 
-        logger.LogWarning("Unable to parse OpenAI response format: {Response}", RedactAndTruncate(responseContent));
+        logger.LogWarning("Unable to parse OpenAI response format: {Response}", ProviderResponseRedactor.RedactAndTruncate(responseContent));
         throw new OpenAiRequestException("AI provider returned an unexpected response format");
     }
 
     private sealed record CompletionResult(string Content, AiCompletionUsage? Usage);
-
-    /// <summary>
-    /// Strips anything key-shaped out of a provider body and bounds its length, so a provider that
-    /// echoes our request cannot put the credential — or a whole prompt — into the log.
-    /// </summary>
-    private static string RedactAndTruncate(string body)
-    {
-        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        return redacted.Length > MaximumLoggedBodyLength ? redacted[..MaximumLoggedBodyLength] + "…" : redacted;
-    }
 
     /// <summary>
     /// Renders the transcript for the grader with the two sides named in the language of the exercise,
