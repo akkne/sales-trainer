@@ -186,3 +186,65 @@ Preconditions: a `TenancyAdmin` account, and a way to move an organization's `Ai
 | Organization at the monthly token limit | red "Лимит исчерпан" banner; per docs/AI_QUOTAS.md §5, interactive calls now 429 too |
 | A model with no price-table entry was used this month | its row shows «нет цены»; the total line shows the "not calculated" sentence, not a partial figure |
 | Try to find a quota-editing control anywhere on the screen | there is none — raising the limit is a platform-admin action on a different route entirely |
+
+---
+
+## Slice 2 — O1 «Команда» (`/org`)
+
+The heat map, the suggestion panel above it, and the roster merge that feeds the rows.
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgTeamHeatMap.test.ts` | the four-step colour scale and its boundaries, the dash for a withheld percentage, and column↔cell alignment on both axes |
+| `__tests__/orgTeamRoster.test.ts` | `mergeTeamRoster` in all four roster conditions, the window summary maths, Russian pluralization, and the suppression-reason dictionary |
+| `__tests__/OrgTeamScreen.test.tsx` | `SkillHeatMap` end to end: the states table of ADMIN_UI_DESIGN.md O1, and that no XP/streak/league word reaches the DOM |
+
+The behaviours worth naming:
+
+- **50 / 65 / 80 are the only boundaries.** `49→critical`, `50→weak`, `64→weak`, `65→plain`,
+  `79→plain`, `80→strong`. Lime (`--primary`) appears nowhere on the map — «готово» is `--success`.
+- **`accuracyPercent: null` is its own step**, drawn as «—» with an `aria-label` reading «меньше
+  {minimumAttemptsForAccuracy} попыток». The threshold in that sentence comes from the response,
+  never from a client constant. `null` and `0` must never render the same.
+- **Rows are keyed, not positional.** A manager who skipped a stage keeps every other cell under
+  the right column; the test pins the `[null, 41]` case that a positional read would print as
+  `[41, null]`.
+- **The roster merge is the one place this screen improves on its own design.** `skill-map` alone
+  can never produce the «† уже не работает» row (when it reaches identity-service its member list
+  *is* the active roster, so every `isActiveMember` is `true`; when it cannot, every one is `null`).
+  `GET /memberships?status=all` restores both that mark and the newly-hired person with zero
+  attempts. Four conditions are pinned: roster present, roster absent, roster absent but
+  `rosterKnown: true`, and a member the roster does not mention at all (→ `null`, never `true`).
+- **A departed person who never practised is not resurrected** as an empty row.
+- **Ordering:** active-with-practice by volume, then silent actives, then the departed — last, no
+  matter how many attempts their history holds.
+- **`weakestStageKey: null` reads «нет данных»**, never «слаб везде».
+- **The «уже не работает» mark is withheld entirely** when neither service could check the roster,
+  and the amber `role="status"` strip says so.
+- **`unattributedAttemptCount > 0` always footnotes**, even for three attempts, and the headline
+  attempt total includes them — folding an unknown into a known bucket is a claim nobody can check.
+- **No leaderboard.** A team dashboard is where the old product put one; the render test fails on
+  `xp`, `опыт`, `стрик`, `streak`, `лига`, `league` anywhere in the DOM.
+
+### Manual — O1
+
+Preconditions: a `TenancyAdmin` whose organization has at least one manager with attempts.
+
+| Scenario | Expect |
+|---|---|
+| Open `/org` on a slow connection | header skeleton, two card placeholders, an 8-row grid — never an empty table |
+| Stop learning-service, open `/org` | one `ErrorState` with «Повторить» — map and panel fail together, because they share one window |
+| Switch the window 30 → 90 → 180 | both the map and the suggestion panel re-read; the «Данные с …» line moves with them, and they never disagree |
+| Switch «по этапам» → «по навыкам» | columns change, no network request is issued |
+| A brand-new organization with no attempts | «Пока никто из команды не решал упражнения» + «Создать задание» → `/org/assignments/new`; when the roster is readable the copy also names the headcount |
+| An organization where nothing is failing | «Ни один этап воронки не проваливается …» quoting the three thresholds **from the response** |
+| A stage suppressed as `run_in_progress` | grey card, «Уже идёт генерация», «открыть прогон» → `/org/content/generation/{jobId}` |
+| A stage suppressed as `dismissed` | «Отложено вами до …» + «Вернуть предложение»; pressing it brings the offer back |
+| Press «Не сейчас» | a modal with an optional note; confirming replaces the panel from the mutation's own response, no second read |
+| Press «Сгенерировать упражнения» | navigates to `/org/content/generation/{jobId}`; pressing twice lands on the same run, never a second one |
+| Press it after the window has moved (409) | the card shows «Окно сдвинулось…», the screen does not navigate |
+| Stop identity-service, keep learning-service up | the map still renders; roster marks fall back to whatever `skill-map` knew — no error, no red banner |
+| Click a manager's name | `/org/dialogs?userId={userId}` |
+| Click a cell | nothing happens — there is no per-skill attempt filter in the API to click through to |
