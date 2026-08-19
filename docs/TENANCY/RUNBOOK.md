@@ -407,11 +407,22 @@ $DC logs -f identity
 имперсонации, обновление политик под платформенный режим. **Начиная с 40.9 identity требует Redis на
 старте** — в нём появился первый Kafka-консьюмер.
 
-Проверка:
+Проверка — **на сервере это `check`, а не `verify`**:
 
 ```bash
-./scripts/tenancy-default-organization-verify.sh
+./scripts/tenancy-default-organization-check.sh
 ```
+
+Читает живые `identity` и `organization`: организация на месте и Active, id совпадает в обеих базах
+(между ними нет внешнего ключа — это ловушка №2 ниже), у каждого пользователя есть членство, никто
+не остался с удалённой глобальной ролью `Admin`, конфигурация входа и проекция реестра на месте.
+Только `SELECT`, ничего не пишет.
+
+> ⚠️ `./scripts/tenancy-default-organization-verify.sh` — **не** шаг раскатки. Это тест самих
+> SQL-файлов: он собирает две одноразовые базы через `dotnet ef migrations script`, прогоняет по
+> ним фикстуру и откат и удаляет их. Ему нужен .NET SDK, которого на сервере нет, он создаёт и
+> дропает базы на боевом кластере, и про ваши данные он не говорит ничего. Его место — машина
+> разработчика и CI.
 
 ## Шаг 7 — ai-service (**строго раньше learning-service**)
 
@@ -643,6 +654,9 @@ PUT  /organizations/profile                      {product, icp, objections, tone
 6. **Переключили в `Production`, не задав `INTERNAL_SERVICE_SECRET`** → `403` на всех внутренних
    маршрутах, ломается фан-аут заданий.
 7. **Не прогнаны `--indexes`** → второй заказчик не заводится из-за глобально-уникальных слагов.
+8. **Перепутаны `verify` и `check`.** `tenancy-default-organization-verify.sh` — тест SQL-файлов на
+   одноразовых БД, требует .NET SDK и на сервере падает на `dotnet: command not found`. Живые данные
+   проверяет `tenancy-default-organization-check.sh` (шаг 6).
 
 ---
 

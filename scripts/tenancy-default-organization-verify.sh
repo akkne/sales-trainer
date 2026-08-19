@@ -5,6 +5,15 @@
 # Proves that the Phase 40.9 backfill and its rollback are correct, WITHOUT going anywhere near
 # real data.
 #
+# THIS IS A DEVELOPER-MACHINE / CI TEST, NOT A ROLLOUT STEP.
+#   It needs the .NET SDK (`dotnet ef migrations script`) and it creates and drops two databases.
+#   Neither belongs on a production host, and nothing it reports says anything about your server's
+#   data — it only ever looks at the fixture it built itself.
+#
+#   To check that the backfill landed on a real server, use the SELECT-only counterpart:
+#     ./scripts/tenancy-default-organization-check.sh
+#   That is what scripts/tenancy-rollout.sh runs as its step 6.
+#
 # HOW
 #   1. Creates two throwaway databases (default: tenancy_verify_identity / tenancy_verify_organization).
 #      If they already exist they are dropped first — they belong to this script and to nothing else.
@@ -120,6 +129,18 @@ drop_verification_databases() {
   execute postgres "DROP DATABASE IF EXISTS \"$VERIFY_IDENTITY_DB\" WITH (FORCE);"
   execute postgres "DROP DATABASE IF EXISTS \"$VERIFY_ORGANIZATION_DB\" WITH (FORCE);"
 }
+
+# Checked before anything is created, so a host without the SDK gets one sentence instead of two
+# orphaned databases and a failure five steps in.
+if ! command -v dotnet >/dev/null 2>&1; then
+  die "the .NET SDK is not installed, and this script builds its schema with
+       'dotnet ef migrations script'. That is expected on a server: this is a developer-machine
+       and CI test of the 40.9 SQL, not a rollout step, and it would create and drop two databases
+       on this cluster.
+
+       To check that the backfill landed on THIS server, run the SELECT-only counterpart:
+         ./scripts/tenancy-default-organization-check.sh"
+fi
 
 trap drop_verification_databases EXIT
 

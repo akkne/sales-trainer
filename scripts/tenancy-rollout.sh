@@ -358,7 +358,11 @@ step_5_default_organization() {
 
 step_6_verify_default_organization() {
   step_header 6 "Verify the default organization landed in both databases"
-  rollout_script tenancy-default-organization-verify.sh
+  # tenancy-default-organization-check.sh, not tenancy-default-organization-verify.sh: the latter
+  # tests the SQL files against two throwaway databases built with `dotnet ef migrations script`,
+  # which needs the .NET SDK and creates and drops databases. That is a developer-machine and CI
+  # test, and it says nothing about this server. This one is SELECT-only against the live data.
+  rollout_script tenancy-default-organization-check.sh
 }
 
 step_7_ai() {
