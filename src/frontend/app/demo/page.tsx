@@ -114,7 +114,7 @@ export default function DemoRequestPage() {
                         </span>
                         <h2 className="demo-success-heading">Отлично, мы с вами свяжемся</h2>
                         <p className="small demo-success-text">
-                            Мы написали вашу заявку и свяжемся с вами по адресу{" "}
+                            Заявка принята. Напишем вам на{" "}
                             <strong>{workEmail}</strong> в течение одного рабочего дня.
                         </p>
                         <Link href="/" className="btn btn-outline btn-lg">
