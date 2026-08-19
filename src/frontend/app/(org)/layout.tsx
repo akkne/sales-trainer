@@ -143,7 +143,6 @@ export default function OrganizationLayout({ children }: { children: React.React
                 organizationName={impersonatedOrganizationName ?? FALLBACK_ORGANIZATION_NAME}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
-                canReachPlatformPanel={isPlatformStaff(authenticatedUser.role)}
                 badges={badges}
             />
 

@@ -14,7 +14,6 @@ interface OrgSidebarProps {
     organizationName: string;
     isOpen: boolean;
     onClose: () => void;
-    canReachPlatformPanel: boolean;
     badges: OrganizationNavigationBadgeCounts;
 }
 
@@ -33,22 +32,23 @@ function readBadgeCount(
  * a person who holds both roles should not have to relearn the furniture. What differs is the
  * language, the component library, and the fact that the entries live in a constants file.
  *
+ * On desktop it is `sticky` and exactly one viewport tall, not `static`. As a stretched flex item
+ * it inherited the height of `<main>`, so on any screen taller than the window — the people table,
+ * the content list — the footer sat at the bottom of the *document* and «В приложение» could only
+ * be reached by scrolling past all the data. Bounding the height puts the exit in the bottom-left
+ * corner of the viewport on every screen, which is what makes the `overflow-y-auto` on the nav
+ * below actually do something.
+ *
  * Following a link closes the mobile drawer here, at the click, rather than in an effect watching
  * the pathname: navigating within the panel is the only thing that changes it, and the effect
  * version re-renders the whole shell twice for every route change.
  */
-export function OrgSidebar({
-    organizationName,
-    isOpen,
-    onClose,
-    canReachPlatformPanel,
-    badges,
-}: OrgSidebarProps) {
+export function OrgSidebar({ organizationName, isOpen, onClose, badges }: OrgSidebarProps) {
     const pathname = usePathname();
 
     return (
         <aside
-            className={`w-56 shrink-0 bg-surface flex flex-col fixed md:static inset-y-0 left-0 z-50 border-r border-line md:border-r-0 transition-transform duration-200 md:translate-x-0 ${
+            className={`w-56 shrink-0 bg-surface flex flex-col fixed md:sticky top-0 bottom-0 md:bottom-auto md:h-screen left-0 z-50 border-r border-line md:border-r-0 transition-transform duration-200 md:translate-x-0 ${
                 isOpen ? "translate-x-0" : "-translate-x-full"
             }`}
         >
@@ -71,7 +71,7 @@ export function OrgSidebar({
 
             {/* min-h-0 is required for overflow-y-auto to take effect: a flex item's auto
                 minimum size otherwise refuses to shrink below its content height, and the nav
-                links overflow the fixed inset-y-0 aside on short viewports. */}
+                links overflow the one-viewport-tall aside on short screens. */}
             <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-0.5">
                 {ORGANIZATION_NAVIGATION_ITEMS.map((item) => {
                     const isActive = isOrganizationNavigationItemActive(item.href, pathname);
@@ -116,22 +116,18 @@ export function OrgSidebar({
                 })}
             </nav>
 
-            <div className="px-5 py-4 space-y-2">
+            {/* The exit, and only the exit. The footer used to carry a second link into the
+                platform panel for Sellevate staff; it is gone on the owner's instruction, so the
+                organization panel now offers exactly one way out of itself on every screen and
+                never advertises the internal tool to the customer looking over a shoulder. */}
+            <div className="px-5 py-4">
                 <Link
                     href="/tree"
+                    onClick={onClose}
                     className="flex items-center gap-2 text-xs text-ink-3 hover:text-ink transition-colors"
                 >
                     <Icon name="arrow-left" size="sm" />В приложение
                 </Link>
-                {canReachPlatformPanel && (
-                    <Link
-                        href="/admin"
-                        className="flex items-center gap-2 text-xs text-ink-3 hover:text-ink transition-colors"
-                    >
-                        <Icon name="settings" size="sm" />
-                        Платформенная админка
-                    </Link>
-                )}
             </div>
         </aside>
     );

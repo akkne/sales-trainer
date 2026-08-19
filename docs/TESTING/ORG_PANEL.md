@@ -80,10 +80,14 @@ As a `TenancyAdmin`:
   Программа, Люди, Расход ИИ.
 - «Команда» is highlighted on `/org` and **not** on `/org/assignments`.
 - «Задания» stays highlighted on `/org/assignments/new`.
-- The footer has «В приложение» → `/tree`, and «Платформенная админка» → `/admin` **only** for
-  platform staff.
-- At a phone width the sidebar becomes a drawer; the hamburger opens it, the backdrop and any nav
-  link close it.
+- The footer holds exactly one entry, «В приложение» → `/tree`, and it is the same for everyone the
+  gate admits. There is **no** link to the platform panel — check as a platform admin too, which is
+  the role that used to see the second «Платформенная админка» link.
+- The exit stays in the bottom-left corner of the *window* on a screen taller than the window: open
+  `/org/people` or `/org/content` on a desktop width, scroll the page to the middle, and «В
+  приложение» must still be visible without scrolling to the end of the table.
+- At a phone width the sidebar becomes a drawer; the hamburger opens it, the backdrop, any nav link
+  and «В приложение» close it.
 - Entries whose slice has not shipped yet lead to a 404. Expected until slices 1–11 land.
 
 ### The three badges
