@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import {
     useLogin,
@@ -138,7 +139,7 @@ export default function LoginPage() {
                 )}
 
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    Доступ в Sellevate — только по приглашению от твоей компании.
+                    Нет аккаунта? <Link href="/register">Зарегистрироваться</Link>
                 </p>
             </div>
         </div>

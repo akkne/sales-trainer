@@ -27,6 +27,9 @@ public static class TrackedEvents
         "session",
         "login",
         "register",
+        // Missing since 40.7 renamed the frontend's /register page to /invite without following it
+        // here, so every invite-acceptance page view was answered with a 400 instead of counted.
+        "invite",
         "onboarding",
         "admin",
         "other",

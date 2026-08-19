@@ -23,18 +23,53 @@ public class AuthFlowTests
     }
 
     /// <summary>
-    /// Phase 40.7: the public registration route is deleted, not hidden behind a flag or a role —
-    /// there must be no handler left at that path at all (docs/TENANCY/TENANCY.md §4.1).
+    /// Phase 40.37 reopened the route 40.7 deleted (docs/TENANCY/TENANCY.md §4.1a). What is asserted
+    /// is not just that it answers, but the shape of what it hands back: a session with no
+    /// organization on it.
     /// </summary>
     [Test]
-    public async Task Register_RouteIsGone()
+    public async Task Register_CreatesASessionWithNoOrganization()
     {
         var client = Factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/auth/register",
             new { email = UniqueEmail(), password = "Password123!", displayName = "Reg User" });
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<AuthTokenResult>();
+        body!.AccessToken.Should().NotBeNullOrEmpty();
+        body.OrgId.Should().BeNull("registering joins no company — only an invite does that");
+        body.IsOnboardingCompleted.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task Register_SameAddressTwice_IsRejectedAsConflict()
+    {
+        var client = Factory.CreateClient();
+        var email = UniqueEmail();
+        var payload = new { email, password = "Password123!", displayName = "Reg User" };
+
+        (await client.PostAsJsonAsync("/auth/register", payload)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var second = await client.PostAsJsonAsync("/auth/register", payload);
+
+        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    /// <summary>
+    /// The registered account must actually be able to come back — the invite flow used to be the
+    /// only producer of a login-capable row, so this covers the password hash landing correctly.
+    /// </summary>
+    [Test]
+    public async Task Register_ThenLogin_Succeeds()
+    {
+        var client = Factory.CreateClient();
+        var email = UniqueEmail();
+        await client.PostAsJsonAsync("/auth/register",
+            new { email, password = "Password123!", displayName = "Reg User" });
+
+        var login = await client.PostAsJsonAsync("/auth/login", new { email, password = "Password123!" });
+
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Test]
@@ -113,5 +148,12 @@ public class AuthFlowTests
         return client.SendAsync(request);
     }
 
-    private sealed record AuthTokenResult(string AccessToken, string UserId, string DisplayName, bool IsOnboardingCompleted, string Role);
+    private sealed record AuthTokenResult(
+        string AccessToken,
+        string UserId,
+        string DisplayName,
+        bool IsOnboardingCompleted,
+        string Role,
+        string? OrgId,
+        string? OrgRole);
 }

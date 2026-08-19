@@ -10,6 +10,29 @@ namespace Sellevate.Identity.Features.Auth.Services.Abstract;
 /// </summary>
 public interface IAuthenticationService
 {
+    /// <summary>
+    /// Creates an account from the public sign-up form (Phase 40.37) and signs it straight in.
+    ///
+    /// <para>
+    /// The account carries **no** membership, and this method never creates one — joining an
+    /// organization stays the invite's job. What the caller gets is therefore an identity that can
+    /// log in and reach nothing but the "waiting for an invitation" screen, which is why the
+    /// duplicate-address answer here can be honest (<see cref="InvalidOperationException"/>) while
+    /// the login and Google paths keep their deliberately uninformative wording: a form that
+    /// refuses to tell you the address is taken cannot let you register either.
+    /// </para>
+    ///
+    /// <para>
+    /// Whether it signs in or asks for a code is <c>EmailVerification:Enabled</c>'s decision — see
+    /// <see cref="RegistrationResult"/>.
+    /// </para>
+    /// </summary>
+    Task<RegistrationResult> RegisterWithEmailAsync(
+        string email,
+        string password,
+        string displayName,
+        CancellationToken cancellationToken = default);
+
     Task<IssuedTokenPair> VerifyEmailAsync(
         string email,
         string code,

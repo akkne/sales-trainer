@@ -94,6 +94,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | Document | Scope |
 |----------|-------|
 | [CORE.md](TESTING/CORE.md) | Test strategy, tooling, how to run |
+| [REGISTRATION.md](TESTING/REGISTRATION.md) | Public sign-up (40.37), Google provisioning, the `EMAIL_VERIFICATION_ENABLED` flag, and the no-organization waiting screen |
 | [EMAIL_VERIFICATION.md](TESTING/EMAIL_VERIFICATION.md) | Registration code flow: unit, integration, manual checklist |
 | [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |

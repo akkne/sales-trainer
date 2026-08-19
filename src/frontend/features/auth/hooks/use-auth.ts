@@ -77,9 +77,60 @@ export function useInitAuth() {
     }, [accessToken]);
 }
 
-// Phase 40.7: there is no public registration. An account is created only by accepting an
-// invite, and the invite token itself already proves control of the email address, so this
-// replaces both the old useRegister hook and the email-verification step for invited users.
+/**
+ * Sign-up answers one of two ways depending on the server's `EmailVerification:Enabled`: a session
+ * (200) when the address needs no proving, or just the address (202) when a code has been mailed.
+ * Told apart by the presence of `accessToken` rather than by status code, which the api-client does
+ * not surface.
+ */
+type RegistrationResponse =
+    | AuthTokenResponse
+    | { email: string; requiresEmailVerification: true };
+
+/**
+ * Public registration, reopened in 40.37 after 40.7 had deleted it.
+ *
+ * What comes back is an account with no membership, so `handleSuccessfulAuth` routes it exactly
+ * like any other sign-in — onboarding first, then `/tree`, where the gate in `app/(main)` shows
+ * the "waiting for an invitation" screen instead of the lesson tree. Registration deliberately
+ * knows nothing about that: the user's organization, or lack of one, is the server's answer, not
+ * a branch this hook takes.
+ */
+export function useRegister() {
+    const router = useRouter();
+    const handleSuccessfulAuth = useHandleSuccessfulAuth();
+
+    return useMutation({
+        mutationFn: (credentials: { email: string; password: string; displayName: string }) =>
+            apiClient.post<RegistrationResponse>("/auth/register", credentials),
+        onSuccess: (data, variables) => {
+            if (!("accessToken" in data)) {
+                clientLogger.info("Registration awaiting email verification", {
+                    email: variables.email,
+                });
+                storePendingVerificationEmail(data.email);
+                router.push("/verify-email");
+                return;
+            }
+
+            clientLogger.info("Registration successful", {
+                userId: data.userId,
+                email: variables.email,
+            });
+            handleSuccessfulAuth(data);
+        },
+        onError: (error, variables) => {
+            clientLogger.warn("Registration failed", {
+                email: variables.email,
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
+// An invite remains the way an account is attached to an organization, and the invite token
+// itself already proves control of the email address — so accepting one still skips the
+// verification code, whether it lands on a brand-new account or on one made at /register.
 export function useAcceptInvite(token: string) {
     const handleSuccessfulAuth = useHandleSuccessfulAuth();
 

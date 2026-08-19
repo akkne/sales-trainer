@@ -480,6 +480,10 @@ Two operational caveats:
 
 ### 4.1 No public registration — and no route that could become one
 
+> **Superseded by §4.1a (Phase 40.37, 2026-08-20).** `POST /auth/register` exists again. The
+> paragraph below is kept because the reasoning it records is still half true — and because knowing
+> which half stopped being true is the point of §4.1a.
+
 "Hiding" the registration page is not a control. The design position: `identity-service` has **no
 self-service registration route at all**. `POST /auth/register` is deleted, not guarded. An
 organization is created only from the internal superadmin panel; its users arrive only by invite.
@@ -488,6 +492,48 @@ This is a real deletion of existing behaviour — registration, Google sign-in a
 all exist today (`AuthController`, `EmailVerificationService`, `GoogleAuthConfiguration`) — and the
 invite flow replaces email verification, since possession of the invite token already proves the
 address.
+
+### 4.1a Public registration, reopened — an account is not access
+
+40.7 conflated two things that turn out to be separable: **having an account** and **belonging to a
+customer**. It closed the first in order to close the second. `RAW.md` had always asked for
+"регистрация через email или Google", and the owner asked for the form back on 2026-08-20.
+
+The position now: **anyone may register; nobody registers into an organization.**
+
+`POST /auth/register` creates a `user` row and **no** `membership`, and there is no branch in it
+that could create one. That is what makes reopening the route something other than a rollback of
+§4.1's boundary. What 40.7 actually protected is untouched:
+
+- with no active membership the JWT carries no `org_id` (`ClaimTypeNames.OrganizationId` — absence
+  means "no organization", never "every organization"), so every tenant-scoped query and every RLS
+  policy sees nothing;
+- an organization is still created only from the platform panel;
+- a person still joins one only by accepting an invite, and is still offboarded by membership
+  deactivation, never deletion.
+
+A registrant with no invite therefore reaches exactly one screen — the waiting room in
+`features/auth/components/awaiting-organization-gate.tsx`, which stands in front of everything under
+`app/(main)`. Platform staff pass it, because `Admin`/`SuperAdmin` are Sellevate's own roles and are
+deliberately not bound to tenancy; an unauthenticated visitor passes it too, so it cannot become a
+second login redirect competing with the api-client's 401 handler.
+
+Two consequences worth stating plainly, because they are real costs and were accepted knowingly:
+
+1. **Sign-up is an account-enumeration oracle.** It answers `409` for a taken address. This cannot
+   be avoided — a form that will not tell you the address is taken cannot create the account either.
+   The evasive wording on `/auth/login`, `/auth/login/start` and `/auth/google` is now worth less
+   than it was, but it is kept: those routes leak *which company* an address belongs to, which
+   sign-up never does.
+2. **Google sign-in provisions again.** An unknown Google identity becomes a member-less account
+   rather than a `401`, since `RAW.md` asks for sign-up by Google and a button that registers
+   nothing would be a lie. Its one surviving rejection is an address already held by an unverified
+   local row.
+
+Email verification is a flag, `EmailVerification:Enabled` (`EMAIL_VERIFICATION_ENABLED`), **off**.
+Off, sign-up marks the address verified and signs in; on, it mails a code and issues no session, and
+`/auth/login` refuses unverified accounts. One switch governs both ends so the two cannot disagree.
+See [EMAIL_VERIFICATION.md](../EMAIL_VERIFICATION.md).
 
 ### 4.2 `memberships` from day one
 

@@ -59,6 +59,7 @@ writes are unchanged and still require an explicit organization. See TENANCY.md 
 
 | Method | Path | Body | Response |
 |---|---|---|---|
+| POST | /auth/register `[public]` | `{email, password, displayName}` | `AuthTokenResponseDto` + cookie `refreshToken`, or `202 {email, requiresEmailVerification}` |
 | POST | /auth/invites/{token}/accept `[public]` | `{displayName?, password?}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/verify-email | `{email, code}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/resend-code | `{email}` | 204 |
@@ -71,12 +72,25 @@ writes are unchanged and still require an explicit organization. See TENANCY.md 
 
 `AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role, orgId, orgRole}`
 
-> **There is no `POST /auth/register` (Phase 40.7).** The route is deleted, not guarded — see
-> [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.1. The only way an account is created is
-> `POST /auth/invites/{token}/accept`. `POST /auth/google` is a login method only: it rejects an
-> unknown Google identity, and one whose account has no **active** membership, with `401` and a
-> single identical message for both cases (it must not reveal which addresses belong to a
-> customer).
+> **`POST /auth/register` is back (Phase 40.37),** after 40.7 had deleted it — see
+> [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.1a. It creates an account with **no
+> membership** and never creates one, so registering buys an identity and no access to anybody's
+> data: with no active membership the JWT carries no `org_id`, and the client shows the
+> "waiting for an invitation" screen instead of the app. Joining an organization is still
+> exclusively `POST /auth/invites/{token}/accept`.
+>
+> `409` when the address is taken — sign-up is the one route that cannot be evasive about that, as a
+> form refusing to say so could not create the account either. `202` instead of `200` when
+> `EmailVerification:Enabled` is on: the account exists, a code has been mailed, and no session is
+> issued until `POST /auth/verify-email` consumes it. The flag is **off** by default, in which case
+> the address is marked verified on the spot and the response is a normal `200` with a session.
+>
+> `POST /auth/google` provisions on the same terms — an unknown Google identity becomes an account
+> with no membership, since sign-up "через email или Google" is what `RAW.md` asks for. Its one
+> remaining `401` is an address already held by an *unverified* local row, which can be neither
+> signed into nor duplicated. The membership check it used to apply is gone: a member-less account
+> now has a screen to land on, and refusing it here while `/auth/login` admitted it was an
+> inconsistency the platform-staff carve-out existed to paper over.
 
 > **Suspended organizations (Phase 40.9).** `/auth/login`, `/auth/google`, `/auth/refresh` and
 > `/auth/invites/{token}/accept` all answer `403` (`"Organization suspended"`) when the caller's

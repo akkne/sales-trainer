@@ -23,6 +23,7 @@ function resolvePage(pathname: string): TrackedPage {
         case "discuss":
         case "session":
         case "login":
+        case "register":
         case "invite":
         case "onboarding":
         case "admin":

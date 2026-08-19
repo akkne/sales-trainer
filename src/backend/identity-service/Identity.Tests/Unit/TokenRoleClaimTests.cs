@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
+using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Features.Auth.Services.Implementation;
@@ -52,7 +53,9 @@ public sealed class TokenRoleClaimTests
             new OrganizationAuthConfigurationResolver(
                 databaseContext, NullLogger<OrganizationAuthConfigurationResolver>.Instance),
             [new PasswordAuthProvider(databaseContext, NullLogger<PasswordAuthProvider>.Instance)],
+            Substitute.For<IUserEventPublisher>(),
             JwtOptions,
+            Options.Create(new EmailVerificationConfiguration()),
             NullLogger<AuthenticationService>.Instance);
 
     private static async Task<User> SeedUserAsync(IdentityDbContext databaseContext, UserRole role)

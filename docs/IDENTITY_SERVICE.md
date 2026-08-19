@@ -82,14 +82,26 @@ Migrating existing users into a default organization's `Membership` row is **40.
 not this block's — the schema is intentionally nullable/backfillable (`InvitedBy`) to leave
 that migration room without a follow-up schema change.
 
-## Closed registration and invites (Phase 40.7)
+## Registration and invites (Phase 40.7, revised by 40.37)
 
-`POST /auth/register` **is deleted** — not hidden, not flagged, not role-gated. There is no
-route in this service that creates an account on request. `POST /auth/google` is a login
-method only: an unknown Google identity, and a known one whose account has no *active*
-membership, both get `401` with one identical message (a distinguishable answer would let an
-outsider probe which addresses belong to a customer). See
-[TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.1.
+> 40.7 deleted `POST /auth/register` outright. **40.37 brought it back** on a narrower rule — see
+> [TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.1a. What follows describes the current behaviour.
+
+`POST /auth/register` creates a `User` and **no** `Membership`, and no branch in it can create one.
+An account is therefore not access to anything: with no active membership the issued JWT carries no
+`org_id`, so every tenant-scoped query sees no organization and the client shows the
+"waiting for an invitation" screen. `POST /auth/google` provisions on identical terms rather than
+rejecting an unknown identity; its one remaining `401` is an address already held by an
+*unverified* local row, which can be neither signed into nor duplicated.
+
+Sign-up answers `409` for a taken address — the one place in this service where an evasive answer is
+impossible, since a form that will not admit the address is taken cannot create the account either.
+The evasive wording on `/auth/login`, `/auth/login/start` and `/auth/google` stays: those routes can
+leak which *organization* an address belongs to, which sign-up never does.
+
+Email verification is the `EmailVerification:Enabled` flag (`EMAIL_VERIFICATION_ENABLED`), off by
+default; it gates registration and login together — see
+[EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
 
 `Invite (Id, OrganizationId, Email, Role, TokenHash, ExpiresAt, AcceptedAt, RevokedAt,
 InvitedBy, CreatedAt)` is the service's **first tenant-scoped table**: it implements

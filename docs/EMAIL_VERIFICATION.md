@@ -1,20 +1,34 @@
 # Email Verification by Code
 
-> ⚠️ **SUPERSEDED BY THE INVITE FLOW (Phase 40.7, 2026-08-15).**
-> There is no public registration any more — `POST /auth/register` is deleted — so nothing
-> reaches this flow on the normal path. **The invite replaces email verification:** possession
-> of the single-use invite token already proves control of the address, so
-> `POST /auth/invites/{token}/accept` creates the user with `IsEmailVerified = true` and sends
-> no code at all. See [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.3 and the
-> "Invites & memberships" section of [API_CONTRACTS.md](API_CONTRACTS.md).
+> ⚠️ **BEHIND A FLAG, AND THE FLAG IS OFF (Phase 40.37, 2026-08-20).**
 >
-> The code endpoints (`/auth/verify-email`, `/auth/resend-code`), the
-> `EmailVerificationCodes` table and `EmailVerificationService` all remain in the codebase and
-> still work — they cover accounts created before invites existed, and any future flow that
-> needs to re-prove an address (an email change, say). `POST /auth/login` does not block
-> unverified accounts.
+> `EmailVerification:Enabled` — environment variable `EMAIL_VERIFICATION_ENABLED`, default
+> **`false`** — is the single switch for this whole mechanism, and it governs both ends of the rule
+> so they cannot drift apart:
 >
-> Everything below describes that retained mechanism.
+> | | `false` (today) | `true` |
+> |---|---|---|
+> | `POST /auth/register` | creates the account with `IsEmailVerified = true`, returns `200` + a session | creates it unverified, mails a code, returns `202 {email, requiresEmailVerification}` and **no** session |
+> | `POST /auth/login` | admits unverified accounts | `403` (`EmailNotVerifiedException`) until the code is entered |
+>
+> Off is the deliberate default. In local dev MailerSend is unconfigured and a code only reaches the
+> service log (see the fallback below), so a mandatory code makes sign-up untestable without reading
+> container output. It also buys little: a self-registered account holds no membership and can reach
+> nothing until an organization invites that exact address — and accepting that invite proves the
+> mailbox anyway.
+>
+> **The invite still replaces verification outright,** regardless of the flag: possession of the
+> single-use token already proves control of the address, so
+> `POST /auth/invites/{token}/accept` creates the user with `IsEmailVerified = true` and sends no
+> code. See [TENANCY/TENANCY.md](TENANCY/TENANCY.md) sections 4.1a and 4.3.
+>
+> Google sign-in is likewise always auto-verified — Google has proven the address — and since 40.37
+> it provisions a new account rather than rejecting an unknown one.
+>
+> The code endpoints (`/auth/verify-email`, `/auth/resend-code`), the `EmailVerificationCodes`
+> table and `EmailVerificationService` all remain live and are what the flag turns on.
+>
+> Everything below describes that mechanism.
 
 Implemented 2026-06-15. Confirming ownership of an address with a short numeric code.
 
@@ -22,7 +36,7 @@ Implemented 2026-06-15. Confirming ownership of an address with a short numeric 
 > (`/auth/*` flipped at the gateway), unchanged. The `EmailVerificationCodes` table moved to
 > the Identity service's own `identity-db`. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
 
-## How an address is proven today (40.7)
+## How an address is proven today (40.7, revised by 40.37)
 
 1. An `OrgAdmin` creates an invite (`POST /invites`). Only the SHA-256 hash of the single-use
    token is stored; the raw token goes out in the email through the same MailerSend transport
@@ -32,9 +46,12 @@ Implemented 2026-06-15. Confirming ownership of an address with a short numeric 
    response is a normal `AuthTokenResponseDto` — **no code is ever generated or sent**. The
    token arrived in the invitee's mailbox, which is exactly what a verification code exists to
    demonstrate.
-4. Google sign-in (`/auth/google`) is auto-verified — Google has already proven ownership — but
-   since 40.7 it only works for an address that already has an account *and* an active
-   membership. It never creates one.
+4. Google sign-in (`/auth/google`) is auto-verified — Google has already proven ownership. Since
+   40.37 it also *creates* the account when the identity is unknown, on the same terms as
+   `/auth/register`: no membership, no organization.
+5. `POST /auth/register` proves nothing while `EMAIL_VERIFICATION_ENABLED` is `false`, which is the
+   default — it marks the address verified and signs in. Turning the flag on makes it the one path
+   that does use the code flow below.
 
 ## Retained code flow
 

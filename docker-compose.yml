@@ -52,6 +52,7 @@ services:
       - Jwt__AccessTokenLifetimeMinutes=${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-15}
       - Jwt__RefreshTokenLifetimeDays=${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-30}
       - Jwt__DemoTokenLifetimeHours=${JWT_DEMO_TOKEN_LIFETIME_HOURS:-2}
+      - EmailVerification__Enabled=${EMAIL_VERIFICATION_ENABLED:-false}
       - EmailVerification__CodeLifetimeMinutes=${EMAIL_VERIFICATION_CODE_LIFETIME_MINUTES:-10}
       - EmailVerification__MaximumVerificationAttempts=${EMAIL_VERIFICATION_MAX_ATTEMPTS:-5}
       - EmailVerification__ResendCooldownSeconds=${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:-60}

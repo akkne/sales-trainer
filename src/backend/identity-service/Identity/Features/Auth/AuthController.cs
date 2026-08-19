@@ -101,8 +101,54 @@ public sealed class AuthController(
     }
 
     /// <summary>
-    /// Consumes a single-use invite token and signs the invitee in. This is the only way into the
-    /// product now that <c>POST /auth/register</c> is gone (docs/TENANCY/TENANCY.md §4.1).
+    /// Public sign-up (Phase 40.37, docs/TENANCY/TENANCY.md §4.1a). Creates an account with no
+    /// membership and signs it in; the client then shows the "waiting for an invitation" screen.
+    ///
+    /// <para>
+    /// Anonymous, and deliberately not <c>[TenantScoped]</c> for the same reason invite acceptance
+    /// is not: the caller holds no token and no <c>X-Organization-Id</c> header, and here there is
+    /// no organization to scope to at all — that is the point of the route.
+    /// </para>
+    ///
+    /// <para>
+    /// Two success shapes, decided by <c>EmailVerification:Enabled</c>: <c>200</c> with a session
+    /// when the address needs no proving, and <c>202</c> naming the address when a code has just
+    /// been mailed and no session exists yet.
+    /// </para>
+    /// </summary>
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(
+        [FromBody] RegisterRequestDto registerRequest,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var registrationResult = await authenticationService.RegisterWithEmailAsync(
+                registerRequest.Email,
+                registerRequest.Password,
+                registerRequest.DisplayName,
+                cancellationToken);
+
+            if (registrationResult.TokenPair is not { } issuedTokenPair)
+            {
+                return Accepted(new RegistrationPendingVerificationDto(
+                    registrationResult.Email, RequiresEmailVerification: true));
+            }
+
+            return OkWithRefreshTokenCookie(issuedTokenPair);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { message = exception.Message });
+        }
+    }
+
+    /// <summary>
+    /// Consumes a single-use invite token and signs the invitee in. Since 40.37 it is no longer the
+    /// only way into the product, but it remains the only way into an <em>organization</em>: sign-up
+    /// creates an identity, an invite is what attaches it to a company
+    /// (docs/TENANCY/TENANCY.md §4.1a).
     ///
     /// <para>
     /// Anonymous and deliberately not <c>[TenantScoped]</c>: the caller has no organization yet, so
