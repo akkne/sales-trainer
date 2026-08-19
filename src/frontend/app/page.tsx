@@ -57,9 +57,14 @@ export default function LandingPage() {
             <div className="app-backdrop" />
             <header className="land-top container">
                 <Wordmark size={28} />
-                <Link href="/login" className="btn btn-ghost">
-                    Войти
-                </Link>
+                <div className="row gap-2">
+                    <Link href="/login" className="btn btn-ghost">
+                        Войти
+                    </Link>
+                    <Link href="/demo" className="btn btn-primary btn-sm">
+                        Запросить демо
+                    </Link>
+                </div>
             </header>
 
             <div className="container land-hero">
@@ -91,9 +96,12 @@ export default function LandingPage() {
                 </p>
 
                 <div className="row gap-3 center wrap">
-                    <Link href="/login" className="btn btn-dark btn-lg">
-                        Войти
+                    <Link href="/demo" className="btn btn-primary btn-lg">
+                        Запросить демо
                         <Icon name="arrow-right" size={18} />
+                    </Link>
+                    <Link href="/login" className="btn btn-outline btn-lg">
+                        Войти
                     </Link>
                 </div>
 
@@ -111,6 +119,19 @@ export default function LandingPage() {
                             </p>
                         </div>
                     ))}
+                </div>
+
+                <div className="card card-pad land-cta-band">
+                    <h2 className="h4" style={{ fontSize: 22, margin: "0 0 8px" }}>
+                        Готовы показать команде, на что способен Sellevate?
+                    </h2>
+                    <p className="small" style={{ marginBottom: 20 }}>
+                        Оставьте заявку — подберём удобное время и разберём ваши сценарии продаж.
+                    </p>
+                    <Link href="/demo" className="btn btn-primary btn-lg">
+                        Запросить демо
+                        <Icon name="arrow-right" size={18} />
+                    </Link>
                 </div>
             </div>
         </div>

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sellevate.Organization.Infrastructure.Data;
@@ -11,9 +12,11 @@ using Sellevate.Organization.Infrastructure.Data;
 namespace Sellevate.Organization.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(OrganizationDbContext))]
-    partial class OrganizationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819223716_AddDemoRequests")]
+    partial class AddDemoRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -50,9 +53,6 @@ namespace Sellevate.Organization.Infrastructure.Data.Migrations
                     b.Property<string>("JobTitle")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
-
-                    b.Property<DateTime?>("MarketingConsentGivenAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(40)

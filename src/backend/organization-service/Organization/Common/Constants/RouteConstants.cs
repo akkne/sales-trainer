@@ -25,4 +25,14 @@ public static class RouteConstants
 
     /// <summary>Relative to <see cref="OrganizationProfileBase"/>: commits a reviewed draft.</summary>
     public const string OrganizationProfileDraftApply = "draft/apply";
+
+    /// <summary>The public, anonymous "Request a demo" lead-capture route.</summary>
+    public const string DemoRequestsBase = "demo-requests";
+
+    /// <summary>The platform-staff list of submitted demo requests.</summary>
+    public const string AdminDemoRequestsBase = "admin/demo-requests";
+
+    /// <summary>Relative to <see cref="AdminDemoRequestsBase"/>: records what happened after a lead
+    /// was contacted.</summary>
+    public const string AdminDemoRequestStatus = "{id:guid}/status";
 }

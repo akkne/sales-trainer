@@ -51,6 +51,7 @@ Double underscore maps to a section: `YandexTts__ApiKey` → `YandexTts:ApiKey`.
 | `DEEPGRAM_API_KEY` | backend | `Deepgram:ApiKey` |
 | `YANDEX_TTS_API_KEY` | backend | `YandexTts:ApiKey` |
 | `MAILERSEND_API_TOKEN/FROM_EMAIL/FROM_NAME` | backend | `MailerSend:*` |
+| `DEMO_REQUESTS_NOTIFICATION_EMAIL` | organization-service | `DemoRequests:NotificationEmail` |
 | `GRAFANA_ADMIN_USER/PASSWORD` | grafana | `GF_SECURITY_ADMIN_*` |
 
 ### Two Postgres connections, one per privilege level
@@ -75,6 +76,20 @@ the next deploy that carried a migration. Rollout procedure:
 Non-secret email-verification tuning (`EmailVerification:CodeLength`, `CodeLifetimeMinutes`,
 `MaximumVerificationAttempts`, `ResendCooldownSeconds`) lives in `appsettings.json`. See
 [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md) and [INTEGRATIONS.md](INTEGRATIONS.md#mailersend-transactional-email).
+
+Non-secret demo-request tuning (`DemoRequests:NotificationRecipientName`,
+`SubmissionCooldownSeconds`) likewise lives in `organization-service`'s `appsettings.json`. Only
+`NotificationEmail` — the internal sales inbox a submission is mailed to — is environment-specific
+enough to be `INJECTED_FROM_ENV` and come from the root `.env`.
+
+**Known gap:** `organization-service` reuses the shared `MailerSend:*` section (like every other
+service that sends transactional email) and its own `DemoRequests` section, both present in its
+`appsettings.json` with `INJECTED_FROM_ENV` placeholders, but `docker-compose.yml` does not yet pass
+`MailerSend__ApiToken/FromEmail/FromName` or `DemoRequests__NotificationEmail` into the `organization`
+container's `environment:` block the way it does for identity-service and notification-service. Until
+that block is updated, demo-request notifications no-op (logged as unconfigured) in every deployed
+environment, exactly like any other service with an unset MailerSend token — leads are still
+persisted, only the email is skipped.
 
 ## Company service (Phase 39)
 

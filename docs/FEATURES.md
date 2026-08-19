@@ -49,6 +49,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
 | [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
 | [Custom Scenario](CUSTOM_SCENARIO.md) | **Shipped** — user-authored practice scenarios on «Практика»: compose dialog, LLM sales-relevance gate with a Redis verdict cache, prompt fencing, hidden seeded `custom-scenario` mode. Tests: [TESTING/CUSTOM_SCENARIO.md](TESTING/CUSTOM_SCENARIO.md) |
+| [Demo Request](DEMO_REQUEST.md) | **Shipped** — the landing page's lead capture: «Запросить демо» → `/demo` form → «Отлично, мы с вами свяжемся». Anonymous `POST /demo-requests` in organization-service (a lead precedes both user and tenant, so the entity is not `ITenantScoped`), honeypot + per-email cooldown instead of a CAPTCHA, one email to a fixed internal inbox and deliberately none to the submitter, `RequirePlatformAdministrator` list and status endpoints. Tests: [TESTING/DEMO_REQUEST.md](TESTING/DEMO_REQUEST.md) |
 
 ## Multi-tenancy (Phase 40 complete — Stages A–F built, 40.20/40.30 wait on the owner, 40.35/40.36 skipped)
 

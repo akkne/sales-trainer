@@ -2315,6 +2315,49 @@ organization's AI coach its reps into the exact promises compliance forbade. Ver
 `POST …/draft/apply` publishes `organization.profile.updated` like every other save, so the 40.19
 replicas learn about a promoted draft the same way they learn about a form submission.
 
+### Demo requests (lead capture — NOT tenant-scoped)
+
+> Owned by **organization-service**, alongside the tenant registry rather than in identity-service:
+> a lead has no user, no organization and no membership, so it cannot be `ITenantScoped` and its
+> bounded context is "prospective tenant", not "user". Rationale and the anti-spam design:
+> [DEMO_REQUEST.md](DEMO_REQUEST.md).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /demo-requests `[public]` | `CreateDemoRequestRequestDto` | `202 DemoRequestAcceptedDto`, `400` validation, `429` `{message, retryAfterSeconds}` + `Retry-After` |
+| GET | /admin/demo-requests `[RequirePlatformAdmin]` | — | `DemoRequestDto[]`, newest first |
+| PATCH | /admin/demo-requests/{id}/status `[RequirePlatformAdmin]` | `{status}` | `DemoRequestDto` or `404` |
+
+`CreateDemoRequestRequestDto`: `{fullName, workEmail, phone?, companyName, jobTitle?, salesTeamSize, comment?, consentGiven, marketingConsentGiven, website?}`
+`DemoRequestAcceptedDto`: `{id, submittedAt}`
+`DemoRequestDto`: `{id, fullName, workEmail, phone?, companyName, jobTitle?, salesTeamSize, comment?, status, consentGivenAt, marketingConsentGivenAt?, createdAt, updatedAt}`
+
+`salesTeamSize` is `UpToFive | SixToTwenty | TwentyOneToFifty | FiftyOneToTwoHundred | MoreThanTwoHundred`
+and `status` is `New | Contacted | Qualified | Declined` — both are enum **names** on the wire and are
+stored as those names, so the Russian labels live only in the frontend (docs/LOCALIZATION.md).
+
+**`salesTeamSize` is required and nullable in the DTO on purpose.** `[Required]` on a non-nullable
+enum has nothing to reject, so an omitted field would bind to the zero member and record `UpToFive` as
+though somebody had chosen it. Omitting it is a `400`.
+
+**Two consents, not one.** `consentGiven` (data processing) is required and must be `true`;
+`marketingConsentGiven` is a separate optional field, and `false` is a perfectly valid answer.
+152-ФЗ/GDPR treat them as distinct purposes, and one bundled checkbox would force a visitor to accept
+marketing email to get a demo. Both are stored as timestamps (`consentGivenAt`,
+`marketingConsentGivenAt`), never as booleans — a boolean records that a box was ticked, a timestamp
+records when.
+
+**`website` is a honeypot.** It is a hidden field no human fills. A non-empty value persists nothing
+and sends no email, but still answers `202` with a freshly minted id — the response is deliberately
+indistinguishable from a real submission, because a bot that can tell the difference simply stops
+filling the field.
+
+`429` is a **per-email** cooldown (`DemoRequests:SubmissionCooldownSeconds`, default 300), not a
+general rate limit — there is no rate-limiting middleware in this backend and none was added for one
+marketing form. The endpoint **never emails the submitter's address**, only a fixed configured
+internal inbox; a public unauthenticated route that mails arbitrary addresses is a relay. An
+unconfigured inbox or a MailerSend failure is logged and still returns `202` with the lead persisted.
+
 ---
 
 ## Admin content pipeline (Phases 40.27–40.28, learning-service)

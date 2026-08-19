@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Sellevate.Organization.Common.Constants;
+using Sellevate.Organization.Features.DemoRequests.Endpoints;
 
 namespace Sellevate.Organization.Tests.Unit;
 
@@ -131,5 +132,33 @@ public sealed class AuthorizationPolicyContractTests
         {
             (await IsAllowedAsync(ordinaryUser, policyName)).Should().BeFalse(policyName);
         }
+    }
+
+    /// <summary>
+    /// The demo-request lead-capture endpoint is the one route in this service meant to be reached by
+    /// an anonymous visitor, so a regression here would either lock a visitor out of the public form or
+    /// silently open the admin surface next to it.
+    /// </summary>
+    [Test]
+    public void The_public_demo_request_endpoint_carries_AllowAnonymous()
+    {
+        typeof(DemoRequestController).GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true)
+            .Should().NotBeEmpty("the public demo-request form has no account to authenticate with");
+    }
+
+    /// <summary>
+    /// Both admin demo-request actions must carry the platform-administrator gate: this is where a
+    /// visitor's contact details become readable, and nothing about the controller name would catch a
+    /// missing or downgraded policy at compile time.
+    /// </summary>
+    [Test]
+    public void The_admin_demo_request_controller_carries_RequirePlatformAdministrator()
+    {
+        var authorizeAttribute = typeof(AdminDemoRequestController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Should().ContainSingle().Subject;
+
+        authorizeAttribute.Policy.Should().Be(AuthorizationPolicies.RequirePlatformAdministrator);
     }
 }

@@ -493,6 +493,15 @@ services:
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
       - Kafka__BootstrapServers=kafka:29092
+      # "Request a demo" leads are mailed to an internal sales inbox through MailerSend. All four
+      # are optional by design: with any of them unset the sender logs that it is unconfigured and
+      # the lead is still persisted, because losing a lead to a mail misconfiguration is worse than
+      # nobody being paged about it. The submitter's own address is never mailed — see
+      # docs/DEMO_REQUEST.md.
+      - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
+      - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
+      - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
+      - DemoRequests__NotificationEmail=${DEMO_REQUESTS_NOTIFICATION_EMAIL}
     depends_on:
       postgres:
         condition: service_healthy

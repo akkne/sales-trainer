@@ -9,6 +9,7 @@ using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Organization.Common.Constants;
+using Sellevate.Organization.Features.DemoRequests;
 using Sellevate.Organization.Features.Organizations;
 using Sellevate.Organization.Infrastructure.Data;
 using Serilog;
@@ -46,6 +47,8 @@ builder.Services.AddDbContext<OrganizationDbContext>((serviceProvider, databaseO
             serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddOrganizationFeatureServices();
+builder.Services.AddSellevateEmail(builder.Configuration);
+builder.Services.AddDemoRequestFeatureServices(builder.Configuration);
 
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddHostedService<KafkaTopicProvisioner>();

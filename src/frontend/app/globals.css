@@ -3275,6 +3275,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .land-title { font-size: clamp(40px, 7vw, 76px); margin: 22px 0; line-height: 1.02; }
 .land-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 64px; text-align: left; }
 .land-feat { display: flex; flex-direction: column; }
+.land-cta-band { max-width: 640px; margin: 64px auto 0; text-align: center; padding: 40px 36px; }
 /* ── Auth shell ── */
 .auth { min-height: 100vh; min-height: 100dvh; background: var(--surface-2); display: flex; align-items: center; justify-content: center; padding: 24px 20px; position: relative; }
 .auth-card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 40px 36px; position: relative; z-index: 2; box-shadow: 0 2px 8px rgba(20,20,40,.06), 0 1px 2px rgba(20,20,40,.04); }
@@ -3529,6 +3530,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .land-top { padding: 16px; }
   .land-hero { padding: 40px 0 50px; }
   .land-features { margin-top: 36px; }
+  .land-cta-band { margin-top: 36px; padding: 28px 20px; }
 
   /* guidebook thread paddings */
   .gb-top { padding: 18px; gap: 14px; }
@@ -4067,4 +4069,124 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 
   /* persona chip delete: comfortable touch target */
   .co-persona-chip-delete { width: 28px; height: 28px; }
+}
+
+/* ── Demo request page ── */
+.demo-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  background: var(--surface-2);
+  padding: 48px 0 72px;
+}
+.demo-shell {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+}
+@media (min-width: 900px) {
+  .demo-shell {
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: 64px;
+    align-items: start;
+  }
+}
+
+.demo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 28px;
+  transition: color var(--transition);
+}
+.demo-back:hover { color: var(--ink); }
+
+.demo-value-wordmark { margin-bottom: 28px; }
+
+.demo-heading {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink-heading);
+  font-size: clamp(28px, 3.6vw, 40px);
+  margin: 0 0 14px;
+}
+.demo-lead {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  font-weight: 500;
+  margin: 0 0 36px;
+  max-width: 440px;
+}
+
+.demo-steps { display: flex; flex-direction: column; gap: 20px; }
+.demo-step { display: flex; align-items: flex-start; gap: 14px; }
+
+.demo-form-card { padding: 36px 32px; }
+
+.demo-form { display: flex; flex-direction: column; }
+.demo-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; display: block; }
+.demo-form .demo-label:not(:first-child) { margin-top: 16px; }
+
+/* Honeypot — off-screen, not display:none, so automated fillers are more likely to reach it. */
+.demo-honeypot {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.demo-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.demo-checkbox {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.demo-form .auth-error { margin-top: 16px; }
+.demo-form > .btn { margin-top: 22px; }
+
+.demo-success { text-align: center; }
+.demo-success-icon { width: 64px; height: 64px; margin: 0 auto 20px; }
+.demo-success-heading {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  color: var(--ink-heading);
+  margin: 0 0 10px;
+}
+.demo-success-text { margin: 0 0 28px; line-height: 1.55; }
+
+/* ── Demo request page — responsive ── */
+@media (max-width: 767.98px) {
+  .demo-page { padding: 32px 0 56px; }
+  .demo-shell { gap: 32px; padding: 0 16px; }
+  .demo-form-card { padding: 24px 20px; }
+  .demo-lead { max-width: 100%; }
 }

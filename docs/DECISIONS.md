@@ -5437,3 +5437,74 @@ adding and removing users is superadmin-exclusive.
 - **Chat messages are embedded in the conversation document.** `GetMessagesAsync` loads the whole
   conversation and pages in memory. A `// TODO SO3` proposed moving messages to their own collection;
   the TODO is gone, the intent is recorded here.
+
+---
+
+## 2026-08-20 — Demo request: a public write endpoint, and the four decisions it forced
+
+Feature: [DEMO_REQUEST.md](DEMO_REQUEST.md). The landing page needed a way for a company that has
+no account to ask for a demo. That is the platform's first anonymous endpoint that *writes* — every
+other `[AllowAnonymous]` route either issues a token for an address it already knows or reads
+something public — and most of what follows is a consequence of that one fact.
+
+### The lead lives in organization-service, next to the tenant registry
+
+A demo request has no user, no organization and no membership: it precedes all three. That
+disqualifies every tenant-scoped service outright, because the entity cannot satisfy `ITenantScoped`
+— there is no organization to scope it to.
+
+The alternative was identity-service, which already hosts the anonymous pre-auth routes and already
+wires `IEmailSender`, so it was the cheaper landing spot. It was rejected on bounded context:
+identity answers "who is this user", and a marketing lead is not a user and may never become one.
+`Organizations` is already the one table in the platform that is deliberately un-scoped because it
+*is* the registry (TENANCY.md §1.2, §1.9); a lead sits one step earlier on that same axis, so
+`DemoRequests` sits beside it with the same absence of a query filter and the same
+`RequirePlatformAdministrator` gate on reads.
+
+### No confirmation email to the submitter — the abuse case beats the courtesy
+
+The obvious design sends the visitor a "we got your request" email. We deliberately do not.
+
+A public unauthenticated form that emails whatever address was typed into it is a mail relay
+pointed at arbitrary third parties, and the cost of abusing it falls entirely on the platform's
+sending reputation rather than on the abuser. One notification goes to a fixed configured internal
+address; the visitor is told on screen instead, which is what the in-place success panel is for.
+
+This also decided the failure mode. Sending is wrapped: an unconfigured `NotificationEmail`, or a
+MailerSend outage, logs and returns `202` with the lead still persisted. A lead saved with nobody
+notified is recoverable from the admin list. A lead refused because the mail provider was down is
+gone, and the visitor will not type it twice.
+
+### Honeypot plus a per-email cooldown, and explicitly no CAPTCHA
+
+There is no rate-limiting middleware anywhere in this backend — `Microsoft.AspNetCore.RateLimiting`
+is not wired up in any of the nine services. Introducing a platform-wide throttling story for one
+low-traffic marketing form would be the wrong place to introduce it.
+
+So: a hidden `website` field that persists nothing and sends nothing when filled but still answers a
+normal `202` with a minted id — the response has to be indistinguishable, or a bot simply learns to
+skip the field — plus a per-email cooldown returning `429` with `Retry-After`, modelled on
+identity-service's resend-code cooldown.
+
+This is honest about its reach. Keyed on email, it stops the accidental double-submit and the lazy
+script; it does not stop a determined attacker cycling addresses. The next step if leads start
+arriving as junk is per-IP limiting at the gateway, not more fields on the form.
+
+### Formal «вы» on this flow, against the product's own house style
+
+LOCALIZATION.md puts the learner UI in the informal «ты» and confines «вы» to the org panel. The
+demo flow uses «вы» too: it addresses a company decision-maker who has not bought anything, which is
+the org panel's register, not the training product's. The tone flips to «ты» at the point somebody is
+actually inside the product training — which is the same boundary the org panel already draws.
+
+### Deferred to the owner
+
+- **Phone is optional.** Both Russian sales-training vendors whose live forms we could actually read
+  (Talent Rocks, Эквио) require it, and CIS B2B sales is phone-first, so requiring it is defensible.
+  We left it optional because a required phone number costs submissions from buyers who are willing
+  to start over email, and this form's job right now is volume. One `[Required]` attribute and one
+  `required` prop reverses it.
+- **Free-domain email is accepted.** Blocking gmail/mail.ru/yandex.ru raises lead quality in the US
+  playbook, but in Russia those are routinely the real working addresses of SMBs and sole traders, so
+  a hard block would refuse legitimate leads. If filtering is ever wanted, a soft warning beside the
+  field is the shape to use, not a rejection.

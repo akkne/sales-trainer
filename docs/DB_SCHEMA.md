@@ -1627,6 +1627,8 @@ One EF migration history per database — there is no shared one, and there has 
 |---|---|---|
 | `InitialOrganizationSchema` | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
 | `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+| `AddDemoRequests` | 2026-08-19 | `DemoRequests` — landing-page lead capture, written by an anonymous endpoint. Deliberately **no** `EnableTenantRls` call and no `OrganizationId`: a lead precedes any tenant, so there is nothing to scope it to, and platform-admin authorization replaces RLS here. Non-unique index on `WorkEmail` (the cooldown lookup — one company may legitimately ask twice over time) and a descending index on `CreatedAt` (the admin list order). |
+| `AddDemoRequestMarketingConsent` | 2026-08-19 | Additive `AddColumn` only: nullable `MarketingConsentGivenAt` on `DemoRequests`, splitting marketing consent off the required data-processing consent because 152-ФЗ/GDPR treat them as separate purposes. Written as a second migration rather than an edit to `AddDemoRequests` so the sequence stays an honest record of what happened. |
 
 
 ---
@@ -1782,6 +1784,42 @@ and [TENANCY.md](TENANCY/TENANCY.md).
 pattern as `Companies.Status`). This table is the tenant registry itself, so it deliberately does
 **not** implement `ITenantScoped` and is never wrapped in `EnableTenantRls` — see
 [TENANCY.md §1.2](TENANCY/TENANCY.md) and `docs/DECISIONS.md`.
+
+### Table: `DemoRequests` (landing-page leads — NOT tenant-scoped, no RLS)
+
+| Column                    | Type          | Constraints                          |
+|---------------------------|---------------|--------------------------------------|
+| `Id`                      | uuid          | PK, minted in code                   |
+| `FullName`                | varchar(120)  | NOT NULL                             |
+| `WorkEmail`               | varchar(200)  | NOT NULL, stored trimmed + lowercased|
+| `Phone`                   | varchar(40)   | NULL                                 |
+| `CompanyName`             | varchar(200)  | NOT NULL                             |
+| `JobTitle`                | varchar(120)  | NULL                                 |
+| `SalesTeamSize`           | varchar(32)   | NOT NULL                             |
+| `Comment`                 | varchar(2000) | NULL                                 |
+| `Status`                  | varchar(32)   | NOT NULL, DEFAULT 'New'              |
+| `ConsentGivenAt`          | timestamptz   | NOT NULL                             |
+| `MarketingConsentGivenAt` | timestamptz   | NULL — null means not given          |
+| `CreatedAt`               | timestamptz   | NOT NULL                             |
+| `UpdatedAt`               | timestamptz   | NOT NULL                             |
+
+**Indexes:** `IX_DemoRequests_WorkEmail` (non-unique — the per-email cooldown lookup, and one company
+may legitimately ask twice over time), `IX_DemoRequests_CreatedAt` (descending — the admin list order)
+
+`SalesTeamSize` is `UpToFive | SixToTwenty | TwentyOneToFifty | FiftyOneToTwoHundred |
+MoreThanTwoHundred` and `Status` is `New | Contacted | Qualified | Declined`, both stored as their
+string names (`HasConversion<string>()`, same pattern as `Organizations.Status`).
+
+Not `ITenantScoped` and never wrapped in `EnableTenantRls`, for a **different reason** than
+`Organizations` above: the registry is un-scoped because it *is* the tenant list, whereas a demo
+request is un-scoped because it precedes any tenant existing at all — the submitter has no user, no
+organization and no membership. Reads are gated by `RequirePlatformAdministrator` instead of by RLS.
+
+Both consents are timestamps rather than booleans on purpose: a boolean records that a box was ticked,
+a timestamp records when, which is the part that matters if it is ever asked about. `WorkEmail` is
+**not** unique — the cooldown is enforced in `DemoRequestService` against `CreatedAt`, deliberately
+not by a constraint, because a company coming back six months later is a new lead, not a conflict.
+Feature: [DEMO_REQUEST.md](DEMO_REQUEST.md).
 
 ### Table: `OrganizationProfiles` (tenant-scoped — RLS enabled)
 
