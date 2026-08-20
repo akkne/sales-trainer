@@ -6,6 +6,14 @@ import { apiClient } from "@/shared/api/api-client";
 
 const TEAM_SKILL_MAP_STALE_TIME_MILLISECONDS = 60_000;
 
+/**
+ * Same label other features fall back to for a person the directory has no name for
+ * (features/org-people/utils/format-people.ts, features/org-team/utils/team-roster.ts,
+ * features/org-dialogs/constants/dialog-review-dictionary.ts) — kept as its own local constant
+ * here too, matching how each of those features owns its copy rather than sharing one.
+ */
+const UNNAMED_MEMBER_LABEL = "Без имени";
+
 export interface TeamSkillMapCell {
     key: string;
     attemptCount: number;
@@ -33,7 +41,13 @@ export interface TeamSkillMapSkill {
 
 export interface TeamSkillMapMember {
     userId: string;
-    displayName: string;
+    /**
+     * Null for anybody without a row yet in identity-service's replicated `UserReplicas` table
+     * (ordinary replication lag, not an error) — see
+     * `TeamSkillMapMemberDto.DisplayName` on the backend. Never read this directly for display;
+     * go through `useTeamMemberNames`, which resolves it to `UNNAMED_MEMBER_LABEL`.
+     */
+    displayName: string | null;
     isActiveMember: boolean;
     attemptCount: number;
     accuracyPercent: number | null;
@@ -58,6 +72,7 @@ export interface TeamSkillMap {
 
 export interface TeamMemberName {
     userId: string;
+    /** Always a real string here — `useTeamMemberNames` has already resolved a missing name to `UNNAMED_MEMBER_LABEL`. */
     displayName: string;
     isActiveMember: boolean;
 }
@@ -97,7 +112,7 @@ export function useTeamMemberNames(windowDays?: number) {
         return members
             .map((member) => ({
                 userId: member.userId,
-                displayName: member.displayName,
+                displayName: member.displayName ?? UNNAMED_MEMBER_LABEL,
                 isActiveMember: member.isActiveMember,
             }))
             .sort((left, right) => {
