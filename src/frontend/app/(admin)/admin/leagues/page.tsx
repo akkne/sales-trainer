@@ -106,6 +106,13 @@ export default function AdminLeaguesPage() {
                 </div>
             </div>
 
+            {closeWeek.isError && (
+                <p className="-mt-3 mb-6 text-xs text-red-500" role="alert">
+                    Failed to close the week: {(closeWeek.error as Error).message}. Nothing was
+                    closed — the current week is still open, try again.
+                </p>
+            )}
+
             {showSettings && settingsForm && (
                 <div className="mb-6 p-4 border border-line rounded-xl bg-bg-2/50">
                     <h2 className="text-sm font-semibold text-ink mb-3">League settings</h2>
