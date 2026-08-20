@@ -5,6 +5,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Icon } from "@/shared/components/icon";
 import { Skeleton } from "@/shared/components/skeleton";
+import { ErrorState } from "@/shared/components/error-state";
 import {
     useTechniques,
     useTechniquesMeta,
@@ -130,8 +131,13 @@ export default function GuidebookPage() {
 
     const deferredSearch = useDeferredValue(searchInput);
 
-    const { data: meta } = useTechniquesMeta();
-    const { data: cards = [], isLoading } = useTechniques({
+    const { data: meta, isError: isMetaError, refetch: refetchMeta } = useTechniquesMeta();
+    const {
+        data: cards = [],
+        isLoading,
+        isError: isCardsError,
+        refetch: refetchCards,
+    } = useTechniques({
         skill: selectedSkill ?? undefined,
         search: deferredSearch || undefined,
         tags: activeTags,
@@ -170,10 +176,12 @@ export default function GuidebookPage() {
     // library-wide numbers from /techniques/meta rather than flashing 0 while the first
     // /techniques fetch is in flight.
     const isFiltered = selectedSkill !== null || deferredSearch.trim() !== "" || activeTags.length > 0;
-    const displayedTotalCount = isFiltered ? cards.length : meta?.totalCount ?? 0;
+    // E-8: a failed /techniques/meta must not read as "the library has 0 techniques" — that's
+    // indistinguishable from a real empty library, so it falls back to "—" instead of 0.
+    const displayedTotalCount = isFiltered ? cards.length : meta?.totalCount ?? (isMetaError ? null : 0);
     const displayedMasteredCount = isFiltered
         ? cards.filter((c) => c.masteryLevel >= MASTERED_THRESHOLD_LEVEL).length
-        : meta?.userCounts.mastered ?? 0;
+        : meta?.userCounts.mastered ?? (isMetaError ? null : 0);
 
     return (
         <div className={"page ref-page" + (selectedSlug ? " has-panel" : "")} style={{ display: "flex", overflow: "hidden" }}>
@@ -183,7 +191,7 @@ export default function GuidebookPage() {
             <div className="ref-header">
                 <h1 className="ref-title">Справочник техник</h1>
                 <p className="ref-subtitle">
-                    {displayedTotalCount} техник · освоено {displayedMasteredCount}
+                    {displayedTotalCount ?? "—"} техник · освоено {displayedMasteredCount ?? "—"}
                 </p>
 
                 <div className="ref-tools">
@@ -251,6 +259,14 @@ export default function GuidebookPage() {
                             <Skeleton key={i} height={160} rounded={15} />
                         ))}
                     </div>
+                ) : isCardsError ? (
+                    <ErrorState
+                        title="Не удалось загрузить техники"
+                        onRetry={() => {
+                            refetchCards();
+                            refetchMeta();
+                        }}
+                    />
                 ) : cards.length === 0 ? (
                     <div className="ref-empty">
                         <Icon name="search" size="lg" color="var(--ink-4)" />
