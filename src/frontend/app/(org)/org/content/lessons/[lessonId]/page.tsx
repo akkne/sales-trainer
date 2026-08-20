@@ -438,9 +438,9 @@ export default function OrganizationLessonEditorPage() {
                 onConfirm={() => {
                     const exercise = exerciseToDelete;
                     if (!exercise) return;
-                    void withDraft(() => deleteExercise.mutateAsync(exercise.id)).then(() =>
-                        setExerciseToDelete(null)
-                    );
+                    void withDraft(() => deleteExercise.mutateAsync(exercise.id)).then((deleted) => {
+                        if (deleted) setExerciseToDelete(null);
+                    });
                 }}
             />
 
