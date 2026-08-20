@@ -207,6 +207,38 @@ it cannot be used as a back door into a running customer's organization — see 
 `404` also covers "organization-service created it seconds ago and identity-service has not
 consumed `organization.created` yet"; the message says so and the operation is safe to retry.
 
+### Internal, un-gatewayed (`X-Internal-Service-Secret`) — demo-request provisioning
+
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /internal/organizations/{organizationId:guid}/bootstrap-admin | `{organizationName, organizationSlug, email, role?, actorUserId}` → `{inviteId, email, expiresAt}` |
+
+Called only by organization-service's `POST /admin/demo-requests/{id}/provision` (above). Not
+`[Authorize]` and not `[TenantScoped]` — the caller has no JWT and no membership in the
+organization it names by route segment, the same carve-out `PlatformAdminController` relies on for
+its request body (`scripts/tenancy-boundary-lint.py` allow-lists this controller by exact path for
+the route-segment case).
+
+In order: **upserts `OrganizationReplica` from the payload** — authoritative here, not fed from
+Kafka, because the caller *is* the registry owner and just committed the organization row in the
+same request that triggers this call, which would otherwise race its own Kafka consumer on every
+provision (unlike the `404` two paragraphs up, which tolerates exactly that race for a human
+retrying a form); **re-checks `actorUserId` is a platform `SuperAdmin`** in identity-db (`403` — the
+shared secret authorizes organization-service's channel, this check authorizes the actor, and
+skipping it would let a plain `Admin`'s provisioning click be laundered into a superadmin act);
+`409` if an active `TenancyAdmin`/`TenancySuperAdmin` membership already exists; **`200` returning
+the existing invite, not `409`, if one is already pending** — required for convergent retry, since
+`InviteService.CreateAsync` sends its email after commit and outside any try/catch, so a mail
+failure can leave a committed invite behind a thrown exception; otherwise mints through
+`IInviteService` with `InvitedBy = actorUserId`, role validated/narrowed by the same rule
+`PlatformAdminService.ResolveBootstrapRole` applies (`Manager`/unknown → `400`, omitted →
+`TenancySuperAdmin`), and the mail send is wrapped so a committed invite never surfaces as a `500`.
+Full narrative: docs/DEMO_REQUEST.md.
+
+Excluded from the gateway routing table and from `RouteParity.Tests`'
+`Every_public_controller_route_is_reachable_through_the_gateway` by the same `internal/` prefix
+convention every other service-to-service route here uses.
+
 ---
 
 ## Invites & memberships `[tenant-scoped]`
@@ -2335,10 +2367,17 @@ replicas learn about a promoted draft the same way they learn about a form submi
 | POST | /demo-requests `[public]` | `CreateDemoRequestRequestDto` | `202 DemoRequestAcceptedDto`, `400` validation, `429` `{message, retryAfterSeconds}` + `Retry-After` |
 | GET | /admin/demo-requests `[RequirePlatformAdmin]` | — | `DemoRequestDto[]`, newest first |
 | PATCH | /admin/demo-requests/{id}/status `[RequirePlatformAdmin]` | `{status}` | `DemoRequestDto` or `404` |
+| POST | /admin/demo-requests/{id}/provision `[RequireSuperAdmin]` | `ProvisionDemoRequestRequestDto` (all optional) | see "Provisioning" below |
 
 `CreateDemoRequestRequestDto`: `{fullName, workEmail, phone, companyName, jobTitle?, salesTeamSize, comment?, consentGiven, marketingConsentGiven, website?}`
 `DemoRequestAcceptedDto`: `{id, submittedAt}`
-`DemoRequestDto`: `{id, fullName, workEmail, phone, companyName, jobTitle?, salesTeamSize, comment?, status, consentGivenAt, marketingConsentGivenAt?, createdAt, updatedAt}`
+`DemoRequestDto`: `{id, fullName, workEmail, phone, companyName, jobTitle?, salesTeamSize, comment?, status, consentGivenAt, marketingConsentGivenAt?, createdAt, updatedAt, organizationId?, organizationName?, organizationSlug?, provisioningState, bootstrapInviteId?, bootstrapAdminEmail?, provisionedAt?}` — the trailing fields report provisioning progress (below); `provisioningState` is `NotProvisioned | OrganizationCreated | AdminInvited`.
+
+`organizationName` / `organizationSlug` are resolved by a join inside organization-service, which owns
+both the lead and the registry — they are null until the lead is provisioned. The **invite's expiry is
+deliberately not here**: `Invite` belongs to identity-service, so putting it on a list endpoint would
+mean either a cross-service read per row or a replica of another service's table. It is returned once,
+by the provision call that creates it.
 
 **`phone` is required** (owner decision, 2026-08-20 — was optional). Not needed to *reply* —
 `workEmail` already covers that — but required because the sales motion this form feeds is
@@ -2373,11 +2412,44 @@ marketing form.
 submitter" decision — docs/DECISIONS.md).** A `202` sends the unchanged internal notification plus
 a «Спасибо, что выбрали Sellevate» acknowledgement to `workEmail`. A `PATCH …/status` that actually
 transitions a lead into `Approved` — never a re-patch of an already-`Approved` lead — sends a
-«Заявку одобрили» notification to `workEmail` pointing at `{Frontend:Url}/register`. All three sends
-are wrapped and logged, never surfaced as an error: an unconfigured internal inbox or a MailerSend
+«Заявку одобрили» notification to `workEmail`. That email carries **no link** (changed alongside
+provisioning, below): it used to point at `{Frontend:Url}/register`, which stranded the recipient
+on the awaiting-organization gate, since `/register` creates an identity with no membership. It now
+only says the request is approved and a workspace invitation will follow. All three sends are
+wrapped and logged, never surfaced as an error: an unconfigured internal inbox or a MailerSend
 failure on any of them still returns the normal response with the lead (or status change) persisted.
 The honeypot and the per-email cooldown are now the only two things limiting how often this
 anonymous endpoint can be made to mail a third party.
+
+### Provisioning — `POST /admin/demo-requests/{id}/provision`
+
+`RequireSuperAdmin`, not `RequirePlatformAdmin` — provisioning creates a membership, which
+`AuthorizationPolicies` reserves for a superadmin at either the platform or the organization level.
+Creates the organization and sends the bootstrap invite to its first administrator, in one call.
+Full design and the write-order safety property: docs/DEMO_REQUEST.md, "How provisioning is
+actually written". Allowed from any status; sets `Status = Approved` itself.
+
+`ProvisionDemoRequestRequestDto`: `{organizationName?, slug?, adminEmail?, role?}` — every field
+optional, defaulting respectively to `CompanyName`, a normalized form of the name, `WorkEmail`, and
+`TenancySuperAdmin`.
+
+| Code | Body |
+|---|---|
+| `200` | `{demoRequestId, status, provisioningState, organization: {id, name, slug}, inviteId, inviteEmail, inviteExpiresAt, alreadyProvisioned}` |
+| `404` | lead not found |
+| `409` | `{code: "slug-taken", slug, message}` |
+| `409` | `{code: "organization-has-admin", organizationId}` |
+| `503` | `{code: "invite-failed", organizationId, provisioningState: "OrganizationCreated"}` |
+| `400` | `{message}` — bad role or bad email |
+
+**`200` — never a fresh `409` — on a lead that is already fully provisioned** (`alreadyProvisioned:
+true`), because this is a UI button and a double-click must not look like an error. On that path
+`inviteExpiresAt` is `null`: that timestamp is never stored on `DemoRequest`, and re-asking
+identity-service to answer a call defined to have no side effects would defeat the point of the
+fast path.
+
+`organization.created` is published exactly once across a first attempt, a retry after a `503`, and
+an already-provisioned call — see docs/DEMO_REQUEST.md for exactly which step publishes it.
 
 ---
 

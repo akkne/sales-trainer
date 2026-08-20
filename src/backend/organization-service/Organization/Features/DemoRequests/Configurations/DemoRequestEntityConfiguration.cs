@@ -10,9 +10,18 @@ namespace Sellevate.Organization.Features.DemoRequests.Configurations;
 /// still carry a freshly minted identifier either way. <c>WorkEmail</c> carries a non-unique index
 /// because the cooldown lookup reads by address, not because the address itself is unique: the same
 /// person may legitimately submit again once the cooldown has passed. <c>CreatedAt</c> carries a
-/// descending index because the admin list is always read newest-first. Both enums are stored as
-/// their name rather than their ordinal, so a value stays readable in the database after either enum
-/// is reordered in code.
+/// descending index because the admin list is always read newest-first. Every enum here — including
+/// <see cref="DemoRequestProvisioningState"/> — is stored as its name rather than its ordinal, so a
+/// value stays readable in the database after the enum is reordered in code.
+///
+/// <para>
+/// <b><c>OrganizationId</c> carries a partial unique index — unique only where the column is not
+/// null.</b> A plain unique index would reject every second and third <see langword="null"/> lead that
+/// has never been provisioned; the filtered form only ever has to reject two leads claiming the same
+/// organization, which is exactly the property provisioning needs and the only thing the
+/// application-level row lock in <c>DemoRequestProvisioningService</c> cannot guarantee on its own —
+/// the lock protects one demo-request row, not the organization it is about to point at.
+/// </para>
 /// </summary>
 public sealed class DemoRequestEntityConfiguration : IEntityTypeConfiguration<DemoRequest>
 {
@@ -73,5 +82,18 @@ public sealed class DemoRequestEntityConfiguration : IEntityTypeConfiguration<De
 
         builder.Property(demoRequest => demoRequest.UpdatedAt)
             .IsRequired();
+
+        builder.Property(demoRequest => demoRequest.ProvisioningState)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(DemoRequestProvisioningState.NotProvisioned);
+
+        builder.Property(demoRequest => demoRequest.BootstrapAdminEmail)
+            .HasMaxLength(200);
+
+        builder.HasIndex(demoRequest => demoRequest.OrganizationId)
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NOT NULL");
     }
 }

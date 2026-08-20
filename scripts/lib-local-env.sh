@@ -244,4 +244,11 @@ export_organization_env() {
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 
   export Jwt__Key="${JWT_KEY}"
+
+  # Demo-request provisioning's one call: bootstrapping an organization's first admin
+  # through identity-service. The committed default (http://identity:8080) is a Docker
+  # network hostname and does not resolve on the host. InternalAuth__ServiceSecret is left
+  # unset here on purpose, the same as every other local export function that calls an
+  # internal/* route — InternalServiceAuthFilter allows an unset secret in Development.
+  export IdentityService__BaseUrl="http://localhost:${LOCAL_IDENTITY_PORT}"
 }

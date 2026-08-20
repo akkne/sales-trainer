@@ -47,4 +47,28 @@ public sealed class DemoRequest
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>
+    /// The organization <c>POST …/provision</c> created for this lead, or <see langword="null"/>
+    /// before that ever ran. A partial unique index on this column (where not null) is what stops two
+    /// leads from ever ending up pointed at the same organization, including under a concurrent
+    /// double-click — see <c>DemoRequestEntityConfiguration</c>.
+    /// </summary>
+    public Guid? OrganizationId { get; set; }
+
+    public DemoRequestProvisioningState ProvisioningState { get; set; } = DemoRequestProvisioningState.NotProvisioned;
+
+    /// <summary>The invite <c>identity-service</c> minted for this lead's first administrator.</summary>
+    public Guid? BootstrapInviteId { get; set; }
+
+    /// <summary>
+    /// The address the bootstrap invite was actually sent to, resolved and fixed the moment the
+    /// organization is created. A later call to <c>/provision</c> for the same lead reuses this value
+    /// rather than re-reading the request's <c>adminEmail</c>, because by then the invite it names may
+    /// already exist — changing the target address on a retry would either strand the first address or
+    /// require silently revoking and reissuing an invite nobody asked to revoke.
+    /// </summary>
+    public string? BootstrapAdminEmail { get; set; }
+
+    public DateTime? ProvisionedAt { get; set; }
 }

@@ -5601,3 +5601,128 @@ actually grants — "Superadmin (can add and remove users)" / "Admin (cannot man
 than by the bare enum name, because that add/remove-users line is the *only* thing separating the
 two ranks (docs/ADMIN_PANEL.md) and a platform operator picking blind from `TenancyAdmin` /
 `TenancySuperAdmin` alone would have no way to know which one is right.
+
+---
+
+## 2026-08-20 — Demo-request provisioning: approve ≠ provision, and a narrow reversal of the 40.9
+## rejection of exactly this shape of call
+
+### Approve is not provision, and they must not become one endpoint
+
+`PATCH /admin/demo-requests/{id}/status` moving a lead to `Approved` and `POST
+/admin/demo-requests/{id}/provision` creating its organization and first administrator are two
+different acts with two different blast radii, and this block keeps them two different endpoints
+rather than folding provisioning into a status transition.
+
+The reason is exactly the one `AuthorizationPolicies` already states: "the only privilege that
+separates an admin from a superadmin is adding and removing users." Approving a lead is ordinary
+platform administration — a sales rep's judgment call that a company is worth onboarding — and
+stays `RequirePlatformAdmin`. Provisioning creates a membership, which is the one privilege this
+platform reserves for a superadmin at either rank, so it is gated `RequireSuperAdmin` and, per the
+brief this block implements, deliberately **not** built as one endpoint whose behavior branches on
+the caller's role. A single branching endpoint would mean a plain `Admin`'s request silently landing
+on the low-privilege branch, or — worse, if the branch condition were ever inverted by accident —
+silently landing on the one that mints a membership. Two endpoints make the privilege boundary a
+routing fact, not a runtime `if`, and it shows up as a fact in `scripts/tenancy-boundary-lint.py` and
+in `AdminDemoRequestControllerTests`' attribute-reflection tests rather than only in a code review.
+
+This is also why `DemoRequestService.ProvisionAsync` does not exist: provisioning got its own
+`IDemoRequestProvisioningService`/`DemoRequestProvisioningService` rather than a new case inside
+`DemoRequestService.UpdateStatusAsync`. Routing it through that method would have fired the
+plain-approval «Заявку одобрили» email on every provision — the exact email whose entire job is to
+be the notice sent when *nobody has provisioned yet* (see the next section). A lead can be
+provisioned directly from `New`, skipping `Approved` entirely; the service sets `Status = Approved`
+itself as a side effect of provisioning, once, rather than requiring the two calls to happen in a
+particular order.
+
+### The plain-approval email stops promising `/register`
+
+Until this block, `PATCH …/status` transitioning a lead to `Approved` sent «Заявку одобрили»
+pointing at `{Frontend:Url}/register`. That link was never actually usable: `/register` (Phase
+40.37) creates a global identity with **no membership**, so the recipient would land straight on the
+awaiting-organization gate having "registered" into nothing. The link that actually works —
+`/invite/{token}`, minted by `IInviteService`, 7-day expiry — only exists once a platform superadmin
+provisions the lead, a separate, possibly much later act. The email now says the request is approved
+and a workspace invitation will follow, without promising a link that may not exist for days.
+`DemoRequestNotificationComposer`'s dependency on `FrontendConfiguration` is now dead — left in
+place rather than torn out mid-feature, see docs/DONT_FORGET.md — and `ComposeApprovalNotification`
+is asserted, by a reflection test on `DemoRequestProvisioningService`'s constructor, to be
+structurally unreachable from the provisioning path.
+
+### Why a synchronous organization → identity call now qualifies, when 40.9 rejected exactly this
+
+The Phase 40.9 entry above records, verbatim: *"Alternative rejected: organization-service calling
+identity-service over HTTP to create the invite — that would put a synchronous cross-service call
+on a path that already has a database it can write to, and would need a second trust mechanism
+between the two services."* This block does precisely the rejected thing —
+`DemoRequestProvisioningService` calls `POST internal/organizations/{organizationId}/bootstrap-admin`
+over HTTP, with a second trust mechanism (`InternalAuth:ServiceSecret`) in front of it — and this
+entry exists to say so honestly rather than pretend 40.9 never considered it.
+
+What changed is not the general verdict on synchronous cross-service calls; it is the specific
+alternative 40.9 had available and this feature does not. In 40.9, the superadmin's own browser was
+the caller, already free to hit `POST /organizations` and then `POST
+/admin/platform/organizations/bootstrap-admin` as two separate requests — the "database it can
+already write to" in that rejection is organization-service's own registry, reached directly by the
+client, with no service-to-service hop anywhere. Demo-request provisioning has no equivalent: the
+brief specifies one button, one call, one endpoint (`POST /admin/demo-requests/{id}/provision`), and
+the safety property that call needs — lock the lead row, decide once whether to create the
+organization, and converge under retry regardless of where a partial failure landed — cannot be
+built by asking a browser to make two independent HTTP calls and reconcile their partial failure
+itself. A browser cannot hold a Postgres row lock across two round trips; organization-service can,
+inside one request.
+
+The tradeoff this accepts, named plainly: organization-service's admin panel now depends on
+identity-service being reachable for this one action. That is a real coupling. It is accepted
+because (a) this is a rare, superadmin-only administrative action — not a per-request hot path like
+the login flow 40.8/40.9 were explicitly protecting when they kept identity off organization-service
+and vice versa — and (b) the failure mode is loud and recoverable by construction: a failed call
+leaves the lead visibly parked at `OrganizationCreated`, and the *same* button, pressed again,
+finishes the job. That "stuck-but-visible-and-retryable" state is what the write order in
+`DemoRequestProvisioningService` (docs/DEMO_REQUEST.md, "How provisioning is actually written") is
+built to guarantee, and it is the reason this narrow reversal does not license a general return to
+synchronous inter-service calls elsewhere — the next one still has to earn this same property, not
+just this same convenience.
+
+### The internal route re-checks the actor rather than trusting the request
+
+`InternalOrganizationBootstrapController`'s body carries an `actorUserId`, and
+`OrganizationBootstrapService` looks that user up in identity-db and requires `Role ==
+UserRole.SuperAdmin` before minting anything — it does not trust the claim. The shared secret in
+`InternalAuth:ServiceSecret` authenticates organization-service's *channel*; it says nothing about
+which of organization-service's own callers is asking. Without this re-check, any authenticated
+platform `Admin` — who can already call `POST /admin/demo-requests/{id}/provision` under
+`RequireSuperAdmin`... except they cannot, because that route itself is `RequireSuperAdmin` and an
+`Admin` is rejected before ever reaching the service. The re-check is therefore defense in depth
+against a narrower but real risk: a bug in organization-service's own authorization (a missing
+attribute, a policy mistakenly widened) would, without this second check, be laundered by the
+internal call into identity-service minting a membership on the strength of organization-service's
+say-so alone. Two services independently agreeing an actor is a superadmin is a stronger property
+than one service asserting it and the other believing it.
+
+### The organization replica is upserted from the payload, not awaited from Kafka
+
+`OrganizationBootstrapService` writes `OrganizationReplica` directly from the request body's
+`organizationName`/`organizationSlug`, before doing anything else. Every other reader of that table
+waits for `organization.created` over Kafka, and docs/API_CONTRACTS.md already documents the
+consequence for the JWT-facing `bootstrap-admin` route: a `404` that can mean "organization-service
+created it seconds ago and identity-service has not consumed the event yet," tolerable for a human
+retrying a form. It is not tolerable here, because this call is issued by organization-service
+itself, in the same request that just committed the organization row — waiting for the consumer
+would mean racing it on every single provision, not occasionally. The caller passing this payload
+*is* the registry owner, so the payload is treated as authoritative rather than as one more untrusted
+input to be revalidated against a system that has not caught up yet.
+
+### What stays a gap, named rather than fixed
+
+No outbox in organization-service. `organization.created` is published after the commit that
+creates the row, in-process, with no transactional guarantee the publish itself survives a crash
+between the two — the same pre-existing gap every write in `OrganizationService` already has, not
+something this block introduces or was asked to fix. Logged in docs/DONT_FORGET.md rather than
+worked around here, because building an outbox is a cross-cutting change to how this entire service
+writes, not a provisioning-specific fix.
+
+`INTERNAL_SERVICE_SECRET` remains unprovisioned in every real environment (docs/ROADMAP.md,
+docs/DONT_FORGET.md). This is the first feature where that gap is load-bearing on the write path
+that matters most in this block — a demo lead never getting an administrator — rather than on a
+read that degrades gracefully. Recorded as a thing a human must actually do, not as done.

@@ -13,6 +13,7 @@ using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Invites;
 using Sellevate.Identity.Features.Onboarding;
+using Sellevate.Identity.Features.Organizations;
 using Sellevate.Identity.Features.PlatformAdmin;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
@@ -104,6 +105,7 @@ builder.Services
     .AddAuthenticationFeatureServices(builder.Configuration)
     .AddInviteFeatureServices(builder.Configuration)
     .AddOnboardingFeatureServices()
+    .AddOrganizationBootstrapFeatureServices()
     .AddPlatformAdminFeatureServices(builder.Configuration)
     .AddProfileFeatureServices();
 

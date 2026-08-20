@@ -18,12 +18,26 @@ Three checks:
 Scope is passed as command-line paths (defaults to the whole backend). Files
 under obj/, bin/, and Migrations/ are skipped.
 
-One narrow exception is allow-listed by exact path — see ALLOWED_REQUEST_DTO_PATHS.
-Section 1.3 states the rule and its single carve-out in the same breath: a
-superadmin acting across tenants does so through an explicit impersonation
-endpoint that mints a new token. Those bodies have to name an organization; that
-IS the endpoint. Naming the files here keeps the exception visible and reviewable
-instead of being hidden behind a file name chosen to slip past the regex.
+Two narrow security exceptions are allow-listed by exact path — see
+ALLOWED_REQUEST_DTO_PATHS and ALLOWED_ROUTE_TEMPLATE_PATHS. Section 1.3 states the
+rule and its carve-outs in the same breath: a superadmin acting across tenants does
+so through an explicit impersonation endpoint that mints a new token (those bodies
+have to name an organization; that IS the endpoint), and a machine-to-machine
+internal/* route may address an organization by its route segment instead, because
+its caller is another service with no membership in that organization to carry an
+X-Organization-Id header for — PlatformAdminController and
+InternalOrganizationBootstrapController rely on this pair of carve-outs
+respectively. Naming the files here keeps each exception visible and reviewable
+instead of being hidden behind a file or route shape chosen to slip past the regex.
+
+A third, non-security allow-list — ALLOWED_OUTBOUND_ONLY_FILENAME_FALSE_POSITIVES — exists
+for the filename heuristic in check 1 itself: "ends in Request.cs or Dto.cs" assumes that
+suffix always means a wire-bound *inbound* request DTO, but the same suffix also names
+persisted entities whose own domain name happens to end that way (a lead is literally a
+"demo request") and response DTOs that are only ever returned, never accepted as a
+[FromBody] parameter type. Both are false positives, not exceptions to the rule: the
+OrganizationId on each allow-listed file is written by server-side logic and read by a
+client, and is never bound from an inbound request body.
 """
 import pathlib
 import re
@@ -32,7 +46,9 @@ import sys
 ORGANIZATION_ID_IDENTIFIER_PATTERN = re.compile(r"\bOrganizationId\b")
 FROM_QUERY_OR_ROUTE_PATTERN = re.compile(r"\[From(?:Query|Route)\b[^\]]*\]")
 ORGANIZATION_ID_BINDING_NAME_PATTERN = re.compile(r"\borganizationId\b", re.IGNORECASE)
-ROUTE_TEMPLATE_ORGANIZATION_PATTERN = re.compile(r"\{organizationId\}", re.IGNORECASE)
+ROUTE_TEMPLATE_ORGANIZATION_PATTERN = re.compile(r"\{organizationId(?::\w+)?\}", re.IGNORECASE)
+# Matches the bare segment and a route-constrained one such as "{organizationId:guid}" — a
+# constraint suffix must not be a blind spot a route template can hide behind.
 # The check above is about ROUTE templates, so it only looks at lines that declare one. Before
 # Phase 40.11 it scanned every line, which was fine while "{organizationId}" could only be a route
 # segment; once services started building Redis keys as $"org:{organizationId}:..." — the whole
@@ -58,6 +74,32 @@ ALLOWED_REQUEST_DTO_PATHS = frozenset({
     "BootstrapOrganizationAdminRequestDto.cs",
 })
 
+# Route declarations allowed to carry an {organizationId} (or {organizationId:guid}) segment, by
+# exact repo-relative path. Every entry must be a machine-to-machine internal/* route guarded by
+# InternalServiceAuthFilter rather than [TenantScoped] — the documented TENANCY.md section 1.3
+# exception PlatformAdminController already relies on for its request body, applied here to a route
+# segment instead because the caller is another service with no membership to carry an
+# X-Organization-Id header for. Adding a path here is a security decision, not a formality.
+ALLOWED_ROUTE_TEMPLATE_PATHS = frozenset({
+    "src/backend/identity-service/Identity/Features/Organizations/Endpoints/"
+    "InternalOrganizationBootstrapController.cs",
+})
+
+# Files whose name coincidentally ends in "Request.cs" or "Dto.cs" for a domain reason having
+# nothing to do with being an inbound wire type, tripping check 1's filename heuristic even
+# though the OrganizationId member is never bound from a request body:
+#   - DemoRequest.cs is a persisted entity (a lead is literally a "demo request"); its
+#     OrganizationId is written only by DemoRequestProvisioningService, from a Guid it minted
+#     itself when it inserted the Organization row.
+#   - DemoRequestDto.cs is a response-only DTO — returned by GET/PATCH/POST …/provision, never
+#     accepted as a [FromBody] parameter type anywhere — reporting the same OrganizationId back
+#     to whoever is allowed to read it.
+# See docs/DEMO_REQUEST.md.
+ALLOWED_OUTBOUND_ONLY_FILENAME_FALSE_POSITIVES = frozenset({
+    "src/backend/organization-service/Organization/Features/DemoRequests/Models/DemoRequest.cs",
+    "src/backend/organization-service/Organization/Features/DemoRequests/Models/DemoRequestDto.cs",
+})
+
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -69,7 +111,13 @@ def relative_to_repository(path: pathlib.Path) -> str:
 
 
 def is_allowed_request_dto(path: pathlib.Path) -> bool:
-    return relative_to_repository(path) in ALLOWED_REQUEST_DTO_PATHS
+    return relative_to_repository(path) in (
+        ALLOWED_REQUEST_DTO_PATHS | ALLOWED_OUTBOUND_ONLY_FILENAME_FALSE_POSITIVES
+    )
+
+
+def is_allowed_route_template(path: pathlib.Path) -> bool:
+    return relative_to_repository(path) in ALLOWED_ROUTE_TEMPLATE_PATHS
 
 
 def is_skipped(path: pathlib.Path) -> bool:
@@ -90,6 +138,7 @@ def lint_file(path: pathlib.Path):
         bool(REQUEST_DTO_FILENAME_PATTERN.search(path.name))
         and not is_allowed_request_dto(path)
     )
+    route_template_is_allowed = is_allowed_route_template(path)
 
     for line_number, line in enumerate(text.splitlines(), start=1):
         if is_request_dto_file and ORGANIZATION_ID_IDENTIFIER_PATTERN.search(line):
@@ -106,7 +155,11 @@ def lint_file(path: pathlib.Path):
                 "(TENANCY.md section 1.3)",
             ))
 
-        if ROUTE_DECLARATION_PATTERN.search(line) and ROUTE_TEMPLATE_ORGANIZATION_PATTERN.search(line):
+        if (
+            ROUTE_DECLARATION_PATTERN.search(line)
+            and ROUTE_TEMPLATE_ORGANIZATION_PATTERN.search(line)
+            and not route_template_is_allowed
+        ):
             violations.append((
                 line_number,
                 "route template must not carry an organization id segment "
@@ -120,7 +173,10 @@ def report_stale_allow_list_entries() -> int:
     """An allow-list entry that no longer points at a file is a silent hole: the exception
     outlives the code it was granted for. Report it as a violation rather than ignoring it."""
     stale_count = 0
-    for allowed_path in sorted(ALLOWED_REQUEST_DTO_PATHS):
+    all_allowed_paths = (
+        ALLOWED_REQUEST_DTO_PATHS | ALLOWED_ROUTE_TEMPLATE_PATHS | ALLOWED_OUTBOUND_ONLY_FILENAME_FALSE_POSITIVES
+    )
+    for allowed_path in sorted(all_allowed_paths):
         if not (REPOSITORY_ROOT / allowed_path).is_file():
             print(
                 f"{allowed_path}: allow-listed in tenancy-boundary-lint but the file no longer "

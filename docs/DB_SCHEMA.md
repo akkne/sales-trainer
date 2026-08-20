@@ -1630,6 +1630,7 @@ One EF migration history per database — there is no shared one, and there has 
 | `AddDemoRequests` | 2026-08-19 | `DemoRequests` — landing-page lead capture, written by an anonymous endpoint. Deliberately **no** `EnableTenantRls` call and no `OrganizationId`: a lead precedes any tenant, so there is nothing to scope it to, and platform-admin authorization replaces RLS here. Non-unique index on `WorkEmail` (the cooldown lookup — one company may legitimately ask twice over time) and a descending index on `CreatedAt` (the admin list order). |
 | `AddDemoRequestMarketingConsent` | 2026-08-19 | Additive `AddColumn` only: nullable `MarketingConsentGivenAt` on `DemoRequests`, splitting marketing consent off the required data-processing consent because 152-ФЗ/GDPR treat them as separate purposes. Written as a second migration rather than an edit to `AddDemoRequests` so the sequence stays an honest record of what happened. |
 | `MakeDemoRequestPhoneRequired` | 2026-08-20 | `AlterColumn` only: `DemoRequests.Phone` from nullable to `NOT NULL` (owner decision — the sales motion this form feeds is phone-first). The `Qualified → Approved` rename the same day needed **no** migration: `Status` is `character varying(32)` via `HasConversion<string>()` with no `CHECK` constraint naming the allowed values, so nothing in the database referenced the old member name. |
+| `AddDemoRequestProvisioning` | 2026-08-20 | Adds `OrganizationId` (uuid, nullable), `ProvisioningState` (`character varying(32)`, `HasConversion<string>()`, default `'NotProvisioned'`), `BootstrapInviteId` (uuid, nullable), `BootstrapAdminEmail` (`character varying(200)`, nullable) and `ProvisionedAt` (timestamptz, nullable) to `DemoRequests`, plus a **partial unique index** on `OrganizationId` (`WHERE "OrganizationId" IS NOT NULL`) — two leads can never claim the same organization, the database-level backstop behind the application-level row lock in `DemoRequestProvisioningService`. Generated only; not run against any database in this session (no local Postgres available here). |
 
 
 ---
@@ -1803,15 +1804,25 @@ pattern as `Companies.Status`). This table is the tenant registry itself, so it 
 | `MarketingConsentGivenAt` | timestamptz   | NULL — null means not given          |
 | `CreatedAt`               | timestamptz   | NOT NULL                             |
 | `UpdatedAt`               | timestamptz   | NOT NULL                             |
+| `OrganizationId`          | uuid          | NULL — set once `/provision` creates the organization (`AddDemoRequestProvisioning`, 2026-08-20) |
+| `ProvisioningState`       | varchar(32)   | NOT NULL, DEFAULT 'NotProvisioned' — `NotProvisioned \| OrganizationCreated \| AdminInvited` |
+| `BootstrapInviteId`       | uuid          | NULL — the invite `identity-service` minted for this lead's first administrator |
+| `BootstrapAdminEmail`     | varchar(200)  | NULL — resolved and fixed once, at organization-creation time (see field comment on the entity) |
+| `ProvisionedAt`           | timestamptz   | NULL — stamped once `ProvisioningState` reaches `AdminInvited` |
 
 **Indexes:** `IX_DemoRequests_WorkEmail` (non-unique — the per-email cooldown lookup, and one company
-may legitimately ask twice over time), `IX_DemoRequests_CreatedAt` (descending — the admin list order)
+may legitimately ask twice over time), `IX_DemoRequests_CreatedAt` (descending — the admin list order),
+`IX_DemoRequests_OrganizationId` (**unique, partial** — `WHERE "OrganizationId" IS NOT NULL` — two
+leads can never claim the same organization; a plain unique index would instead reject every second
+and third never-provisioned lead's shared `NULL`)
 
 `SalesTeamSize` is `UpToFive | SixToTwenty | TwentyOneToFifty | FiftyOneToTwoHundred |
 MoreThanTwoHundred` and `Status` is `New | Contacted | Approved | Declined` (`Approved`, not
 `Qualified` — renamed 2026-08-20, no migration needed since the column carries no `CHECK`
 constraint), both stored as their
 string names (`HasConversion<string>()`, same pattern as `Organizations.Status`).
+`ProvisioningState` follows the same convention for the same reason — a value stays readable in the
+database after the enum is reordered in code.
 
 Not `ITenantScoped` and never wrapped in `EnableTenantRls`, for a **different reason** than
 `Organizations` above: the registry is un-scoped because it *is* the tenant list, whereas a demo

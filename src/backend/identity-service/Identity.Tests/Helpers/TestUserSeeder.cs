@@ -23,7 +23,8 @@ public static class TestUserSeeder
         string password = DefaultPassword,
         Guid? organizationId = null,
         OrgRole organizationRole = OrgRole.Manager,
-        MembershipStatus membershipStatus = MembershipStatus.Active)
+        MembershipStatus membershipStatus = MembershipStatus.Active,
+        UserRole platformRole = UserRole.User)
     {
         var user = new User
         {
@@ -32,7 +33,8 @@ public static class TestUserSeeder
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow,
-            IsEmailVerified = true
+            IsEmailVerified = true,
+            Role = platformRole
         };
 
         using var scope = factory.Services.CreateScope();

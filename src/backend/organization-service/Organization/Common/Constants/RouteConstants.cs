@@ -35,4 +35,8 @@ public static class RouteConstants
     /// <summary>Relative to <see cref="AdminDemoRequestsBase"/>: records what happened after a lead
     /// was contacted.</summary>
     public const string AdminDemoRequestStatus = "{id:guid}/status";
+
+    /// <summary>Relative to <see cref="AdminDemoRequestsBase"/>: creates the organization and the
+    /// bootstrap admin invite for a lead, in one call.</summary>
+    public const string AdminDemoRequestProvision = "{id:guid}/provision";
 }

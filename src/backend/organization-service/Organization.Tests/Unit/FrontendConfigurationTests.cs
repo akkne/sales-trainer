@@ -7,11 +7,11 @@ namespace Sellevate.Organization.Tests.Unit;
 /// <summary>
 /// Pins <see cref="FrontendConfiguration.PrimaryUrl"/>, which exists because <c>Frontend:Url</c> is a
 /// comma-separated list of allowed CORS origins rather than a single address — `docker-compose.yml`
-/// ships <c>http://localhost:3000,https://sellevate.vercel.app</c> as its default.
+/// ships <c>http://localhost:3000,https://sellevate.site</c> as its default.
 ///
 /// <para>
 /// Anything that builds a link for an email must take one origin out of that list. Using the raw value
-/// yields <c>http://localhost:3000,https://sellevate.vercel.app/register</c>, which is broken in every
+/// yields <c>http://localhost:3000,https://sellevate.site/register</c>, which is broken in every
 /// environment except a single-origin local one — that is, broken everywhere except where it would be
 /// noticed. These tests fail if somebody swaps the property back.
 /// </para>
@@ -32,7 +32,7 @@ public sealed class FrontendConfigurationTests
     {
         var configuration = new FrontendConfiguration
         {
-            Url = "http://localhost:3000,https://sellevate.vercel.app"
+            Url = "http://localhost:3000,https://sellevate.site"
         };
 
         configuration.PrimaryUrl.Should().Be("http://localhost:3000");
@@ -43,7 +43,7 @@ public sealed class FrontendConfigurationTests
     {
         var configuration = new FrontendConfiguration
         {
-            Url = " http://localhost:3000 , https://sellevate.vercel.app "
+            Url = " http://localhost:3000 , https://sellevate.site "
         };
 
         configuration.PrimaryUrl.Should().Be("http://localhost:3000");

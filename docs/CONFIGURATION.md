@@ -91,6 +91,27 @@ that block is updated, demo-request notifications no-op (logged as unconfigured)
 environment, exactly like any other service with an unset MailerSend token — leads are still
 persisted, only the email is skipped.
 
+**Demo-request provisioning** gives `organization-service` its first outbound `HttpClient` and its
+first reference to the internal-service-secret handshake, because `POST
+/admin/demo-requests/{id}/provision` calls identity-service's `internal/organizations/*` route.
+`IdentityService:BaseUrl` (`IdentityService__BaseUrl`, default `http://identity:8080`) and
+`IdentityService:TimeoutSeconds` (in-code default `10`, not currently overridden by an environment
+variable) are bound in `organization-service`'s own `appsettings.json`.
+`InternalAuth:ServiceSecret` (`INTERNAL_SERVICE_SECRET` — the same root `.env` variable identity-,
+ai-, company- and gamification-service already read) is read directly off `IConfiguration` rather
+than through the options pattern, the same way every other internal-secret client and filter in
+this backend reads it, and is what `organization-service` attaches as `X-Internal-Service-Secret`
+when calling identity-service.
+
+**Consequence, not yet closed:** identity-service's `InternalServiceAuthFilter` refuses every
+`internal/*` request outside `Development` once no secret is configured at all — and
+`INTERNAL_SERVICE_SECRET` is provisioned in no real environment today (docs/ROADMAP.md,
+docs/DONT_FORGET.md). Demo-request provisioning is the first *write* path where that gap is
+load-bearing: without a real `INTERNAL_SERVICE_SECRET`, every provision call gets `503
+invite-failed` in a real deployment, and the lead sticks at `OrganizationCreated` forever. This is
+a thing a human operator must actually set before shipping this feature, not something this session
+could do — see docs/DONT_FORGET.md.
+
 ## Company service (Phase 39)
 
 `company-service` introduces no new secrets — it reuses the shared `POSTGRES_USER`/

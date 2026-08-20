@@ -1,10 +1,8 @@
 using System.Net;
-using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Email.Models;
 using Sellevate.Organization.Features.DemoRequests.Constants;
 using Sellevate.Organization.Features.DemoRequests.Models;
 using Sellevate.Organization.Features.DemoRequests.Services.Abstract;
-using Sellevate.Organization.Infrastructure.Configuration;
 
 namespace Sellevate.Organization.Features.DemoRequests.Services.Implementation;
 
@@ -12,9 +10,17 @@ namespace Sellevate.Organization.Features.DemoRequests.Services.Implementation;
 /// Writes the three emails a demo request can trigger: the internal sales-inbox notification, and —
 /// since the 2026-08-20 reversal of the original "never mail the submitter" decision (docs/DECISIONS.md,
 /// docs/DEMO_REQUEST.md) — the submitter's own submission acknowledgement and approval notification.
+///
+/// <para>
+/// <b>The approval notification no longer promises a <c>/register</c> link.</b> Until provisioning
+/// existed, <c>/register</c> was the only thing this email could point at, and it strands the
+/// recipient on the awaiting-organization gate because <c>/register</c> creates a global identity
+/// with no membership. Since a real invite link only exists once a platform superadmin actually
+/// provisions the lead — a separate act, possibly minutes or days later — this email says the request
+/// is approved and that the workspace invitation will follow, rather than link anywhere at all.
+/// </para>
 /// </summary>
-internal sealed class DemoRequestNotificationComposer(
-    IOptions<FrontendConfiguration> frontendOptions) : IDemoRequestNotificationComposer
+internal sealed class DemoRequestNotificationComposer : IDemoRequestNotificationComposer
 {
     public EmailMessage ComposeInternalNotification(DemoRequest demoRequest, string recipientEmail, string recipientName)
     {
@@ -96,23 +102,21 @@ internal sealed class DemoRequestNotificationComposer(
     {
         ArgumentNullException.ThrowIfNull(demoRequest);
 
-        var registrationUrl = $"{frontendOptions.Value.PrimaryUrl.TrimEnd('/')}/register";
         var escapedFullName = WebUtility.HtmlEncode(demoRequest.FullName);
         var escapedCompanyName = WebUtility.HtmlEncode(demoRequest.CompanyName);
-        var escapedRegistrationUrl = WebUtility.HtmlEncode(registrationUrl);
 
         var textBody =
             $"Здравствуйте, {demoRequest.FullName}!\n\n" +
-            $"Рады сообщить: доступ к Sellevate для {demoRequest.CompanyName} одобрен. Чтобы начать " +
-            "работу, зарегистрируйтесь и создайте логин и пароль по ссылке ниже:\n\n" +
-            $"{registrationUrl}\n\n" +
+            $"Рады сообщить: доступ к Sellevate для {demoRequest.CompanyName} одобрен. В ближайшее " +
+            "время на этот адрес придёт отдельное письмо с приглашением в ваше рабочее пространство — " +
+            "по нему вы сможете задать пароль и войти.\n\n" +
             "До встречи в Sellevate!\nКоманда Sellevate";
 
         var htmlBody =
             $"<p>Здравствуйте, {escapedFullName}!</p>" +
-            $"<p>Рады сообщить: доступ к Sellevate для {escapedCompanyName} одобрен. Чтобы начать " +
-            $"работу, <a href=\"{escapedRegistrationUrl}\">зарегистрируйтесь и создайте логин и " +
-            "пароль</a>.</p>" +
+            $"<p>Рады сообщить: доступ к Sellevate для {escapedCompanyName} одобрен. В ближайшее время " +
+            "на этот адрес придёт отдельное письмо с приглашением в ваше рабочее пространство — по нему " +
+            "вы сможете задать пароль и войти.</p>" +
             "<p>До встречи в Sellevate!<br/>Команда Sellevate</p>";
 
         return new EmailMessage(

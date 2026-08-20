@@ -112,10 +112,18 @@ register): confirms the request arrived, sets the expectation that a manager wil
 one business day, and briefly restates what the demo covers.
 
 **On approval** (`Status` moving into `Approved`, see below), `workEmail` receives a «Заявку
-одобрили» notification pointing at `{Frontend:Url}/register` to create a login and password. This
-fires only on an actual transition into `Approved` — re-patching an already-`Approved` lead (an
-admin refreshing, double-clicking, or retrying) sends nothing, so the submitter is never mailed
-twice for one approval.
+одобрили» notification. This fires only on an actual transition into `Approved` — re-patching an
+already-`Approved` lead (an admin refreshing, double-clicking, or retrying) sends nothing, so the
+submitter is never mailed twice for one approval.
+
+**This email stopped linking to `/register` once provisioning shipped (2026-08-20).** Until then
+`/register` was the only thing it could point at, and that link strands the recipient: `/register`
+creates a global identity with no membership, landing the recipient on the awaiting-organization
+gate having "registered" into nothing. The link that actually works — `/invite/{token}`, 7-day
+expiry — only exists once a platform superadmin provisions the lead (below), a separate act that
+may happen minutes or days later. This email now only says the request is approved and that a
+workspace invitation will follow, rather than promise a link that may not exist yet. See
+docs/DECISIONS.md.
 
 Both follow the same failure semantics as the internal notification: wrapped in try/catch, logged,
 never surfaced to the caller. A lead is still persisted when the acknowledgement fails to send, and
@@ -201,6 +209,106 @@ and tucks `jobTitle`/`comment` behind a per-row "Details" toggle. Data hooks:
 `features/admin/lib/demo-request-format.ts`. Tests:
 `__tests__/AdminDemoRequestsPage.test.tsx`.
 
+### Provisioning: turning an approved lead into a tenant
+
+`POST /admin/demo-requests/{id}/provision` (`SuperAdmin` only) is the one-click version of what
+the "Organizations" screen otherwise does in two separate steps — create a tenant, then bootstrap
+its first admin. Body is `{organizationName?, slug?, adminEmail?, role?}`, all optional; the
+server defaults the name from the lead's `companyName`, the slug from a normalized name, the
+admin email from the lead's `workEmail`, and the role to `TenancySuperAdmin`. `DemoRequestDto`
+carries the outcome as `organizationId?`, `organizationName?`, `organizationSlug?`,
+`provisioningState` (`NotProvisioned | OrganizationCreated | AdminInvited`), `bootstrapInviteId?`,
+`bootstrapAdminEmail?`, `provisionedAt?`.
+
+**`OrganizationCreated` is a deliberate, surfaced middle state, not a glitch.** The organization
+write and the invite send are two operations, and the second can fail (`503 invite-failed`) after
+the first has already committed. The screen shows this as a warning-toned "Organization created,
+invite not sent" indicator with a "Finish provisioning" retry that calls the same endpoint — never
+as either "done" or "failed", both of which would be lying about what actually happened.
+
+**The Provision action is SuperAdmin-only**, reusing `canManagePlatformUsers` — the same predicate
+that gates first-admin bootstrap and impersonation on the organizations screen — rather than a new
+check. A plain `Admin` sees the lead list and provisioning state exactly as a `SuperAdmin` does,
+just without the button.
+
+**The confirmation is inline** (never `window.confirm`) and lets the admin override the slug and
+the invited email before submitting — the slug is the one field that can collide with an existing
+organization (`409 slug-taken`). The client only sends a field when the admin actually edited it
+away from the previewed default; an untouched field is omitted from the request body entirely, so
+the server's own name/slug/email derivation stays the single source of truth for what "default"
+means. `409 organization-has-admin` (the tenant exists and already has an administrator — no
+invite is sent) and a plain `400` are rendered as their own distinct messages inline; a `503`
+message says the organization was created and that pressing again finishes the job, then the list
+is refetched so the row does not keep showing `NotProvisioned` after the tenant already exists.
+
+**The organization's name and slug are on `DemoRequestDto`; the invite's expiry is not**, and that
+asymmetry follows ownership rather than convenience. organization-service owns both the lead and the
+registry, so it resolves the name and slug in one join and they survive a page reload. `Invite`
+belongs to identity-service, so reporting its expiry on a list endpoint would mean a cross-service
+read per row or a replica of somebody else's table — it is returned once, by the provision call that
+creates it, and the screen caches that for the rest of the session (`provisionedDetailsById`). After
+a reload the row shows the real organization and says the expiry is unknown, rather than guessing.
+
+This was originally built the other way — nothing but `organizationId` on the DTO, everything else
+from the cached provision response — and the result was that every lead provisioned before the
+current page load rendered the lead's own `companyName` and the literal text "slug unknown", which in
+normal operation is most of the list. Two tests pin the join now.
+
+### How provisioning is actually written — the safety property, not the screen
+
+`DemoRequestProvisioningService.ProvisionAsync` (organization-service) is the whole feature; the
+screen above is a client of it. The order matters and is deliberate:
+
+1. **Lock the lead row** (`SELECT … FOR UPDATE`, skipped on the in-memory test provider) inside a
+   transaction, so two concurrent provisions for the same lead cannot both read
+   `OrganizationId == null` and both try to create an organization. A **partial unique index on
+   `DemoRequests.OrganizationId` where not null** is the second, database-level line of defense for
+   the same property.
+2. **`AdminInvited` already? Commit and return, no side effects at all.** This is the fast path a
+   double-click hits, and it is a `200`, never a fresh `409` — a UI button being pressed twice must
+   not look like a failure.
+3. **Not yet provisioned:** resolve and check the slug *before* writing anything (reusing
+   `OrganizationService`'s own slug logic, promoted to `internal` rather than duplicated — the same
+   move `InviteService.ParseRole` made for `PlatformAdminService`). A collision throws before either
+   row is touched, so the transaction's rollback leaves nothing to clean up. Otherwise: insert the
+   `Organization`, flip the lead to `OrganizationCreated` and `Status = Approved`, resolve and store
+   `BootstrapAdminEmail` — **one `SaveChangesAsync`, one commit, both rows together** — then publish
+   `organization.created`. A retry that finds `OrganizationId` already set skips straight past this
+   step, which is what keeps the event published exactly once.
+4. **Call identity-service, outside any transaction.** `POST internal/organizations/{organizationId}
+   /bootstrap-admin` — see below. Its failure is the one this design treats as ordinary: the lead
+   stays at `OrganizationCreated`, and the same call again always converges.
+5. **A second, separate transaction** records `BootstrapInviteId`, flips to `AdminInvited`, and
+   stamps `ProvisionedAt` — only once identity-service has actually answered.
+
+`BootstrapAdminEmail` is resolved and stored exactly once, at step 3 — a retry's own `adminEmail`
+override (if any) is ignored once the organization exists, because by then the invite it would name
+may already be committed. `role`, by contrast, is **not** persisted anywhere and is re-read from
+each call's request body, so a first attempt rejected for a bad role converges on a retry that
+sends a valid one.
+
+### The call into identity-service
+
+`POST internal/organizations/{organizationId:guid}/bootstrap-admin` (identity-service), guarded by
+`InternalServiceAuthFilter` — the shared secret, not a JWT — and deliberately not `[TenantScoped]`:
+the caller is organization-service itself, with no membership in the organization to carry an
+`X-Organization-Id` header for. Body: `{organizationName, organizationSlug, email, role?,
+actorUserId}`.
+
+In order: **upsert `OrganizationReplica` from the payload** (not from Kafka — see the class summary
+on `OrganizationBootstrapService` for why this call would otherwise race its own consumer on every
+single provision); **re-check `actorUserId` is a platform `SuperAdmin`** in identity-db (`403` if
+not — the shared secret authorizes the channel, this check authorizes the actor, and skipping it
+would let a plain `Admin`'s click be laundered into a superadmin act); an active administrator
+already existing is `409`; **a pending admin invite already existing is `200` returning that
+invite**, not a fresh `409` — the same convergent-retry property `/provision` needs, because
+`InviteService.CreateAsync` sends its email after commit and outside any try/catch, so a mail
+failure can leave a committed invite behind a thrown exception. The role is validated and narrowed
+to `TenancyAdmin`/`TenancySuperAdmin` by the exact rule `PlatformAdminService.ResolveBootstrapRole`
+already applies (promoted to `internal` rather than duplicated), defaulting to `TenancySuperAdmin`.
+Full contract: docs/API_CONTRACTS.md. The reversal of the Phase 40.9 decision against exactly this
+shape of call, and why it is narrow rather than a precedent, is recorded in docs/DECISIONS.md.
+
 ---
 
 ## Configuration
@@ -210,16 +318,18 @@ and tucks `jobTitle`/`comment` behind a per-row "Details" toggle. Data hooks:
 | `DemoRequests:NotificationEmail` | `DemoRequests__NotificationEmail` | *(empty)* | Where the lead notification is sent |
 | `DemoRequests:NotificationRecipientName` | `DemoRequests__NotificationRecipientName` | `Sellevate` | Display name on that email |
 | `DemoRequests:SubmissionCooldownSeconds` | `DemoRequests__SubmissionCooldownSeconds` | `300` | Per-email resubmission cooldown |
-| `Frontend:Url` | `Frontend__Url` | `http://localhost:3000` | Base address the approval email's registration link is built from; the same key every other service already reads for its own purposes (docs/CONFIGURATION.md) |
+| `IdentityService:BaseUrl` | `IdentityService__BaseUrl` | `http://identity:8080` | Where provisioning's bootstrap-admin call goes |
+| `IdentityService:TimeoutSeconds` | *(not set — in-code default)* | `10` | How long that call may take before provisioning gives up and leaves the lead at `OrganizationCreated` |
+| `InternalAuth:ServiceSecret` | `INTERNAL_SERVICE_SECRET` | *(unset)* | The header identity-service's `InternalServiceAuthFilter` checks; see docs/CONFIGURATION.md and docs/DONT_FORGET.md for the fact that this is not actually provisioned in any real environment yet |
 
-**`Frontend:Url` is a comma-separated list, not one address.** Its original consumer is the CORS
-allow-list, which needs every permitted origin, so `Program.cs` splits it and `docker-compose.yml`
-ships `http://localhost:3000,https://sellevate.vercel.app` as the default. The approval email
-therefore builds its link from `FrontendConfiguration.PrimaryUrl` (first entry wins), not from the
-raw value — interpolating the raw value yields
-`http://localhost:3000,https://sellevate.vercel.app/register`, which is broken in every environment
-except a single-origin local one, i.e. broken everywhere except where anyone would notice.
-`FrontendConfigurationTests` pins this.
+**`Frontend:Url`/`FrontendConfiguration` is no longer read anywhere in this service.** The approval
+email used to build a `/register` link from it (`FrontendConfiguration.PrimaryUrl` — the first
+origin out of the comma-separated CORS allow-list `Frontend:Url` holds, since the raw value would
+have produced `http://localhost:3000,https://sellevate.site/register`). Now that the email links
+nowhere (see above), the binding in `DemoRequestFeatureServiceCollectionExtensions` and the class
+itself are dead configuration, left in place rather than torn out mid-feature — see
+docs/DONT_FORGET.md. `FrontendConfigurationTests.cs` still pins the class's own behaviour in
+isolation, independent of whether anything in this service currently reads it.
 
 An unset `NotificationEmail` logs a warning and skips the internal sales notification only — **the
 lead is still persisted, and the submitter's own acknowledgement still sends.** The same is true

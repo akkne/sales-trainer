@@ -182,8 +182,16 @@ internal sealed class PlatformAdminService(
     /// <see cref="OrgRole.TenancyAdmin"/> or <see cref="OrgRole.TenancySuperAdmin"/>. That last step
     /// is what keeps this platform endpoint from minting a <see cref="OrgRole.Manager"/> or any
     /// other organization role: it may only choose which rank of administrator it bootstraps.
+    ///
+    /// <para>
+    /// <c>internal</c> rather than <c>private</c> so <c>Organizations.Services.Implementation
+    /// .OrganizationBootstrapService</c> — the machine-to-machine bootstrap route demo-request
+    /// provisioning calls — applies exactly this narrowing instead of carrying a second definition of
+    /// which roles a bootstrap call may mint, the same reasoning that made
+    /// <see cref="InviteService.ParseRole"/> <c>internal</c> in the first place.
+    /// </para>
     /// </summary>
-    private static OrgRole ResolveBootstrapRole(string? requestedRoleName)
+    internal static OrgRole ResolveBootstrapRole(string? requestedRoleName)
     {
         var roleName = string.IsNullOrWhiteSpace(requestedRoleName)
             ? nameof(OrgRole.TenancySuperAdmin)

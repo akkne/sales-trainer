@@ -227,7 +227,13 @@ scripts/dev-organization.sh # Organization microservice on host, port 5010 (own 
 > `GET/PUT /organizations/profile` require a valid `X-Organization-Id` header — since
 > identity-service does not yet issue the `org_id` JWT claim (Phase 40.6), those two routes
 > return `403` through the gateway today; call them directly against `localhost:5010` with a
-> manually-set header for local testing. See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md).
+> manually-set header for local testing. Since 2026-08-20, `POST
+> /admin/demo-requests/{id}/provision` also calls identity-service's `internal/organizations/*`
+> route; `export_organization_env` in `lib-local-env.sh` points `IdentityService__BaseUrl` at
+> `localhost:${LOCAL_IDENTITY_PORT}` for this profile (the committed default is a Docker-network
+> hostname), and `InternalAuth__ServiceSecret` is left unset, same as every other local service
+> that calls an `internal/*` route — `InternalServiceAuthFilter` allows an unset secret in
+> `Development`. See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md).
 
 ## Files added by this profile
 

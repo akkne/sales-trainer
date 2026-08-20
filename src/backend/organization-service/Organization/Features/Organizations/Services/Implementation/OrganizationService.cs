@@ -39,7 +39,8 @@ internal sealed class OrganizationService(OrganizationDbContext databaseContext,
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
 
-        var slug = await ResolveAvailableSlugAsync(request.Slug, request.Name, excludingOrganizationId: null, cancellationToken);
+        var slug = await ResolveAvailableSlugAsync(
+            databaseContext, request.Slug, request.Name, excludingOrganizationId: null, cancellationToken);
 
         var now = DateTime.UtcNow;
         var organization = new OrganizationEntity
@@ -93,7 +94,8 @@ internal sealed class OrganizationService(OrganizationDbContext databaseContext,
             return null;
         }
 
-        var slug = await ResolveAvailableSlugAsync(request.Slug, request.Name, excludingOrganizationId: organizationId, cancellationToken);
+        var slug = await ResolveAvailableSlugAsync(
+            databaseContext, request.Slug, request.Name, excludingOrganizationId: organizationId, cancellationToken);
 
         organization.Name = request.Name.Trim();
         organization.Slug = slug;
@@ -160,8 +162,21 @@ internal sealed class OrganizationService(OrganizationDbContext databaseContext,
             new OrganizationUpdatedEvent(organization.Id, organization.Name, organization.Slug, organization.Status.ToString()),
             cancellationToken: cancellationToken);
 
-    private async Task<string> ResolveAvailableSlugAsync(
-        string? requestedSlug, string fallbackSource, Guid? excludingOrganizationId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Promoted from <see langword="private"/> so <c>DemoRequestProvisioningService</c> can check and
+    /// reserve a slug through exactly this rule when it creates an organization from a demo request,
+    /// instead of carrying a second definition of what a valid, available slug is — the same reasoning
+    /// that promoted <c>InviteService.ParseRole</c> from <see langword="private"/> to
+    /// <see langword="internal"/> for <c>PlatformAdminService</c>. Static and takes the
+    /// <see cref="OrganizationDbContext"/> explicitly rather than closing over an instance field, since
+    /// the caller is a different service with its own scoped context, not this class.
+    /// </summary>
+    internal static async Task<string> ResolveAvailableSlugAsync(
+        OrganizationDbContext databaseContext,
+        string? requestedSlug,
+        string fallbackSource,
+        Guid? excludingOrganizationId,
+        CancellationToken cancellationToken)
     {
         var slug = NormalizeSlug(string.IsNullOrWhiteSpace(requestedSlug) ? fallbackSource : requestedSlug);
 

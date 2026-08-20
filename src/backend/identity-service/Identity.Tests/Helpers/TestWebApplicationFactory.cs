@@ -28,6 +28,12 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
     /// <see cref="ExportSettingsToEnvironment"/> publishes the same dictionary as environment
     /// variables: the default configuration sources pick those up first.
     /// </summary>
+    /// <summary>The shared secret <see cref="CreateInternalServiceClient"/> attaches, standing in for
+    /// organization-service's <c>InternalAuth:ServiceSecret</c> in production.</summary>
+    public const string InternalServiceSecret = "identity-internal-service-test-secret";
+
+    private const string InternalServiceSecretHeaderName = "X-Internal-Service-Secret";
+
     private static Dictionary<string, string?> BuildSettings(string connectionString) => new()
     {
         ["ConnectionStrings:Postgres"] = connectionString,
@@ -45,7 +51,8 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
         ["Storage:S3:Bucket"] = "identity-tests",
         ["Storage:S3:AccessKey"] = "minioadmin",
         ["Storage:S3:SecretKey"] = "minioadmin",
-        ["Logging:Loki:Url"] = "http://localhost:1/loki"
+        ["Logging:Loki:Url"] = "http://localhost:1/loki",
+        ["InternalAuth:ServiceSecret"] = InternalServiceSecret
     };
 
     public static void ExportSettingsToEnvironment(string connectionString)
@@ -115,6 +122,22 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
     /// (docs/DECISIONS.md). Pass it explicitly to assert the negative case.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Stands in for organization-service calling an <c>internal/*</c> route: no JWT, just the shared
+    /// secret header. Pass an explicit <paramref name="serviceSecret"/> to assert the wrong/missing-
+    /// secret case.
+    /// </summary>
+    public HttpClient CreateInternalServiceClient(string? serviceSecret = InternalServiceSecret)
+    {
+        var client = CreateClient();
+        if (serviceSecret is not null)
+        {
+            client.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, serviceSecret);
+        }
+
+        return client;
+    }
+
     public HttpClient CreateOrganizationAdminClient(
         Guid userId,
         Guid organizationId,

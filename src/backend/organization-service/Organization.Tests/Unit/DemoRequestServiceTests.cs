@@ -13,6 +13,8 @@ using Sellevate.Organization.Infrastructure.Configuration;
 using Sellevate.Organization.Infrastructure.Data;
 using Sellevate.Organization.Tests.Helpers;
 
+using OrganizationEntity = Sellevate.Organization.Features.Organizations.Models.Organization;
+
 namespace Sellevate.Organization.Tests.Unit;
 
 [TestFixture]
@@ -42,7 +44,7 @@ public sealed class DemoRequestServiceTests
     private DemoRequestService BuildService(DemoRequestConfiguration configuration) => new(
         _databaseContext,
         _emailSender,
-        new DemoRequestNotificationComposer(Options.Create(new FrontendConfiguration())),
+        new DemoRequestNotificationComposer(),
         Options.Create(configuration),
         NullLogger<DemoRequestService>.Instance);
 
@@ -58,6 +60,52 @@ public sealed class DemoRequestServiceTests
         ConsentGiven: true,
         MarketingConsentGiven: marketingConsentGiven,
         Website: website);
+
+    /// <summary>
+    /// The list endpoint resolves the provisioned organization's name and slug. Both live in this
+    /// service's own database one join away, and leaving them off the DTO is what made the admin
+    /// screen render the lead's own company name plus "slug unknown" for every lead provisioned
+    /// before the current page load.
+    /// </summary>
+    [Test]
+    public async Task ListDemoRequestsAsync_reports_the_provisioned_organizations_name_and_slug()
+    {
+        var organizationId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        _databaseContext.Organizations.Add(new OrganizationEntity
+        {
+            Id = organizationId,
+            Name = "Acme Sales",
+            Slug = "acme-sales",
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+
+        await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "provisioned@example.com"));
+        var provisioned = await _databaseContext.DemoRequests.SingleAsync();
+        provisioned.OrganizationId = organizationId;
+        provisioned.ProvisioningState = DemoRequestProvisioningState.AdminInvited;
+        await _databaseContext.SaveChangesAsync();
+
+        var listed = await _demoRequestService.ListDemoRequestsAsync();
+
+        listed.Should().ContainSingle();
+        listed[0].OrganizationName.Should().Be("Acme Sales");
+        listed[0].OrganizationSlug.Should().Be("acme-sales");
+    }
+
+    [Test]
+    public async Task ListDemoRequestsAsync_leaves_the_organization_fields_null_for_an_unprovisioned_lead()
+    {
+        await _demoRequestService.SubmitAsync(SampleRequest());
+
+        var listed = await _demoRequestService.ListDemoRequestsAsync();
+
+        listed.Should().ContainSingle();
+        listed[0].OrganizationName.Should().BeNull();
+        listed[0].OrganizationSlug.Should().BeNull();
+    }
 
     [Test]
     public async Task SubmitAsync_persists_the_lead_with_a_normalized_email()
@@ -283,5 +331,29 @@ public sealed class DemoRequestServiceTests
         result!.Status.Should().Be(nameof(DemoRequestStatus.Approved));
         var stored = await _databaseContext.DemoRequests.FindAsync(submitted.Id);
         stored!.Status.Should().Be(DemoRequestStatus.Approved);
+    }
+
+    /// <summary>
+    /// Pins that provisioning stayed its own service rather than becoming a case inside this method.
+    /// <see cref="DemoRequestService.UpdateStatusAsync"/> only ever writes <c>Status</c> and
+    /// <c>UpdatedAt</c> — never <c>OrganizationId</c>, <c>ProvisioningState</c>,
+    /// <c>BootstrapInviteId</c>, <c>BootstrapAdminEmail</c> or <c>ProvisionedAt</c> — because routing
+    /// provisioning through it would fire the plain-approval email on every provision, which is
+    /// exactly the email provisioning must never send. See
+    /// <see cref="Sellevate.Organization.Features.DemoRequests.Services.Abstract.IDemoRequestProvisioningService"/>.
+    /// </summary>
+    [Test]
+    public async Task UpdateStatusAsync_never_touches_the_provisioning_fields()
+    {
+        var submitted = await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "status-only@example.com"));
+
+        await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Approved);
+
+        var stored = await _databaseContext.DemoRequests.FindAsync(submitted.Id);
+        stored!.OrganizationId.Should().BeNull();
+        stored.ProvisioningState.Should().Be(DemoRequestProvisioningState.NotProvisioned);
+        stored.BootstrapInviteId.Should().BeNull();
+        stored.BootstrapAdminEmail.Should().BeNull();
+        stored.ProvisionedAt.Should().BeNull();
     }
 }

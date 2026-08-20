@@ -124,12 +124,22 @@ internal sealed class DemoRequestService(
     public async Task<IReadOnlyList<DemoRequestDto>> ListDemoRequestsAsync(
         CancellationToken cancellationToken = default)
     {
-        var demoRequests = await databaseContext.DemoRequests
+        var rows = await databaseContext.DemoRequests
             .AsNoTracking()
             .OrderByDescending(demoRequest => demoRequest.CreatedAt)
+            .Select(demoRequest => new
+            {
+                DemoRequest = demoRequest,
+                Organization = databaseContext.Organizations
+                    .Where(candidate => candidate.Id == demoRequest.OrganizationId)
+                    .Select(candidate => new { candidate.Name, candidate.Slug })
+                    .FirstOrDefault()
+            })
             .ToListAsync(cancellationToken);
 
-        return demoRequests.Select(ToDto).ToList();
+        return rows
+            .Select(row => ToDto(row.DemoRequest, row.Organization?.Name, row.Organization?.Slug))
+            .ToList();
     }
 
     public async Task<DemoRequestDto?> UpdateStatusAsync(
@@ -155,7 +165,10 @@ internal sealed class DemoRequestService(
             await SendApprovalNotificationAsync(demoRequest, cancellationToken);
         }
 
-        return ToDto(demoRequest);
+        var (organizationName, organizationSlug) =
+            await ResolveOrganizationReferenceAsync(demoRequest.OrganizationId, cancellationToken);
+
+        return ToDto(demoRequest, organizationName, organizationSlug);
     }
 
     private async Task SendInternalNotificationAsync(
@@ -218,7 +231,33 @@ internal sealed class DemoRequestService(
         }
     }
 
-    private static DemoRequestDto ToDto(DemoRequestEntity demoRequest) => new(
+    /// <summary>
+    /// Resolves the provisioned organization's display fields for one lead. A separate query rather
+    /// than a navigation property because <c>DemoRequest.OrganizationId</c> is deliberately a bare
+    /// uuid with no foreign key — a lead may point at an organization row, but it is not owned by one,
+    /// and modelling it as a relationship would imply a cascade that must never exist.
+    /// </summary>
+    private async Task<(string? Name, string? Slug)> ResolveOrganizationReferenceAsync(
+        Guid? organizationId, CancellationToken cancellationToken)
+    {
+        if (organizationId is null)
+        {
+            return (null, null);
+        }
+
+        var organization = await databaseContext.Organizations
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == organizationId.Value)
+            .Select(candidate => new { candidate.Name, candidate.Slug })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (organization?.Name, organization?.Slug);
+    }
+
+    private static DemoRequestDto ToDto(
+        DemoRequestEntity demoRequest,
+        string? organizationName = null,
+        string? organizationSlug = null) => new(
         demoRequest.Id,
         demoRequest.FullName,
         demoRequest.WorkEmail,
@@ -231,5 +270,12 @@ internal sealed class DemoRequestService(
         demoRequest.ConsentGivenAt,
         demoRequest.MarketingConsentGivenAt,
         demoRequest.CreatedAt,
-        demoRequest.UpdatedAt);
+        demoRequest.UpdatedAt,
+        demoRequest.OrganizationId,
+        organizationName,
+        organizationSlug,
+        demoRequest.ProvisioningState.ToString(),
+        demoRequest.BootstrapInviteId,
+        demoRequest.BootstrapAdminEmail,
+        demoRequest.ProvisionedAt);
 }

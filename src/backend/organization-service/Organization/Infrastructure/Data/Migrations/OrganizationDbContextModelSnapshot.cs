@@ -27,6 +27,13 @@ namespace Sellevate.Organization.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BootstrapAdminEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("BootstrapInviteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Comment")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -54,10 +61,23 @@ namespace Sellevate.Organization.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("MarketingConsentGivenAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("ProvisionedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProvisioningState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("NotProvisioned");
 
                     b.Property<string>("SalesTeamSize")
                         .IsRequired()
@@ -83,6 +103,10 @@ namespace Sellevate.Organization.Infrastructure.Data.Migrations
 
                     b.HasIndex("CreatedAt")
                         .IsDescending();
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique()
+                        .HasFilter("\"OrganizationId\" IS NOT NULL");
 
                     b.HasIndex("WorkEmail");
 

@@ -485,7 +485,9 @@ app/(admin)/
     organizations/
       page.tsx         ← tenant registry: create, invite the first admin, suspend/resume, impersonate (Phase 40.9)
     demo-requests/
-      page.tsx         ← the demo-request pipeline: list, inline status change, confirm-gated Approve
+      page.tsx         ← the demo-request pipeline: list, inline status change, confirm-gated Approve,
+                          and (SuperAdmin only) one-click Provision — org + bootstrap invite
+                          (docs/DEMO_REQUEST.md, "Provisioning")
 ```
 
 ### The organization panel (`/org/*`, block 40.20)

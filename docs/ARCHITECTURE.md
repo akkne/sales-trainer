@@ -386,12 +386,20 @@ gateway.
 | learning → identity | `IdentityOrganizationMemberDirectory` | `GET /internal/memberships/active` — who is in the org |
 | ai → learning | `AssignmentPracticeContextClient` | `GET /internal/assignments/practice-context` |
 | company → ai | `BriefingAiClient`, `ParseLogAiClient`, `PersonaAiClient`, `ReadinessAiClient` | the four company AI surfaces |
+| organization → identity | `IdentityOrganizationBootstrapClient` | `POST /internal/organizations/{organizationId}/bootstrap-admin` — demo-request provisioning's bootstrap admin invite |
 
 The ai → learning hop is deliberately **fail-open**: `AssignmentPracticeContextClient` returns
 `null` on any non-success, timeout or exception rather than throwing, so a learning-service outage
 degrades the dialog's assignment context instead of taking dialog down with it. The learning → ai
 hops are not fail-open — an evaluation that cannot reach ai-service is an error, because silently
-grading nothing would be worse than failing loudly.
+grading nothing would be worse than failing loudly. The organization → identity hop is not fail-open
+either, and is the one exception to this table's usual shape: it is issued on a low-frequency
+platform-superadmin action (demo-request provisioning), not a per-request hot path, and its whole
+design (docs/DECISIONS.md, 2026-08-20) is to leave a **visible, retryable** partial-failure state
+(`DemoRequest.ProvisioningState = OrganizationCreated`) rather than to degrade silently or throw an
+opaque 500 — the same "narrow reversal of the Phase 40.9 rejection of exactly this shape of call"
+entry explains why this is the one place in the platform a service calls another synchronously to
+write, not only to read.
 
 ## EF Column Types
 

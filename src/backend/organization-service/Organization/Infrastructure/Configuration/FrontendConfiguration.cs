@@ -20,8 +20,8 @@ public sealed class FrontendConfiguration
     /// <b>This is not defensive paranoia — <c>Frontend:Url</c> genuinely holds a comma-separated
     /// list.</b> Its original and still primary consumer is the CORS allow-list, which needs every
     /// permitted origin, so <c>Program.cs</c> splits it on commas and `docker-compose.yml` ships
-    /// <c>http://localhost:3000,https://sellevate.vercel.app</c> as the default. Interpolating the raw
-    /// value into a URL produces <c>http://localhost:3000,https://sellevate.vercel.app/register</c> —
+    /// <c>http://localhost:3000,https://sellevate.site</c> as the default. Interpolating the raw
+    /// value into a URL produces <c>http://localhost:3000,https://sellevate.site/register</c> —
     /// a link that is broken everywhere except a single-origin local setup, which is exactly the
     /// setup where nobody would notice.
     /// </para>
