@@ -18,6 +18,18 @@ internal sealed class ProfileService(
     IdentityDbContext databaseContext,
     IUserEventPublisher userEventPublisher) : IProfileService
 {
+    /// <summary>
+    /// Identity data only: display name, e-mail, persona, avatar.
+    ///
+    /// <para>
+    /// <b>The streak, experience-point, skill-count and average-score fields are zero and must not be
+    /// rendered.</b> Identity stopped owning learning data at the microservices split and gamification
+    /// was removed from the product; the fields survive only so the response contract stays stable for
+    /// clients that still deserialize them. Reading them as if they were real is what made the profile
+    /// screen report 0% accuracy to learners whose lessons averaged 94%. Learner progress comes from
+    /// learning-service (<c>GET /skills/progress-summary</c>).
+    /// </para>
+    /// </summary>
     public async Task<UserProfileStatsDto> GetProfileStatsForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)

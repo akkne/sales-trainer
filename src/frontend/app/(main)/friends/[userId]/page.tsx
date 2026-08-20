@@ -3,7 +3,6 @@
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
-import { StatTile } from "@/shared/components/stat-tile";
 import { usePublicProfile } from "@/features/friends/hooks/use-friends";
 import { useCreateConversation } from "@/features/friends/hooks/use-chat";
 import { FriendshipButton } from "@/features/friends/components/friendship-button";
@@ -96,19 +95,14 @@ export default function PublicProfilePage() {
 
             {/* Body */}
             <div className="frd-profile-body">
-                <p className="frd-profile-section">Статистика</p>
-                <div className="frd-profile-stats">
-                    <StatTile
-                        label="Средний балл"
-                        value={profile.averageExerciseScore}
-                        unit="%"
-                        tone="neutral"
-                        icon={<Icon name="target" size="xs" />}
-                    />
-                </div>
-
-                {/* Actions */}
-                <p className="frd-profile-section" style={{ marginTop: 24 }}>Действия</p>
+                {/*
+                  * No statistics block. `averageExerciseScore` on this DTO is a hard-coded zero:
+                  * social-service owns friendships, not lesson scores, so the tile read "Средний
+                  * балл 0%" for every person on the platform. Publishing another learner's real
+                  * score is a product and privacy decision nobody has taken, so the tile is gone
+                  * rather than wired up.
+                  */}
+                <p className="frd-profile-section">Действия</p>
                 <div className="frd-profile-actions">
                     <FriendshipButton
                         userId={profile.userId}

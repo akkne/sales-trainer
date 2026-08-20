@@ -97,8 +97,25 @@ internal sealed class ProgramEnrollmentService(
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        return await databaseContext.ProgramEnrollments
+        return await BuildEnrollmentListQuery(databaseContext).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The enrollment list query, factored out so a test can check that Npgsql can translate it
+    /// without needing a database (<c>ToQueryString()</c>).
+    ///
+    /// <para>
+    /// <b>The ordering must stay on the entity, ahead of the projection.</b> Ordering by a member of
+    /// the projected record reads more naturally and is untranslatable: it throws
+    /// <see cref="InvalidOperationException"/> at execution time, which is how this endpoint came to
+    /// answer 500 in production.
+    /// </para>
+    /// </summary>
+    internal static IQueryable<ProgramEnrollmentDto> BuildEnrollmentListQuery(
+        LearningDbContext databaseContext)
+        => databaseContext.ProgramEnrollments
             .AsNoTracking()
+            .OrderBy(enrollment => enrollment.EnrolledAt)
             .Join(
                 databaseContext.ProgramVersions,
                 enrollment => enrollment.ProgramVersionId,
@@ -109,10 +126,7 @@ internal sealed class ProgramEnrollmentService(
                     version.VersionNumber,
                     enrollment.PreviousProgramVersionId,
                     enrollment.EnrolledAt,
-                    enrollment.SwitchedAt))
-            .OrderBy(enrollment => enrollment.EnrolledAt)
-            .ToListAsync(cancellationToken);
-    }
+                    enrollment.SwitchedAt));
 
     /// <summary>
     /// Pins the learner to the newest published programme version, or returns their existing pin

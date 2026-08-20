@@ -187,18 +187,17 @@ export function UserDetailModal({ userId, canManageUser, isSelf, onClose }: User
                             )}
                         </section>
 
-                        {/* Stats */}
+                        {/*
+                          * Only fields identity-service actually knows. The XP, streak, skill and
+                          * average-score fields on this DTO are hard-coded zeros — identity stopped
+                          * owning learning data at the microservices split, and gamification was
+                          * removed from the product entirely. Rendering them showed every user as
+                          * "0 XP, 0/0 skills, avg score 0" regardless of what they had done. Team
+                          * progress lives on the org dashboard (/org), which reads learning-service.
+                          */}
                         <section className="mb-2">
-                            <h3 className="mb-2 text-xs font-medium text-ink-3">Activity</h3>
+                            <h3 className="mb-2 text-xs font-medium text-ink-3">Account</h3>
                             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-                                <Stat label="Total XP" value={user.totalXpAmount} />
-                                <Stat label="Current streak" value={`${user.currentStreakDayCount}d`} />
-                                <Stat label="Longest streak" value={`${user.longestStreakDayCount}d`} />
-                                <Stat
-                                    label="Skills"
-                                    value={`${user.completedSkillCount}/${user.totalSkillCount}`}
-                                />
-                                <Stat label="Avg score" value={user.averageExerciseScore} />
                                 <Stat
                                     label="Registered"
                                     value={new Date(user.createdAt).toLocaleDateString()}

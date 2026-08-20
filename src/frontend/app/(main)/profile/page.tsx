@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useProfile } from "@/features/profile/hooks/use-profile";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
+import { useProgressSummary } from "@/features/skills/hooks/use-progress-summary";
 import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
 import { useUpdateProfile } from "@/features/profile/hooks/use-update-profile";
 import { resolveAvatarUrl } from "@/shared/utils/resolve-avatar-url";
@@ -32,6 +33,9 @@ function initials(name: string): string {
 export default function ProfilePage() {
     const { data: profileStats, isLoading: profileLoading } = useProfile();
     const { data: allSkills, isLoading: skillsLoading } = useSkills();
+    // Accuracy and mastered-skill counts come from learning-service; the same-named fields on
+    // identity-service's /profile are hard-coded zeros left over from the microservices split.
+    const { data: progressSummary } = useProgressSummary();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
     const { data: voiceUsage } = useVoiceUsage();
     const { authenticatedUser } = useAuthStore();
@@ -180,8 +184,14 @@ export default function ProfilePage() {
                         <div>
                             <div className="pv2-stat-label">Точность</div>
                             <div className="pv2-stat-value">
-                                {profileStats.averageExerciseScore}
-                                <small>%</small>
+                                {progressSummary?.averageExerciseScore == null ? (
+                                    "—"
+                                ) : (
+                                    <>
+                                        {progressSummary.averageExerciseScore}
+                                        <small>%</small>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -196,7 +206,12 @@ export default function ProfilePage() {
                         </div>
                         <div>
                             <div className="pv2-stat-label">Навыки</div>
-                            <div className="pv2-stat-value">{profileStats.completedSkillCount}</div>
+                            <div className="pv2-stat-value">
+                                {progressSummary?.completedSkillCount ?? 0}
+                                {progressSummary ? (
+                                    <small>/{progressSummary.totalSkillCount}</small>
+                                ) : null}
+                            </div>
                         </div>
                     </div>
 

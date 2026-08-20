@@ -49,6 +49,21 @@ public sealed class SkillsController(ISkillTreeService skillTreeService, IExerci
         return NoContent();
     }
 
+    /// <summary>
+    /// The caller's own headline progress numbers. Declared ahead of the <c>{skillSlug}</c> routes so
+    /// the literal segment is never mistaken for a slug.
+    /// </summary>
+    [HttpGet("progress-summary")]
+    public async Task<ActionResult<LearningProgressSummaryDto>> GetProgressSummary(
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryResolveUserId(out var userId))
+            return Unauthorized();
+
+        var summary = await skillTreeService.GetProgressSummaryForUserAsync(userId, cancellationToken);
+        return Ok(summary);
+    }
+
     [HttpGet("{skillSlug}/lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(string skillSlug, CancellationToken cancellationToken)
     {

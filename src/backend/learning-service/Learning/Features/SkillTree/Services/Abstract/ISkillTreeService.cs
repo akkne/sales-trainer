@@ -33,6 +33,14 @@ public interface ISkillTreeService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The learner's headline progress numbers for the profile screen. Counts only the skills they
+    /// are enrolled in, so "2 of 5 skills" means the same thing here as on the tree.
+    /// </summary>
+    Task<LearningProgressSummaryDto> GetProgressSummaryForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Replaces the user's enrolled skill set with the skills identified by
     /// <paramref name="skillSlugs"/>. The always-on core skill is always kept enrolled.
     /// </summary>

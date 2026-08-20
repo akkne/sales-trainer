@@ -121,6 +121,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [ORG_PANEL.md](TESTING/ORG_PANEL.md) | Block 40.20, the organization panel (`/org/*`): the slice-0 shell — the role gate on both axes, state O0, the nine nav entries and their three badges, the legacy `/admin/*` redirect table that keeps 40.26's two notification deep links alive, the seven new `shared/components`, and the manual checklist for all of it. Each screen slice appends its own section |
 | [ORGANIZATION_SERVICE.md](TESTING/ORGANIZATION_SERVICE.md) | Phase 40.5: organization-service unit tests (registry CRUD + Kafka event contracts, profile upsert/tenant-isolation, controller status-code mapping, tenancy-scope structural checks) + gateway route-flip |
 | [PHASE_40_BACKLOG.md](TESTING/PHASE_40_BACKLOG.md) | Build plan for the 57 Phase 40 items left untested under Rule #3: each mapped to a verified test project, class under test, file and case count (~620 cases), plus the harnesses to reuse, ten work packages, and six stale items in the source list |
+| [PROD_AUDIT_2026_08_20.md](TESTING/PROD_AUDIT_2026_08_20.md) | Browser-driven audit of the deployed app: the Performance-API probe that reliably reports failed requests, the two bugs it found (the `/org/program` 500 and the profile screen's hard-coded zeros) with their regression guards, and the four findings ruled out |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

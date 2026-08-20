@@ -284,4 +284,47 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             DailyXpGoal: 0,
             WeeklyXpGoal: 0);
     }
+
+    /// <summary>
+    /// Rolls the tree the learner actually sees up into the four numbers the profile screen shows.
+    ///
+    /// <para>
+    /// <b>Locked skills are excluded from both skill counts.</b> "2 of 5 skills" has to mean the same
+    /// thing on the profile as on the tree, and the tree counts only what the learner enrolled in;
+    /// counting the whole library here would silently redefine their progress downwards.
+    /// </para>
+    ///
+    /// <para>
+    /// Accuracy is the mean best score over completed lesson rows, matching the tree's per-skill
+    /// figure so the two screens cannot disagree. It is averaged over the learner's own progress rows
+    /// rather than per skill and then again across skills — a mean of means would weight a skill with
+    /// one completed lesson the same as one with twenty.
+    /// </para>
+    /// </summary>
+    public async Task<LearningProgressSummaryDto> GetProgressSummaryForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var skills = await GetAllSkillsWithProgressAsync(userId, cancellationToken);
+        var enrolledSkills = skills.Where(skill => !skill.IsLocked).ToList();
+
+        var completedBestScores = await databaseContext.UserLessonProgressRecords
+            .Where(progress => progress.UserId == userId
+                               && progress.Status == LessonProgressStatuses.Completed)
+            .Select(progress => progress.BestScore)
+            .ToListAsync(cancellationToken);
+
+        var averageExerciseScore = completedBestScores.Count == 0
+            ? (int?)null
+            : (int)Math.Round(completedBestScores.Average());
+
+        return new LearningProgressSummaryDto(
+            CompletedSkillCount: enrolledSkills
+                .Count(skill => skill.Status == LessonProgressStatuses.Completed),
+            TotalSkillCount: enrolledSkills.Count,
+            CompletedLessonCount: enrolledSkills.Sum(skill => skill.CompletedLessonCount),
+            AverageExerciseScore: averageExerciseScore);
+    }
 }

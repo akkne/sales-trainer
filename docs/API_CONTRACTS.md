@@ -344,6 +344,7 @@ account; it never creates a second user.
 | GET | /skill-tree | — | `SkillTreeResponseDto` |
 | GET | /skills | — | `SkillTreeNodeDto[]` (all skills, `locked` if not enrolled) |
 | GET | /skills/stages | — | `SkillStageDto[]` (admin-configured funnel stages, ordered) |
+| GET | /skills/progress-summary | — | `LearningProgressSummaryDto` — the caller's own headline numbers |
 | GET | /skills/:skillId/topics | — | `TopicDto[]` — `{topicId, skillId, title, orderInSkill}`, the topics of one skill by **id** (not slug), ordered |
 | PUT | /skills/enrolled | `{skillSlugs: string[]}` | 204 |
 
@@ -351,6 +352,22 @@ account; it never creates a second user.
 Skills in the list that are not yet enrolled are set to `available`.  
 Skills currently enrolled but absent from the list are set to `locked` (progress preserved).  
 `sales-basics` is always kept enrolled.
+
+`LearningProgressSummaryDto`: `{completedSkillCount, totalSkillCount, completedLessonCount, averageExerciseScore}`
+
+`GET /skills/progress-summary` — the profile screen's headline numbers, from the service that owns
+the rows. `averageExerciseScore` is the mean `bestScore` over **completed** lessons (the same
+definition the skill tree uses for its per-skill accuracy, so the screens agree) and is `null`, not
+`0`, when nothing has been completed — "no data" and "scored zero" are different answers. Both skill
+counts cover only the skills the learner is **enrolled** in, so `completedSkillCount /
+totalSkillCount` means the same thing here as on the tree.
+
+> **Do not read progress from `GET /profile`.** Identity-service still carries
+> `averageExerciseScore`, `completedSkillCount`, `totalSkillCount`, `totalXpAmount` and the streak
+> fields on `UserProfileStatsDto`, but they are hard-coded zeros: identity stopped owning learning
+> data at the microservices split and gamification was removed from the product. The fields survive
+> only so the response shape stays stable. The same applies to `averageExerciseScore` on
+> social-service's `PublicProfileDto`.
 
 `SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal, weeklyXpGoal}`  
 `dailyXpAmount`/`weeklyXpAmount` = progress points earned today / this week (UTC); `dailyXpGoal`/`weeklyXpGoal` = targets from the admin-editable `GamificationSettings` table (defaults 100 / 500), not hardcoded config.  
