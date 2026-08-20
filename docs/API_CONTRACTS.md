@@ -1141,6 +1141,16 @@ consumer must check `=== false`, never `!isActiveMember`, and gate the "departed
 skill heat map" are the same matrix read along its two axes.** Splitting them would run the
 aggregation twice and let the two screens disagree about the same window.
 
+**`dialogCount`/`dialogAverageScore` count every `UserDialogScores` row for the person in the
+window, unconditionally — a `Score` of `0` is a real grade ("a conversation the manager wrecked",
+`DialogScoreScale.Minimum`'s own doc comment) and is never excluded from either number.** There is
+no nullable "no score" state at this layer: the only way a conversation is absent from the count is
+that no row exists for it at all (2026-08-20 audit, org heat map O-3 — `AssignmentThresholdConsumer`
+used to silently skip writing the row for a `dialog.evaluated` event with no `ModeKey`, which starved
+this endpoint of every mode-key-less conversation regardless of its score; it now writes the row with
+an empty `DialogModeKey` instead, which `AssignmentThresholdEvaluator`'s exact-key matching still
+correctly ignores).
+
 **`accuracyPercent` is `null`, never `0`, below `minimumAttemptsForAccuracy`.** Two right answers out
 of two is 100% and means nothing about anybody — the same call 40.22 made for withholding an accuracy
 until every exercise in a set has been attempted. `weakestStageKey`/`weakestSkillId` are the

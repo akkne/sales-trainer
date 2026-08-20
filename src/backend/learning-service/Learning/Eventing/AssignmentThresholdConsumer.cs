@@ -90,10 +90,18 @@ internal sealed class AssignmentThresholdConsumer : KafkaConsumerBackgroundServi
     ///
     /// <para>
     /// A conversation published by a producer that predates 40.22 carries no mode key, and there is no
-    /// way to recover one. Recording a score under an empty key would make it match no assignment
-    /// while still counting as an attempt — a person credited with a try they cannot be judged on. The
-    /// score is therefore dropped, and the user id is still returned so that any exercise work of
-    /// theirs is not held up by it.
+    /// way to recover one. <b>The row is still written, with an empty mode key, rather than dropped.</b>
+    /// Dropping it used to be reasoned about from one reader alone —
+    /// <see cref="Sellevate.Learning.Features.Assignments.Services.Implementation.AssignmentThresholdEvaluator"/>,
+    /// which matches on <c>DialogModeKey</c> and must never count a conversation towards an assignment
+    /// it cannot be judged against. An empty key still satisfies that: it is not, and can never become,
+    /// one of an assignment's real scenario references, so <c>MeasureDialoguesAsync</c>'s
+    /// <c>modeKeys.Contains(score.DialogModeKey)</c> filter continues to ignore it exactly as before.
+    /// But the same row is also this organization's only per-person record of "a graded conversation
+    /// happened", read by <c>TeamSkillMapService</c> for the team dialog heat map, which needs no mode
+    /// key at all — dropping the row there was collateral damage from a decision made for the other
+    /// reader, and it silently thinned a manager's dialog totals down to whichever conversations
+    /// happened to carry a mode key (2026-08-20 audit, org heat map O-3).
     /// </para>
     /// </summary>
     private static async Task<Guid?> RecordDialogScoreAsync(
@@ -105,11 +113,6 @@ internal sealed class AssignmentThresholdConsumer : KafkaConsumerBackgroundServi
         if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.SessionId))
         {
             return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(payload.ModeKey))
-        {
-            return payload.UserId;
         }
 
         var databaseContext = scopedServices.GetRequiredService<LearningDbContext>();
@@ -132,7 +135,7 @@ internal sealed class AssignmentThresholdConsumer : KafkaConsumerBackgroundServi
             Id = Guid.NewGuid(),
             UserId = payload.UserId,
             SessionId = sessionId,
-            DialogModeKey = payload.ModeKey.Trim(),
+            DialogModeKey = string.IsNullOrWhiteSpace(payload.ModeKey) ? string.Empty : payload.ModeKey.Trim(),
             DialogModeId = payload.ModeId,
             Score = Math.Clamp(payload.QualityScore, 0, 100),
             EvaluatedAt = envelope.OccurredAt.UtcDateTime,

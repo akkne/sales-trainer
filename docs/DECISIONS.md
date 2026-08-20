@@ -5903,3 +5903,86 @@ right next to it). `SkillsController.GetLessonsForSkill` returns `NotFound` only
 otherwise, empty array included. No frontend change was needed — `useLessonsForSkill` already treats
 a 200 with `[]` as "no lessons," and the pages already render an empty state for that; the bug was
 purely the backend manufacturing an error where there wasn't one.
+
+## 2026-08-21 — org-zone audit run 2: O-1 (programme 500 + masked error) already fixed and undeployed; O-3 (heat map dialog undercount) traced to a collateral drop, not a `score = 0` filter
+
+Fixing docs/AUDIT_PROD.md O-1 and O-3 during an unattended run.
+
+### O-1: both halves were already fixed before this run; nothing new to ship except a redeploy
+
+`GET /admin/program/enrollments` throwing 500 is the query-translation bug `b724a2c` already fixed
+(`ProgramEnrollmentService.BuildEnrollmentListQuery` orders on the entity, ahead of the projection,
+and `ProgramEnrollmentQueryTranslationTests` pins it with `ToQueryString()`). Rebuilt and re-ran that
+test in this session (`dotnet test --filter ProgramEnrollmentQueryTranslationTests`, 3/3 green) — no
+new backend change was needed, matching the run's own note that `b724a2c` predates this audit and is
+simply not on `origin/main` yet (`git log origin/main..main` still lists it).
+
+The frontend half — "5xx renders as `Никто не зачислен`" — is *also* already fixed, by an earlier
+commit (`3fb2f0a`, 2026-08-19, "O18 «Программа обучения»"), which **is already on `origin/main`**.
+`app/(org)/org/program/page.tsx` checks `versionsQuery.isError || enrollmentsQuery.isError` before
+ever reaching the enrollment table and renders `<ErrorState>` with a retry button instead. Verified
+this is not merely a first-load check that a later stale-cache background failure could slip past:
+TanStack Query v5's query reducer sets `status: "error"` unconditionally on a failed fetch, even when
+earlier data existed (`node_modules/@tanstack/query-core/.../query.cjs`, `case "error"`), so
+`isError` becomes true on *any* settled failure, not only the first one. Since this fix predates the
+audit and is already merged to `origin/main`, the only explanation for still seeing the masked empty
+state on `sellevate.site` is that the deployed artifact lags even `origin/main`'s HEAD — a deploy gap
+on top of the Q-1 push gap already on record in docs/NIGHT_AUDIT_QUESTIONS.md, not a new code defect.
+
+Checked every sibling org screen fed by its own query hook for the same masking shape
+(`assignments`, `dialogs`, `people`, `profile`, `reviews`, `usage`, `/org` itself): all of them
+already gate on `isError` before falling back to an `EmptyState`. The one screen with no `isError` in
+its page component, `/org/content`, is not the bug — `useContentHubCounters` already reports
+per-queue `hasRunCountFailure`/`hasAdaptationCountFailure`/`hasOverrideCountFailure` (backed by
+`retry: false` + `.isError` per query) and `ContentQueueCard` renders "Не удалось прочитать очередь"
+instead of a zero when a queue's own count failed. No shared helper exists across these screens (each
+page composes `isError` inline), so there was no single place to fix even if one had been missing.
+
+### O-3: the skill-map aggregation does not discard zero scores — verified the generated SQL
+
+The audit's working theory was a `> 0`/truthy filter in `TeamSkillMapService`. Read the whole method
+and found no such filter, then proved it rather than trusting the reading: built the exact
+`dialogTotals` query against a real `LearningDbContext` (no database, `ToQueryString()`, same trick
+`b724a2c`'s test uses) and got back
+`SELECT u."UserId", count(*)::int AS "Count", round(avg(u."Score"::double precision))::int AS
+"Average" FROM "UserDialogScores" AS u WHERE (...tenant filter...) AND u."EvaluatedAt" >=
+@windowStart GROUP BY u."UserId"` — `count(*)`, not `count("Score")` or anything conditioned on its
+value. Score is a required, non-nullable `int` on the entity; there is no query filter, no `HasQueryFilter`,
+and no client-side re-filtering anywhere between the table and the DTO. The read side is innocent.
+
+The real mechanism is in the write side, `AssignmentThresholdConsumer.RecordDialogScoreAsync`
+(40.22): it silently returned without writing a `UserDialogScore` row whenever the incoming
+`dialog.evaluated` event's `ModeKey` was blank — documented in its own comment as deliberate, for a
+producer that predates 40.22 (2026-08-18, `b399110`/`01c94db`) and therefore never carried a mode key
+at all. That reasoning is sound for the one reader it was written for
+(`AssignmentThresholdEvaluator.MeasureDialoguesAsync`, which must never credit an assignment attempt
+it cannot match to a scenario) but the same table has a second reader, `TeamSkillMapService`, which
+needs no mode key — it only counts and averages `Score` per user. Dropping the row starved that
+second reader of every mode-key-less conversation, and for a user whose dialog history mostly
+predates 40.22 that is nearly all of it — which is why the audited account showed `dialogCount: 1`
+against 19 real completed sessions, and why the one row that *did* survive happened to be the one
+with a non-zero score: it is simply the one conversation completed after the mode key started being
+published, not a score-based selection.
+
+Fix: `RecordDialogScoreAsync` no longer drops the row for a blank mode key; it stores
+`DialogModeKey = string.Empty` instead. This is safe for the evaluator — `modeKeys.Contains("")` is
+false for every real assignment content reference, so an empty-keyed row still cannot be credited
+toward any assignment's dialog count — and it makes the row visible to the team heat map, which never
+looked at `DialogModeKey` in the first place. `Score = 0` continues to mean exactly what
+`DialogScoreScale.Minimum`'s own doc comment says ("A conversation the manager wrecked") — a real
+grade, always distinct from "no row exists for this conversation at all," which is the only shape
+"no score" can take in this table (there is no nullable score column to conflate it with).
+
+**What this fix does not do, named rather than silently claimed:** it cannot resurrect the 18 already
+-lost rows for the audited account. `dialog.evaluated` is Kafka's default topic retention
+(`docker-compose.infra.yml` sets no override, so the broker's default `log.retention.hours` applies,
+on the order of days) and those sessions are 20–40 days old; the messages are very likely gone from
+the topic, independent of this fix. Recovering the historical count would need a one-off backfill
+reading ai-service's own Mongo session store (which the audit's `/admin/dialog-sessions` evidence
+shows still has the real per-session scores) and writing the missing `UserDialogScores` rows directly
+— a cross-service data migration, not a bug fix, and an owner call on whether it is worth doing for a
+handful of pre-launch test accounts. Logged as `Q-3` in docs/NIGHT_AUDIT_QUESTIONS.md rather than
+attempted here. Going forward, from the moment this fix ships, no *new* mode-key-less dialog is
+possible in practice (every current producer sends a mode key) — the fix mainly forecloses the same
+collateral-drop shape recurring for some future schema-versioning gap, and stops the heat map from
+silently disagreeing with `/admin/dialog-sessions` on data going forward.
