@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies.Constants;
 using Sellevate.Company.Features.Companies.Exceptions;
@@ -24,6 +25,7 @@ namespace Sellevate.Company.Features.Companies.Endpoints;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class CompanyController(ICompanyService companyService) : ControllerBase
 {

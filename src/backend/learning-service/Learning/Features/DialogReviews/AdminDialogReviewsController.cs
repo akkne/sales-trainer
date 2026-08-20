@@ -21,6 +21,7 @@ namespace Sellevate.Learning.Features.DialogReviews;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminDialogReviewsController(
     IDialogReviewService dialogReviewService,

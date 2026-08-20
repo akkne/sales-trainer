@@ -29,6 +29,7 @@ namespace Sellevate.Learning.Features.Admin;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminAssignmentsController(
     IAssignmentService assignmentService,

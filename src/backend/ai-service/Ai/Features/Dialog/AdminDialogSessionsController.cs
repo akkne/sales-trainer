@@ -37,6 +37,7 @@ namespace Sellevate.Ai.Features.Dialog;
 /// </summary>
 [ApiController]
 [Route("admin/dialog-sessions")]
+[TenantScoped]
 [TenantTransaction]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminDialogSessionsController(

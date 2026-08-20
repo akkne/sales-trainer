@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
@@ -26,6 +27,7 @@ namespace Sellevate.Learning.Features.Exercises;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class ExerciseController(IExerciseService exerciseService, ILogger<ExerciseController> logger) : ControllerBase
 {

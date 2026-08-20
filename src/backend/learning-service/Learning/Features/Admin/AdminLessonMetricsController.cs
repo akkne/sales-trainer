@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.Lessons.Services.Abstract;
@@ -25,6 +26,7 @@ namespace Sellevate.Learning.Features.Admin;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminLessonMetricsController(ILessonAccuracyService lessonAccuracyService) : ControllerBase
 {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Features.Techniques.Services.Abstract;
@@ -7,6 +8,7 @@ using Sellevate.Learning.Features.Techniques.Services.Abstract;
 namespace Sellevate.Learning.Features.Techniques;
 
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class TechniqueController(ITechniqueService techniqueService) : ControllerBase
 {

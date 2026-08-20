@@ -30,6 +30,7 @@ namespace Sellevate.Ai.Features.Quotas;
 [ApiController]
 [Route("admin/ai-usage")]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
+[TenantScoped]
 [TenantTransaction]
 public sealed class AdminAiUsageController(IAiQuotaService quotaService) : ControllerBase
 {
@@ -44,10 +45,25 @@ public sealed class AdminAiUsageController(IAiQuotaService quotaService) : Contr
 /// <para>
 /// <b>Platform staff only, and that is a commercial boundary rather than a technical one.</b> A quota
 /// is what the customer bought; an organization administrator raising their own is not an
-/// administrative action, it is a purchase. The organization edited is the one in the caller's
-/// <c>X-Organization-Id</c> header — for platform staff, the one they impersonated into (40.9) —
-/// which is why there is no organization id in the route and no body field carrying one
-/// (<c>scripts/tenancy-boundary-lint.py</c>).
+/// administrative action, it is a purchase. <c>PUT</c> always writes the organization in the caller's
+/// own <c>X-Organization-Id</c> header — for platform staff, the one they impersonated into (40.9) —
+/// which is why the write has no organization id in the route and no body field carrying one
+/// (<c>scripts/tenancy-boundary-lint.py</c>): a platform administrator's own session is never
+/// scoped to a customer's organization, so today there is no token that both passes
+/// <see cref="AuthorizationPolicies.RequirePlatformAdministrator"/> and writes anywhere but the
+/// platform's own default organization. That gap is tracked as Q-10 in
+/// docs/NIGHT_AUDIT_QUESTIONS.md; this controller does not attempt to close it.
+/// </para>
+///
+/// <para>
+/// <c>GET {id}</c> is the narrow exception: it names the organization explicitly, in the route, and
+/// the tenancy-boundary lint allow-lists this file for exactly that reason (2026-08-21 admin audit,
+/// AD-5). Doing so is safe for reads only — <c>OrganizationQuota</c>'s query filter already widens to
+/// every organization for platform staff, so this simply narrows that already-wide read to one
+/// organization instead of leaving it defaulted to the caller's own. It must never be mirrored onto
+/// the <c>PUT</c>: the <c>TenantSaveChangesInterceptor</c> and the RLS <c>WITH CHECK</c> clause both
+/// still require a write's <c>OrganizationId</c> to match the caller's own <see cref="ITenantContext"/>,
+/// which no code in this controller may reassign mid-request.
 /// </para>
 /// </summary>
 [ApiController]
@@ -60,6 +76,18 @@ public sealed class AdminAiQuotaController(IAiQuotaService quotaService) : Contr
     [HttpGet]
     public async Task<ActionResult<AiQuotaSettingsDto>> GetQuota(CancellationToken cancellationToken)
         => Ok(await quotaService.GetSettingsAsync(cancellationToken));
+
+    /// <summary>
+    /// The platform panel's per-organization quota screen
+    /// (<c>/admin/organizations/{id}/quota</c>) calls this instead of the parameterless
+    /// <see cref="GetQuota"/> so the numbers shown always belong to the organization the operator is
+    /// actually looking at, not to whichever organization the caller's own session happens to carry
+    /// (AD-5). There is deliberately no write counterpart — see the type-level remarks.
+    /// </summary>
+    [HttpGet("{organizationId:guid}")]
+    public async Task<ActionResult<AiQuotaSettingsDto>> GetQuotaForOrganization(
+        Guid organizationId, CancellationToken cancellationToken)
+        => Ok(await quotaService.GetSettingsForOrganizationAsync(organizationId, cancellationToken));
 
     [HttpPut]
     public async Task<ActionResult<AiQuotaSettingsDto>> SaveQuota(

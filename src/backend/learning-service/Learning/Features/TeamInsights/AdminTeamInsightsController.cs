@@ -19,6 +19,7 @@ namespace Sellevate.Learning.Features.TeamInsights;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminTeamInsightsController(ITeamSkillMapService teamSkillMapService) : ControllerBase
 {

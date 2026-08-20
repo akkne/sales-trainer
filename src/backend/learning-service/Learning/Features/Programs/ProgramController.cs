@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Programs.Models;
 using Sellevate.Learning.Features.Programs.Services.Abstract;
@@ -17,6 +18,7 @@ namespace Sellevate.Learning.Features.Programs;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class ProgramController(
     IProgramEnrollmentService programEnrollmentService,

@@ -1,3 +1,4 @@
+using Sellevate.BuildingBlocks.Tenancy;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -20,6 +21,7 @@ namespace Sellevate.Learning.Features.Admin;
 /// </summary>
 [ApiController]
 [TenantTransaction]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminTechniquesController(
     LearningDbContext databaseContext,

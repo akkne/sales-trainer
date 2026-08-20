@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Content;
@@ -43,6 +44,7 @@ namespace Sellevate.Learning.Features.Admin;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 [TenantTransaction]
 public sealed class AdminContentGenerationController(

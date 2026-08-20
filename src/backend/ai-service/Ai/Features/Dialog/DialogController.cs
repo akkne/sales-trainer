@@ -8,6 +8,7 @@ using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.Ai.Infrastructure.Learning;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.Ai.Features.Dialog;
 
@@ -35,6 +36,7 @@ namespace Sellevate.Ai.Features.Dialog;
 /// </summary>
 [ApiController]
 [Route("dialog")]
+[TenantScoped]
 [Authorize]
 public sealed class DialogController : ControllerBase
 {

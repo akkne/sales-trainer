@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.DialogReviews.Models;
 using Sellevate.Learning.Features.DialogReviews.Services.Abstract;
@@ -18,6 +19,7 @@ namespace Sellevate.Learning.Features.DialogReviews;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class DialogReviewsController(IDialogReviewService dialogReviewService) : ControllerBase
 {

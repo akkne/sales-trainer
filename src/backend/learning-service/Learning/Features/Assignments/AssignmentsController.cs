@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Assignments.Services.Abstract;
@@ -24,6 +25,7 @@ namespace Sellevate.Learning.Features.Assignments;
 /// </para>
 /// </summary>
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class AssignmentsController(IMyAssignmentService myAssignmentService) : ControllerBase
 {

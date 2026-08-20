@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
@@ -10,6 +11,7 @@ namespace Sellevate.Learning.Features.SkillTree.Endpoints;
 
 [ApiController]
 [Route("skills")]
+[TenantScoped]
 [Authorize]
 public sealed class SkillsController(ISkillTreeService skillTreeService, IExerciseService exerciseService) : ControllerBase
 {

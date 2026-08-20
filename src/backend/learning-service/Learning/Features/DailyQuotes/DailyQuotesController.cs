@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.DailyQuotes;
 
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class DailyQuotesController(LearningDbContext databaseContext) : ControllerBase
 {

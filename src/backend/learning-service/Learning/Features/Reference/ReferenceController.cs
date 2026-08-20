@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Features.Reference.Services.Abstract;
 
 namespace Sellevate.Learning.Features.Reference;
 
 [ApiController]
+[TenantScoped]
 [Authorize]
 public sealed class ReferenceController(IReferenceService referenceService) : ControllerBase
 {

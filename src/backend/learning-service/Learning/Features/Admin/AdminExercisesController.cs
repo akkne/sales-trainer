@@ -1,3 +1,4 @@
+using Sellevate.BuildingBlocks.Tenancy;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +21,7 @@ namespace Sellevate.Learning.Features.Admin;
 /// </summary>
 [ApiController]
 [TenantTransaction]
+[TenantScoped]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminExercisesController(LearningDbContext database, ILogger<AdminExercisesController> logger) : ControllerBase
 {

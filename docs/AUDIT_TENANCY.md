@@ -224,7 +224,42 @@ read-scope'ы в `DialogService` дают тот же defence-in-depth без э
 - **Уверенность:** defence-in-depth (после шага 12 — функциональный регресс, не утечка)
 - **Severity:** minor
 
-### [ ] T-6 `[TenantScoped]` расставлен непоследовательно
+### [x] T-6 `[TenantScoped]` расставлен непоследовательно
+
+**Исправлено (2026-08-21, ночной прогон), с одним осознанным ограничением объёма.** Добавил
+`[TenantScoped]` на все org/пользовательские контроллеры learning-service, у которых он
+отсутствовал (22 файла: `AdminAssignmentsController`, `AdminContentAdaptationController`,
+`AdminContentGenerationController`, `AdminContentOverridesController`, `AdminExercisesController`,
+`AdminLessonMetricsController`, `AdminLessonsController`, `AdminLessonVersionsController`,
+`AdminProgramController`, `AdminReferenceController`, `AdminTeamSkillGapsController`,
+`AdminTechniquesController`, `AssignmentsController`, `DailyQuotesController`,
+`AdminDialogReviewsController`, `DialogReviewsController`, `ExerciseController`,
+`ProgramController`, `ReferenceController`, `SkillTreeController`, `SkillsController`,
+`AdminTeamInsightsController`, `TechniqueController`), плюс `CompanyController` (company-service)
+и `AdminAiUsageController`/`AdminDialogSessionsController`/`DialogController` (ai-service).
+
+**Осознанно не тронул:**
+- `InternalSkillsController` (learning) — уже документирован как намеренное исключение («No tenant
+  scope to resolve» — глобальный контент, читает без заголовка организации ровно как
+  content-контроллеры под `Features/Admin`). Добавление `[TenantScoped]` сюда сломало бы вызовы от
+  платформенного персонала без организации — а этот маршрут именно для них.
+- Шесть чисто платформенных контроллеров learning-service, работающих только с глобальным
+  контентом (`AdminDailyQuotesController`, `AdminExerciseTypePromptsController`,
+  `AdminSkillStagesController`, `AdminSkillsController`, `AdminSeederController`,
+  `AdminTopicsController`) — все под `RequirePlatformAdministrator`, то есть проверка
+  `[TenantScoped]` (403 только если нет ни организации, ни платформенной роли) для них
+  математически никогда не сработает: кто прошёл `RequirePlatformAdministrator`, уже
+  «платформенный персонал» по определению того же гейта. Добавление было бы шумом без защитного
+  эффекта, поэтому не стал расширять диф туда.
+
+Сборка и юнит-тесты каждого затронутого сервиса зелёные:
+learning-service — `dotnet build` 0 ошибок, `dotnet test` 90 passed/0 failed/14 skipped;
+company-service — `dotnet build` 0 ошибок, `dotnet test` 135 passed/0 failed/12 skipped;
+ai-service — `dotnet build` 0 ошибок, `dotnet test` 170 passed/0 failed/11 skipped.
+`scripts/tenancy-boundary-lint.sh` и `scripts/tenancy-pool-lint.sh` — чисто после каждого сервиса.
+`RouteParity.Tests` (собирает весь бэкенд + сверяет маршруты с гейтвеем) — 5 passed/0 failed,
+подтверждает, что весь бэкенд собирается и маршруты не разошлись с гейтвеем (`[TenantScoped]` —
+только endpoint-метаданные, на маршрутизацию не влияет). Ни один тест не потребовал ревёрта.
 - **Эндпоинт:** атрибута нет ни на одном контроллере learning-service, кроме
   `InternalAssignmentsController.cs:33`; нет на `company-service/.../CompanyController.cs:26-28`;
   в ai-service есть на `AdminAiQuotaController.cs:56`, но нет на соседях
