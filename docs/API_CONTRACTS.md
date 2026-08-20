@@ -1116,7 +1116,12 @@ missing for one person without the whole response failing. `displayName` is `nul
 placeholder, for anyone without a replica row yet; the client types this field `string | null` and
 resolves the fallback label itself (`useTeamMemberNames` in `use-team-directory.ts`) rather than
 sorting or rendering the raw value — a client that treats it as always-a-string will crash the first
-time replication lags behind a fresh signup.
+time replication lags behind a fresh signup. `isActiveMember` is `null` for **every** member at once
+whenever `TryReadRosterAsync` fails to reach identity-service (`TeamSkillMapService.cs`) — it is not
+one person's field going missing, it is the whole roster read failing — so the client types it
+`boolean | null` too (`TeamSkillMapMember`/`TeamMemberName` in `use-team-directory.ts`) and every
+consumer must check `=== false`, never `!isActiveMember`, and gate the "departed" label on
+`rosterKnown`/`isRosterKnown` (`audience-picker.tsx`, mirroring `org-team/utils/team-roster.ts`).
 
 **One endpoint, not two, because "per manager: where they sag, by funnel stage" and "per team: a
 skill heat map" are the same matrix read along its two axes.** Splitting them would run the

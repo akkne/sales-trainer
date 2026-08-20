@@ -48,7 +48,11 @@ export interface TeamSkillMapMember {
      * go through `useTeamMemberNames`, which resolves it to `UNNAMED_MEMBER_LABEL`.
      */
     displayName: string | null;
-    isActiveMember: boolean;
+    /// `null` means «не смогли проверить» (identity-service unreachable when the roster was read),
+    /// which is a different statement from «работает» and must never be drawn as one — see
+    /// `TeamSkillMapMemberDto.IsActiveMember` on the backend and `org-team/utils/team-roster.ts`,
+    /// which normalizes the same field the same way.
+    isActiveMember: boolean | null;
     attemptCount: number;
     accuracyPercent: number | null;
     weakestStageKey: string | null;
@@ -74,7 +78,8 @@ export interface TeamMemberName {
     userId: string;
     /** Always a real string here — `useTeamMemberNames` has already resolved a missing name to `UNNAMED_MEMBER_LABEL`. */
     displayName: string;
-    isActiveMember: boolean;
+    /// `null` means «не смогли проверить», not «работает» — see `TeamSkillMapMember.isActiveMember`.
+    isActiveMember: boolean | null;
 }
 
 /**
@@ -116,8 +121,10 @@ export function useTeamMemberNames(windowDays?: number) {
                 isActiveMember: member.isActiveMember,
             }))
             .sort((left, right) => {
-                if (left.isActiveMember !== right.isActiveMember) {
-                    return left.isActiveMember ? -1 : 1;
+                const isLeftDeparted = left.isActiveMember === false;
+                const isRightDeparted = right.isActiveMember === false;
+                if (isLeftDeparted !== isRightDeparted) {
+                    return isLeftDeparted ? 1 : -1;
                 }
                 return left.displayName.localeCompare(right.displayName, "ru");
             });

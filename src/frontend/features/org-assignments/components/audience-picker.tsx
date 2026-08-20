@@ -29,7 +29,7 @@ export function AudiencePicker({
     disabled = false,
     error = null,
 }: AudiencePickerProps) {
-    const { memberNames, isLoading, isError } = useTeamMemberNames();
+    const { memberNames, isRosterKnown, isLoading, isError } = useTeamMemberNames();
 
     const toggleMember = (userId: string) => {
         onSelectedUserIdsChange(
@@ -93,7 +93,7 @@ export function AudiencePicker({
                                     onChange={() => toggleMember(member.userId)}
                                 />
                                 <span>{member.displayName}</span>
-                                {!member.isActiveMember && (
+                                {isRosterKnown && member.isActiveMember === false && (
                                     <span className="text-xs text-ink-4">
                                         уже не работает в компании
                                     </span>
