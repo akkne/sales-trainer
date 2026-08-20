@@ -101,7 +101,7 @@ export default function AdminDiscussPage() {
                                                 {thread.title}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-3 text-ink-3 text-sm">{thread.authorName}</td>
+                                        <td className="px-4 py-3 text-ink-3 text-sm">{thread.authorName || "Аноним"}</td>
                                         <td className="px-4 py-3 text-ink-3">{thread.upvoteCount}</td>
                                         <td className="px-4 py-3 text-ink-3">{thread.replyCount}</td>
                                         <td className="px-4 py-3 text-xs text-ink-3 space-x-1">

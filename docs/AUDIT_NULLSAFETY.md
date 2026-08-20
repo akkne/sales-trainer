@@ -137,7 +137,7 @@
   crash только в подслучае «элемент массива = null»
 - **Severity:** minor
 
-### [ ] N-4 `authorName` в админской таблице обсуждений — пустая ячейка вместо «Аноним»
+### [x] N-4 `authorName` в админской таблице обсуждений — пустая ячейка вместо «Аноним»
 
 - **Бэкенд:** `DiscussThreadSummaryDto.AuthorName` (`string`, non-nullable,
   `src/backend/social-service/Social/Features/Discuss/Models/DiscussThreadSummaryDto.cs:8`),
