@@ -4309,3 +4309,34 @@
       ни один из них не выполнялся ни разу — **прогнать `dotnet test … --filter
       "TestCategory=Integration"` при первой возможности**, до того как на этот маршрут будет
       что-то полагаться в проде.
+
+---
+
+## Block — /skills/progress-summary still 404s in production (2026-08-20)
+
+Re-probed the live API (api.sellevate.site) as part of a debugging task and found `GET
+/skills/progress-summary` still answering `404`, and `GET /readiness` failing outright with no HTTP
+response. Root-caused both; neither needed a code change.
+
+- [ ] **`GET /skills/progress-summary` — the fix is already committed locally but never pushed.**
+      `git log` shows local `main` is `ahead of 'origin/main' by 1` commit: `b724a2c` ("fix: the org
+      programme screen 500ed, and the profile screen reported 0% accuracy"), which adds exactly this
+      route (`SkillsController.GetProgressSummary`, `skills/progress-summary`). Verified the code is
+      correct and not the problem: `dotnet build` on `Sellevate.Learning.csproj` is clean,
+      `Learning.Tests` unit tests for the route (`SkillTreeProgressSummaryTests`) pass, and
+      `Sellevate.RouteParity.Tests` (which reflects over every controller and checks gateway
+      coverage) passes all 5 assertions with this commit present — the route is reachable through
+      the gateway and owned by the right cluster. **A human needs to `git push` (or whatever the
+      deploy pipeline requires) to get `b724a2c` onto the branch/image production actually builds
+      from.** Debugger agents must not push per instructions, so this is left here rather than done.
+
+- [ ] **`GET /readiness` was never a real endpoint — this is a docs bug, now fixed, not a missing
+      route.** Nothing in `src/frontend` calls a bare `/readiness`; the frontend only ever calls
+      `GET /companies/{id}/readiness` (`features/companies/hooks/use-company-readiness.ts`). The gateway
+      has no route for `/readiness` and no controller anywhere serves it — the actual per-service
+      health/readiness probe is `/readyz` (`HealthCheckConstants.ReadinessEndpoint`), which is not
+      exposed through the gateway at all (infra-only, scraped per-service). `docs/API_CONTRACTS.md`
+      used "`GET /readiness`" as loose shorthand for `GET /companies/{id}/readiness` in one sentence
+      (line ~2125), which reads like a distinct documented route if grepped in isolation — that is
+      almost certainly what the production audit tooling matched on. Fixed the wording and added an
+      explicit disambiguation note in `docs/API_CONTRACTS.md`. No endpoint was added.

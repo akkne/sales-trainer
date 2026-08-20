@@ -2122,9 +2122,17 @@ being stuck behind a stale/incorrect cache entry.
 **Cache invalidation:** creating a practice call (`POST /companies/{id}/practice-calls`) is this
 codebase's practice-completion signal (dialog-session completion itself is tracked only in
 ai-service's Mongo, not in company-service) — it clears `ReadinessJson`/`ReadinessGeneratedAt`
-**and** `ReadinessNoFeedbackUntil` on the company so the next `GET /readiness` regenerates from the
-fresh session list instead of being held back by a stale negative cache. There is no other path in
-company-service that marks a practice call complete.
+**and** `ReadinessNoFeedbackUntil` on the company so the next `GET /companies/{id}/readiness`
+regenerates from the fresh session list instead of being held back by a stale negative cache. There
+is no other path in company-service that marks a practice call complete.
+
+> There is no standalone `GET /readiness` endpoint anywhere in this API — every reference to
+> "readiness" above is short for `GET /companies/{id}/readiness`. The bare path `/readiness` is not
+> routed by the gateway, has no controller, and is not called by the frontend; it is easy to
+> misread the shorthand above as a distinct route, which is why this note exists (found during the
+> 2026-08-20 production audit, docs/TESTING/PROD_AUDIT_2026_08_20.md). The `/readyz` health-check
+> endpoint (per-service dependency readiness for infra probes, not exposed through the gateway) is
+> unrelated and documented in docs/MONITORING.md, not here.
 
 `CompanyReadinessDto`: `{score, strengths, gaps, recommendation, generatedAt}` — all fields `null`
 when there's no data yet (see above).
