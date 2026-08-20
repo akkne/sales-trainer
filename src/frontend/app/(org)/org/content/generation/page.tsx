@@ -44,6 +44,19 @@ function GenerationRunsContent() {
     const { data: runs, isLoading, isError, refetch } = useContentGenerationJobs(statusFilter);
     const startGeneration = useStartContentGeneration();
 
+    /**
+     * O-9 (docs/AUDIT_PROD.md): closing the modal has to drop `?new=1` too, or a reload — or even
+     * just the back button — reopens a form the РОП just closed. Only replaces when the parameter
+     * is actually there, so closing a modal opened by the button (no query string to begin with)
+     * doesn't add a needless history entry.
+     */
+    const closeStartModal = () => {
+        setIsStartModalOpen(false);
+        if (searchParameters.has(OPEN_START_FORM_PARAMETER)) {
+            router.replace("/org/content/generation");
+        }
+    };
+
     const columns: Column<ContentGenerationJobSummary>[] = [
         {
             key: "title",
@@ -195,7 +208,7 @@ function GenerationRunsContent() {
             {/* Mounted only while open, so a cancelled draft is gone rather than reset by hand. */}
             {isStartModalOpen && (
                 <StartGenerationModal
-                    onClose={() => setIsStartModalOpen(false)}
+                    onClose={closeStartModal}
                     onStart={handleStart}
                     isPending={startGeneration.isPending}
                     startErrorMessage={
