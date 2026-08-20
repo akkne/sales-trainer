@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { DialogFeedback } from "@/features/dialog/hooks/use-dialog";
 import { Icon } from "@/shared/components/icon";
+import { FeedbackHtml } from "@/shared/components/feedback-html";
 import { useDisputeScore } from "@/features/dialog-reviews/hooks/use-dialog-reviews";
 
 interface FeedbackModalProps {
@@ -89,10 +90,10 @@ export function FeedbackModal({ feedback, onClose, sessionId }: FeedbackModalPro
                     {/* No XP for a call: the analysis is the reward. `xpEarned` is still on the
                         contract (the backend scores the session) but is never shown. */}
 
-                    <div
+                    <FeedbackHtml
+                        html={feedback.summary}
                         className="body [&_strong]:font-semibold [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5"
                         style={{ fontSize: 14, lineHeight: 1.65 }}
-                        dangerouslySetInnerHTML={{ __html: feedback.summary }}
                     />
 
                     {!isExpanded && feedback.content !== feedback.summary && (
@@ -104,10 +105,10 @@ export function FeedbackModal({ feedback, onClose, sessionId }: FeedbackModalPro
                     {isExpanded && (
                         <>
                             <div className="hr" style={{ margin: "16px 0" }} />
-                            <div
+                            <FeedbackHtml
+                                html={feedback.content}
                                 className="body [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_h3:first-child]:mt-0 [&_strong]:font-semibold [&_em]:italic [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5"
                                 style={{ fontSize: 14, lineHeight: 1.65 }}
-                                dangerouslySetInnerHTML={{ __html: feedback.content }}
                             />
                             <button className="more-btn" style={{ color: "var(--ink-3)" }} onClick={() => setIsExpanded(false)}>
                                 Свернуть <Icon name="chevron-up" size={18} />

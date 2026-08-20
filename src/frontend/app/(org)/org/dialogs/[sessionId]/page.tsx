@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Card, CardContent } from "@/shared/components/card";
 import { EmptyState } from "@/shared/components/empty-state";
 import { ErrorState } from "@/shared/components/error-state";
+import { FeedbackHtml } from "@/shared/components/feedback-html";
 import { PageHeader } from "@/shared/components/page-header";
 import { SkeletonList } from "@/shared/components/skeleton";
 import { useAuthStore } from "@/shared/stores/auth-store";
@@ -178,9 +179,10 @@ export default function OrganizationDialogTranscriptPage() {
                                 <h2 className="text-xs font-medium text-ink-3 uppercase tracking-wide mb-3">
                                     Обратная связь ИИ
                                 </h2>
-                                <p className="text-sm text-ink-2 whitespace-pre-wrap">
-                                    {transcript.feedback.content}
-                                </p>
+                                <FeedbackHtml
+                                    html={transcript.feedback.content}
+                                    className="text-sm text-ink-2 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_h3:first-child]:mt-0 [&_strong]:font-semibold [&_em]:italic [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5"
+                                />
                             </CardContent>
                         </Card>
                     )}
