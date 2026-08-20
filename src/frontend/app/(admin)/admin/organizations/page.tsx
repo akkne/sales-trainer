@@ -12,8 +12,16 @@ import {
     usePlatformOrganizations,
     useSetOrganizationStatus,
     useStartImpersonation,
+    type OrganizationAdminRole,
     type PlatformOrganization,
 } from "@/features/admin/hooks/use-organizations";
+
+const defaultAdminRole: OrganizationAdminRole = "TenancySuperAdmin";
+
+const adminRoleLabels: Record<OrganizationAdminRole, string> = {
+    TenancySuperAdmin: "Superadmin (can add and remove users)",
+    TenancyAdmin: "Admin (cannot manage users)",
+};
 
 const statusBadgeClass: Record<string, string> = {
     Active: "bg-olive-soft text-olive",
@@ -40,6 +48,9 @@ export default function AdminOrganizationsPage() {
     const [newOrganizationName, setNewOrganizationName] = useState("");
     const [newOrganizationSlug, setNewOrganizationSlug] = useState("");
     const [adminEmailByOrganizationId, setAdminEmailByOrganizationId] = useState<Record<string, string>>({});
+    const [adminRoleByOrganizationId, setAdminRoleByOrganizationId] = useState<
+        Record<string, OrganizationAdminRole>
+    >({});
     const [feedback, setFeedback] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -63,6 +74,7 @@ export default function AdminOrganizationsPage() {
     const inviteFirstAdmin = async (organization: PlatformOrganization) => {
         const email = (adminEmailByOrganizationId[organization.id] ?? "").trim();
         if (!email) return;
+        const role = adminRoleByOrganizationId[organization.id] ?? defaultAdminRole;
 
         setFeedback(null);
         setErrorMessage(null);
@@ -70,9 +82,10 @@ export default function AdminOrganizationsPage() {
             await bootstrapOrganizationAdmin.mutateAsync({
                 organizationId: organization.id,
                 email,
+                role,
             });
             setAdminEmailByOrganizationId((current) => ({ ...current, [organization.id]: "" }));
-            setFeedback(`Invited ${email} as the first TenancySuperAdmin of "${organization.name}".`);
+            setFeedback(`Invited ${email} as the first ${role} of "${organization.name}".`);
         } catch (error) {
             setErrorMessage((error as Error).message);
         }
@@ -212,6 +225,23 @@ export default function AdminOrganizationsPage() {
                                                 placeholder="admin@customer.com"
                                                 className="px-2 py-1 text-xs rounded-lg border border-line bg-surface text-ink"
                                             />
+                                            <select
+                                                aria-label={`First admin role for ${organization.name}`}
+                                                value={adminRoleByOrganizationId[organization.id] ?? defaultAdminRole}
+                                                onChange={(event) =>
+                                                    setAdminRoleByOrganizationId((current) => ({
+                                                        ...current,
+                                                        [organization.id]: event.target.value as OrganizationAdminRole,
+                                                    }))
+                                                }
+                                                className="px-2 py-1 text-xs rounded-lg border border-line bg-surface text-ink"
+                                            >
+                                                {(Object.keys(adminRoleLabels) as OrganizationAdminRole[]).map((role) => (
+                                                    <option key={role} value={role}>
+                                                        {adminRoleLabels[role]}
+                                                    </option>
+                                                ))}
+                                            </select>
                                             <button
                                                 type="button"
                                                 onClick={() => inviteFirstAdmin(organization)}

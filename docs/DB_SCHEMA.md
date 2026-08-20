@@ -1629,6 +1629,7 @@ One EF migration history per database — there is no shared one, and there has 
 | `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
 | `AddDemoRequests` | 2026-08-19 | `DemoRequests` — landing-page lead capture, written by an anonymous endpoint. Deliberately **no** `EnableTenantRls` call and no `OrganizationId`: a lead precedes any tenant, so there is nothing to scope it to, and platform-admin authorization replaces RLS here. Non-unique index on `WorkEmail` (the cooldown lookup — one company may legitimately ask twice over time) and a descending index on `CreatedAt` (the admin list order). |
 | `AddDemoRequestMarketingConsent` | 2026-08-19 | Additive `AddColumn` only: nullable `MarketingConsentGivenAt` on `DemoRequests`, splitting marketing consent off the required data-processing consent because 152-ФЗ/GDPR treat them as separate purposes. Written as a second migration rather than an edit to `AddDemoRequests` so the sequence stays an honest record of what happened. |
+| `MakeDemoRequestPhoneRequired` | 2026-08-20 | `AlterColumn` only: `DemoRequests.Phone` from nullable to `NOT NULL` (owner decision — the sales motion this form feeds is phone-first). The `Qualified → Approved` rename the same day needed **no** migration: `Status` is `character varying(32)` via `HasConversion<string>()` with no `CHECK` constraint naming the allowed values, so nothing in the database referenced the old member name. |
 
 
 ---
@@ -1792,7 +1793,7 @@ pattern as `Companies.Status`). This table is the tenant registry itself, so it 
 | `Id`                      | uuid          | PK, minted in code                   |
 | `FullName`                | varchar(120)  | NOT NULL                             |
 | `WorkEmail`               | varchar(200)  | NOT NULL, stored trimmed + lowercased|
-| `Phone`                   | varchar(40)   | NULL                                 |
+| `Phone`                   | varchar(40)   | NOT NULL (was NULL — required 2026-08-20, `MakeDemoRequestPhoneRequired`) |
 | `CompanyName`             | varchar(200)  | NOT NULL                             |
 | `JobTitle`                | varchar(120)  | NULL                                 |
 | `SalesTeamSize`           | varchar(32)   | NOT NULL                             |
@@ -1807,7 +1808,9 @@ pattern as `Companies.Status`). This table is the tenant registry itself, so it 
 may legitimately ask twice over time), `IX_DemoRequests_CreatedAt` (descending — the admin list order)
 
 `SalesTeamSize` is `UpToFive | SixToTwenty | TwentyOneToFifty | FiftyOneToTwoHundred |
-MoreThanTwoHundred` and `Status` is `New | Contacted | Qualified | Declined`, both stored as their
+MoreThanTwoHundred` and `Status` is `New | Contacted | Approved | Declined` (`Approved`, not
+`Qualified` — renamed 2026-08-20, no migration needed since the column carries no `CHECK`
+constraint), both stored as their
 string names (`HasConversion<string>()`, same pattern as `Organizations.Status`).
 
 Not `ITenantScoped` and never wrapped in `EnableTenantRls`, for a **different reason** than

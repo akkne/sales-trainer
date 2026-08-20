@@ -27,6 +27,8 @@ export interface OrganizationReference {
     name: string;
 }
 
+export type OrganizationAdminRole = "TenancyAdmin" | "TenancySuperAdmin";
+
 export interface BootstrapOrganizationAdminResult {
     inviteId: string;
     organization: OrganizationReference;
@@ -106,19 +108,27 @@ export function useSetOrganizationStatus() {
 
 export function useBootstrapOrganizationAdmin() {
     return useMutation({
-        mutationFn: ({ organizationId, email }: { organizationId: string; email: string }) =>
+        mutationFn: ({
+            organizationId,
+            email,
+            role = "TenancySuperAdmin",
+        }: {
+            organizationId: string;
+            email: string;
+            role?: OrganizationAdminRole;
+        }) =>
             apiClient.post<BootstrapOrganizationAdminResult>(
                 "/admin/platform/organizations/bootstrap-admin",
-                { organizationId, email }
+                { organizationId, email, role }
             ),
         onSuccess: (result) => {
-            clientLogger.info("First tenancy superadmin invited", {
+            clientLogger.info("First organization administrator invited", {
                 organizationId: result.organization.id,
                 inviteId: result.inviteId,
             });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to invite the first tenancy superadmin", {
+            clientLogger.error("Failed to invite the first organization administrator", {
                 organizationId: variables.organizationId,
                 error: (error as Error).message,
             });

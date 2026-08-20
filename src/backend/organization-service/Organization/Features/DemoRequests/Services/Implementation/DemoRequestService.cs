@@ -32,11 +32,22 @@ namespace Sellevate.Organization.Features.DemoRequests.Services.Implementation;
 /// </para>
 ///
 /// <para>
-/// <b>Notification failure never fails the request.</b> The lead is persisted before the email is
+/// <b>Notification failure never fails the request.</b> The lead is persisted before any email is
 /// attempted, and an exception from <see cref="IEmailSender"/> is caught and logged, not rethrown — a
-/// sales inbox outage must not turn into a failed submission for a visitor filling out a form. The
-/// notification also never reaches the submitter's own address: see
-/// <see cref="Abstract.IDemoRequestNotificationComposer"/>.
+/// sales inbox outage or a submitter's own mailbox rejecting the acknowledgement must not turn into a
+/// failed submission for a visitor filling out a form. The same holds for
+/// <see cref="UpdateStatusAsync"/>: the status change is saved before the approval email is attempted,
+/// so a mail failure never loses the fact that a lead was approved.
+/// </para>
+///
+/// <para>
+/// <b>The submitter now receives email too.</b> As of 2026-08-20 this reverses the original decision
+/// recorded in docs/DECISIONS.md and docs/DEMO_REQUEST.md that no email is ever sent to the address a
+/// visitor typed in, because the honeypot and the per-email cooldown are the only two things left
+/// limiting how often this anonymous endpoint can be made to mail a third party. A submission sends the
+/// internal notification and a submission acknowledgement to <see cref="DemoRequest.WorkEmail"/>; an
+/// actual transition into <see cref="DemoRequestStatus.Approved"/> — never a re-patch of an
+/// already-approved lead — sends one more, pointing the submitter at registration.
 /// </para>
 /// </summary>
 internal sealed class DemoRequestService(
@@ -89,7 +100,7 @@ internal sealed class DemoRequestService(
             Id = Guid.NewGuid(),
             FullName = request.FullName.Trim(),
             WorkEmail = normalizedWorkEmail,
-            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            Phone = request.Phone.Trim(),
             CompanyName = request.CompanyName.Trim(),
             JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? null : request.JobTitle.Trim(),
             SalesTeamSize = request.SalesTeamSize!.Value,
@@ -104,7 +115,8 @@ internal sealed class DemoRequestService(
         databaseContext.DemoRequests.Add(demoRequest);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        await SendNotificationAsync(demoRequest, configuration, cancellationToken);
+        await SendInternalNotificationAsync(demoRequest, configuration, cancellationToken);
+        await SendSubmissionAcknowledgementAsync(demoRequest, cancellationToken);
 
         return new DemoRequestAcceptedDto(demoRequest.Id, demoRequest.CreatedAt);
     }
@@ -131,14 +143,22 @@ internal sealed class DemoRequestService(
             return null;
         }
 
+        var wasJustApproved = demoRequest.Status != DemoRequestStatus.Approved
+            && status == DemoRequestStatus.Approved;
+
         demoRequest.Status = status;
         demoRequest.UpdatedAt = DateTime.UtcNow;
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        if (wasJustApproved)
+        {
+            await SendApprovalNotificationAsync(demoRequest, cancellationToken);
+        }
+
         return ToDto(demoRequest);
     }
 
-    private async Task SendNotificationAsync(
+    private async Task SendInternalNotificationAsync(
         DemoRequestEntity demoRequest, DemoRequestConfiguration configuration, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(configuration.NotificationEmail))
@@ -151,7 +171,7 @@ internal sealed class DemoRequestService(
 
         try
         {
-            var message = notificationComposer.Compose(
+            var message = notificationComposer.ComposeInternalNotification(
                 demoRequest, configuration.NotificationEmail, configuration.NotificationRecipientName);
             await emailSender.SendEmailAsync(message, cancellationToken);
         }
@@ -160,6 +180,40 @@ internal sealed class DemoRequestService(
             logger.LogError(
                 exception,
                 "Failed to send demo request notification for {DemoRequestId}",
+                demoRequest.Id);
+        }
+    }
+
+    private async Task SendSubmissionAcknowledgementAsync(
+        DemoRequestEntity demoRequest, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var message = notificationComposer.ComposeSubmissionAcknowledgement(demoRequest);
+            await emailSender.SendEmailAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Failed to send demo request submission acknowledgement for {DemoRequestId}",
+                demoRequest.Id);
+        }
+    }
+
+    private async Task SendApprovalNotificationAsync(
+        DemoRequestEntity demoRequest, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var message = notificationComposer.ComposeApprovalNotification(demoRequest);
+            await emailSender.SendEmailAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Failed to send demo request approval notification for {DemoRequestId}",
                 demoRequest.Id);
         }
     }

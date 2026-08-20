@@ -25,7 +25,7 @@ public sealed class AdminDemoRequestControllerTests
         id ?? Guid.NewGuid(),
         "Jane Doe",
         "jane@example.com",
-        null,
+        "+7 900 123-45-67",
         "Acme Inc",
         null,
         nameof(SalesTeamSize.SixToTwenty),

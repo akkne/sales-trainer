@@ -163,7 +163,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 |---|---|---|---|
 | POST | /admin/platform/impersonation | `{organizationId, reason}` | `ImpersonationTokenDto`, `404` unknown org, `403` suspended / already impersonating |
 | GET | /admin/platform/impersonation | — | `ImpersonationAuditEntryDto[]`, newest first, max 100 |
-| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email}` | `BootstrapOrganizationAdminResponseDto`, `404`, `409` already has an admin, `403` suspended |
+| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email, role?}` | `BootstrapOrganizationAdminResponseDto`, `400` role is not `TenancyAdmin`/`TenancySuperAdmin`, `404`, `409` already has an admin, `403` suspended |
 
 `ImpersonationTokenDto`: `{accessToken, expiresAt, impersonationId, organization: {id, name}}`
 `ImpersonationAuditEntryDto`: `{id, actorUserId, actorEmail, organization: {id, name}, reason, issuedAt, expiresAt}`
@@ -190,11 +190,19 @@ The audit row is written and committed *before* the token is returned, so a toke
 always has a record behind it. `reason` is required (3–500 chars).
 
 `bootstrap-admin` reuses the Phase 40.7 invite machinery verbatim — same `IInviteService`, same
-email, same one-time token — in a scope pinned to the target organization. The role is always
-`TenancySuperAdmin` and is not taken from the request: only a superadmin can invite, so a first
-admin one rank lower would leave the organization unable to add anybody. It answers `409` if the
-organization already has an active `TenancySuperAdmin` membership or a pending `TenancySuperAdmin`
-invite, so it cannot be used as a back door into a running customer's organization.
+email, same one-time token — in a scope pinned to the target organization. Until 2026-08-20 the
+role was always `TenancySuperAdmin` and was never taken from the request at all, because a role
+taken from the request would let a platform-only endpoint mint any organization role anywhere — a
+far larger blast radius than the one thing it exists to do. The owner asked for the choice back, so
+the request now carries an optional `role`, parsed by the exact rules `InviteService.ParseRole`
+already applies to an ordinary invite (including the retired `OrgAdmin` name check), and then
+narrowed to `TenancyAdmin` or `TenancySuperAdmin` only — `Manager` and anything unrecognized are a
+`400`. Omitted or blank still defaults to `TenancySuperAdmin`, so every caller that predates this
+field keeps working unchanged. The endpoint still cannot mint an arbitrary organization role; it can
+only pick which rank of administrator it bootstraps. It answers `409` if the organization already
+has an active `TenancyAdmin` or `TenancySuperAdmin` membership, or a pending invite for either, so
+it cannot be used as a back door into a running customer's organization — see DECISIONS.md
+(2026-08-20).
 
 `404` also covers "organization-service created it seconds ago and identity-service has not
 consumed `organization.created` yet"; the message says so and the operation is safe to retry.
@@ -2328,13 +2336,18 @@ replicas learn about a promoted draft the same way they learn about a form submi
 | GET | /admin/demo-requests `[RequirePlatformAdmin]` | — | `DemoRequestDto[]`, newest first |
 | PATCH | /admin/demo-requests/{id}/status `[RequirePlatformAdmin]` | `{status}` | `DemoRequestDto` or `404` |
 
-`CreateDemoRequestRequestDto`: `{fullName, workEmail, phone?, companyName, jobTitle?, salesTeamSize, comment?, consentGiven, marketingConsentGiven, website?}`
+`CreateDemoRequestRequestDto`: `{fullName, workEmail, phone, companyName, jobTitle?, salesTeamSize, comment?, consentGiven, marketingConsentGiven, website?}`
 `DemoRequestAcceptedDto`: `{id, submittedAt}`
-`DemoRequestDto`: `{id, fullName, workEmail, phone?, companyName, jobTitle?, salesTeamSize, comment?, status, consentGivenAt, marketingConsentGivenAt?, createdAt, updatedAt}`
+`DemoRequestDto`: `{id, fullName, workEmail, phone, companyName, jobTitle?, salesTeamSize, comment?, status, consentGivenAt, marketingConsentGivenAt?, createdAt, updatedAt}`
+
+**`phone` is required** (owner decision, 2026-08-20 — was optional). Not needed to *reply* —
+`workEmail` already covers that — but required because the sales motion this form feeds is
+phone-first: a business decision, not a technical one. See docs/DECISIONS.md.
 
 `salesTeamSize` is `UpToFive | SixToTwenty | TwentyOneToFifty | FiftyOneToTwoHundred | MoreThanTwoHundred`
-and `status` is `New | Contacted | Qualified | Declined` — both are enum **names** on the wire and are
-stored as those names, so the Russian labels live only in the frontend (docs/LOCALIZATION.md).
+and `status` is `New | Contacted | Approved | Declined` (`Approved`, not `Qualified` — renamed
+2026-08-20, docs/DECISIONS.md) — both are enum **names** on the wire and are stored as those names,
+so the Russian labels live only in the frontend (docs/LOCALIZATION.md).
 
 **`salesTeamSize` is required and nullable in the DTO on purpose.** `[Required]` on a non-nullable
 enum has nothing to reject, so an omitted field would bind to the zero member and record `UpToFive` as
@@ -2354,9 +2367,17 @@ filling the field.
 
 `429` is a **per-email** cooldown (`DemoRequests:SubmissionCooldownSeconds`, default 300), not a
 general rate limit — there is no rate-limiting middleware in this backend and none was added for one
-marketing form. The endpoint **never emails the submitter's address**, only a fixed configured
-internal inbox; a public unauthenticated route that mails arbitrary addresses is a relay. An
-unconfigured inbox or a MailerSend failure is logged and still returns `202` with the lead persisted.
+marketing form.
+
+**The submitter now receives email too (2026-08-20, reversing the original "never mail the
+submitter" decision — docs/DECISIONS.md).** A `202` sends the unchanged internal notification plus
+a «Спасибо, что выбрали Sellevate» acknowledgement to `workEmail`. A `PATCH …/status` that actually
+transitions a lead into `Approved` — never a re-patch of an already-`Approved` lead — sends a
+«Заявку одобрили» notification to `workEmail` pointing at `{Frontend:Url}/register`. All three sends
+are wrapped and logged, never surfaced as an error: an unconfigured internal inbox or a MailerSend
+failure on any of them still returns the normal response with the lead (or status change) persisted.
+The honeypot and the per-email cooldown are now the only two things limiting how often this
+anonymous endpoint can be made to mail a third party.
 
 ---
 

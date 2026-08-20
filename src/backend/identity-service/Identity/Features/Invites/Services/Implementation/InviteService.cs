@@ -380,8 +380,15 @@ internal sealed class InviteService(
     /// declared at all (<c>"99"</c> would become <c>(OrgRole)99</c>), so the parse is followed by
     /// an <c>IsDefined</c> check rather than trusted on its own.
     /// </para>
+    ///
+    /// <para>
+    /// <c>internal</c> rather than <c>private</c> so
+    /// <c>Sellevate.Identity.Features.PlatformAdmin.Services.Implementation.PlatformAdminService</c>
+    /// can validate a bootstrap request's requested role against exactly these rules, instead of
+    /// carrying a second parser that could quietly drift from this one.
+    /// </para>
     /// </summary>
-    private static OrgRole ParseRole(string role)
+    internal static OrgRole ParseRole(string role)
     {
         if (string.Equals(role, LegacyOrganizationAdminRoleName, StringComparison.OrdinalIgnoreCase))
         {

@@ -15,8 +15,9 @@ using Sellevate.Identity.Tests.Helpers;
 namespace Sellevate.Identity.Tests.Integration;
 
 /// <summary>
-/// Phase 40.9 — the platform superadmin surface: impersonation and bootstrapping the first
-/// <c>TenancySuperAdmin</c> of a new organization.
+/// Phase 40.9 — the platform superadmin surface: impersonation and bootstrapping a new
+/// organization's first administrator, at whichever of <c>TenancyAdmin</c> or
+/// <c>TenancySuperAdmin</c> the request chose (2026-08-20).
 /// </summary>
 [TestFixture]
 [Category("Integration")]
@@ -200,8 +201,9 @@ public class PlatformAdminTests
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    [Test]
-    public async Task BootstrapOrganizationAdmin_CreatesATenancySuperAdminInviteThatCanBeAccepted()
+    [TestCase(OrgRole.TenancySuperAdmin)]
+    [TestCase(OrgRole.TenancyAdmin)]
+    public async Task BootstrapOrganizationAdmin_CreatesAnInviteAtTheChosenRoleThatCanBeAccepted(OrgRole requestedRole)
     {
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId, "Fresh Customer");
@@ -210,7 +212,7 @@ public class PlatformAdminTests
 
         var response = await client.PostAsJsonAsync(
             "/admin/platform/organizations/bootstrap-admin",
-            new { organizationId, email = inviteeEmail });
+            new { organizationId, email = inviteeEmail, role = requestedRole.ToString() });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var bootstrapInvite = await response.Content.ReadFromJsonAsync<BootstrapInviteResult>();
@@ -230,14 +232,69 @@ public class PlatformAdminTests
         var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var membership = await database.Memberships
             .SingleAsync(candidate => candidate.OrganizationId == organizationId);
-        membership.Role.Should().Be(OrgRole.TenancySuperAdmin,
-            "the first person in a new organization has to be able to add everyone else, and after "
-            + "the 2026-08-16 role split only a TenancySuperAdmin can");
+        membership.Role.Should().Be(requestedRole,
+            "the invite must be created and accepted at exactly the role the request chose, not a "
+            + "hardcoded one");
         membership.Status.Should().Be(MembershipStatus.Active);
     }
 
     [Test]
-    public async Task BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflict()
+    public async Task BootstrapOrganizationAdmin_WhenRoleIsOmitted_DefaultsToTenancySuperAdmin()
+    {
+        var organizationId = Guid.NewGuid();
+        await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
+        var client = CreateSuperAdminClient();
+        var inviteeEmail = UniqueEmail();
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = inviteeEmail });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var scope = Factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var invite = await database.Invites
+            .SingleAsync(candidate => candidate.OrganizationId == organizationId);
+        invite.Role.Should().Be(OrgRole.TenancySuperAdmin,
+            "every caller that predates the role field sends none at all and must keep getting "
+            + "exactly what it always got");
+    }
+
+    [Test]
+    public async Task BootstrapOrganizationAdmin_WithManagerRole_IsRejectedWithBadRequest()
+    {
+        var organizationId = Guid.NewGuid();
+        await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
+        var client = CreateSuperAdminClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = UniqueEmail(), role = "Manager" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "this platform endpoint may only choose which rank of administrator it bootstraps, "
+            + "never mint an ordinary organization role");
+    }
+
+    [Test]
+    public async Task BootstrapOrganizationAdmin_WithAnUnknownRole_IsRejectedWithBadRequest()
+    {
+        var organizationId = Guid.NewGuid();
+        await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
+        var client = CreateSuperAdminClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = UniqueEmail(), role = "Wizard" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [TestCase(OrgRole.TenancySuperAdmin)]
+    [TestCase(OrgRole.TenancyAdmin)]
+    public async Task BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflictRegardlessOfItsRole(
+        OrgRole pendingInviteRole)
     {
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
@@ -245,7 +302,7 @@ public class PlatformAdminTests
 
         var firstResponse = await client.PostAsJsonAsync(
             "/admin/platform/organizations/bootstrap-admin",
-            new { organizationId, email = UniqueEmail() });
+            new { organizationId, email = UniqueEmail(), role = pendingInviteRole.ToString() });
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var secondResponse = await client.PostAsJsonAsync(
@@ -255,21 +312,55 @@ public class PlatformAdminTests
         secondResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
-    [Test]
-    public async Task BootstrapOrganizationAdmin_WhenATenancySuperAdminAlreadyExists_IsConflict()
+    [TestCase(OrgRole.TenancySuperAdmin)]
+    [TestCase(OrgRole.TenancyAdmin)]
+    public async Task BootstrapOrganizationAdmin_WhenAnAdministratorAlreadyExists_IsConflictRegardlessOfRank(
+        OrgRole existingAdministratorRole)
     {
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
         await TestUserSeeder.SeedUserAsync(
             Factory, UniqueEmail(), "Sitting Admin",
-            organizationId: organizationId, organizationRole: OrgRole.TenancySuperAdmin);
+            organizationId: organizationId, organizationRole: existingAdministratorRole);
         var client = CreateSuperAdminClient();
 
         var response = await client.PostAsJsonAsync(
             "/admin/platform/organizations/bootstrap-admin",
             new { organizationId, email = UniqueEmail() });
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict,
+            "the pre-check answers \"has this organization been bootstrapped already\", not "
+            + "\"does it have a superadmin specifically\"");
+    }
+
+    [TestCase(OrgRole.TenancySuperAdmin)]
+    [TestCase(OrgRole.TenancyAdmin)]
+    public async Task BootstrapOrganizationAdmin_AfterTheFirstAdministratorAcceptsTheInvite_ASecondBootstrapIsConflict(
+        OrgRole firstAdministratorRole)
+    {
+        var organizationId = Guid.NewGuid();
+        await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
+        var client = CreateSuperAdminClient();
+
+        var firstResponse = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = UniqueEmail(), role = firstAdministratorRole.ToString() });
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var bootstrapInvite = await firstResponse.Content.ReadFromJsonAsync<BootstrapInviteResult>();
+
+        var anonymousClient = Factory.CreateClient();
+        var acceptResponse = await anonymousClient.PostAsJsonAsync(
+            $"/auth/invites/{bootstrapInvite!.Token}/accept",
+            new { displayName = "First Admin", password = "Password123!" });
+        acceptResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var secondResponse = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = UniqueEmail() });
+
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.Conflict,
+            $"an organization whose first administrator accepted at {firstAdministratorRole} must "
+            + "read as already bootstrapped, or a second call would sail straight through");
     }
 
     [Test]

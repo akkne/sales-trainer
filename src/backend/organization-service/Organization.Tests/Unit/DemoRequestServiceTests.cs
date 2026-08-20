@@ -42,7 +42,7 @@ public sealed class DemoRequestServiceTests
     private DemoRequestService BuildService(DemoRequestConfiguration configuration) => new(
         _databaseContext,
         _emailSender,
-        new DemoRequestNotificationComposer(),
+        new DemoRequestNotificationComposer(Options.Create(new FrontendConfiguration())),
         Options.Create(configuration),
         NullLogger<DemoRequestService>.Instance);
 
@@ -50,7 +50,7 @@ public sealed class DemoRequestServiceTests
         string? workEmail = null, string? website = null, bool marketingConsentGiven = false) => new(
         FullName: "Jane Doe",
         WorkEmail: workEmail ?? "jane@example.com",
-        Phone: null,
+        Phone: "+7 900 123-45-67",
         CompanyName: "Acme Inc",
         JobTitle: null,
         SalesTeamSize: SalesTeamSize.SixToTwenty,
@@ -80,13 +80,42 @@ public sealed class DemoRequestServiceTests
     }
 
     [Test]
-    public async Task SubmitAsync_sends_no_email_when_notification_email_is_blank()
+    public async Task SubmitAsync_sends_only_the_acknowledgement_when_notification_email_is_blank()
     {
         var service = BuildService(new DemoRequestConfiguration { NotificationEmail = string.Empty });
 
         await service.SubmitAsync(SampleRequest());
 
-        await _emailSender.DidNotReceiveWithAnyArgs().SendEmailAsync(default!, cancellationToken: default);
+        await _emailSender.Received(1).SendEmailAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
+        await _emailSender.Received(1).SendEmailAsync(
+            Arg.Is<EmailMessage>(message => message.RecipientEmail == "jane@example.com"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SubmitAsync_sends_a_submission_acknowledgement_to_the_submitters_work_email()
+    {
+        await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "acknowledged@example.com"));
+
+        await _emailSender.Received(1).SendEmailAsync(
+            Arg.Is<EmailMessage>(message => message.RecipientEmail == "acknowledged@example.com"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SubmitAsync_still_persists_the_lead_and_still_sends_the_internal_notification_when_the_acknowledgement_send_throws()
+    {
+        _emailSender.SendEmailAsync(
+                Arg.Is<EmailMessage>(message => message.RecipientEmail == "jane@example.com"),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException("The submitter's mailbox rejected the acknowledgement."));
+
+        var result = await _demoRequestService.SubmitAsync(SampleRequest());
+
+        (await _databaseContext.DemoRequests.FindAsync(result.Id)).Should().NotBeNull();
+        await _emailSender.Received(1).SendEmailAsync(
+            Arg.Is<EmailMessage>(message => message.RecipientEmail == ConfiguredNotificationEmail),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -173,8 +202,11 @@ public sealed class DemoRequestServiceTests
     public async Task SubmitAsync_notification_email_states_marketing_consent_was_given()
     {
         EmailMessage? capturedMessage = null;
-        _emailSender.SendEmailAsync(Arg.Do<EmailMessage>(message => capturedMessage = message), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+        _emailSender
+            .When(sender => sender.SendEmailAsync(
+                Arg.Is<EmailMessage>(message => message.RecipientEmail == ConfiguredNotificationEmail),
+                Arg.Any<CancellationToken>()))
+            .Do(callInfo => capturedMessage = callInfo.Arg<EmailMessage>());
 
         await _demoRequestService.SubmitAsync(SampleRequest(marketingConsentGiven: true));
 
@@ -187,13 +219,69 @@ public sealed class DemoRequestServiceTests
     public async Task SubmitAsync_notification_email_states_marketing_consent_was_declined()
     {
         EmailMessage? capturedMessage = null;
-        _emailSender.SendEmailAsync(Arg.Do<EmailMessage>(message => capturedMessage = message), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+        _emailSender
+            .When(sender => sender.SendEmailAsync(
+                Arg.Is<EmailMessage>(message => message.RecipientEmail == ConfiguredNotificationEmail),
+                Arg.Any<CancellationToken>()))
+            .Do(callInfo => capturedMessage = callInfo.Arg<EmailMessage>());
 
         await _demoRequestService.SubmitAsync(SampleRequest(marketingConsentGiven: false));
 
         capturedMessage.Should().NotBeNull();
         capturedMessage!.TextBody.Should().Contain("Marketing consent: No");
         capturedMessage.HtmlBody.Should().Contain("Marketing consent:</strong> No");
+    }
+
+    [Test]
+    public async Task UpdateStatusAsync_sends_the_approval_email_on_an_actual_transition_into_Approved()
+    {
+        var submitted = await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "approved@example.com"));
+        _emailSender.ClearReceivedCalls();
+
+        await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Approved);
+
+        await _emailSender.Received(1).SendEmailAsync(
+            Arg.Is<EmailMessage>(message => message.RecipientEmail == "approved@example.com"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateStatusAsync_sends_nothing_when_an_already_approved_lead_is_repatched_to_Approved()
+    {
+        var submitted = await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "repatched@example.com"));
+        await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Approved);
+        _emailSender.ClearReceivedCalls();
+
+        await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Approved);
+
+        await _emailSender.DidNotReceiveWithAnyArgs().SendEmailAsync(default!, cancellationToken: default);
+    }
+
+    [Test]
+    public async Task UpdateStatusAsync_sends_nothing_for_a_transition_from_New_to_Declined()
+    {
+        var submitted = await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "declined@example.com"));
+        _emailSender.ClearReceivedCalls();
+
+        await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Declined);
+
+        await _emailSender.DidNotReceiveWithAnyArgs().SendEmailAsync(default!, cancellationToken: default);
+    }
+
+    [Test]
+    public async Task UpdateStatusAsync_still_records_the_approval_when_the_approval_email_throws()
+    {
+        var submitted = await _demoRequestService.SubmitAsync(SampleRequest(workEmail: "approval-fails@example.com"));
+        _emailSender.SendEmailAsync(
+                Arg.Is<EmailMessage>(message => message.RecipientEmail == "approval-fails@example.com"),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException("MailerSend is down."));
+
+        var result = await _demoRequestService.UpdateStatusAsync(submitted.Id, DemoRequestStatus.Approved);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(nameof(DemoRequestStatus.Approved));
+        var stored = await _databaseContext.DemoRequests.FindAsync(submitted.Id);
+        stored!.Status.Should().Be(DemoRequestStatus.Approved);
     }
 }

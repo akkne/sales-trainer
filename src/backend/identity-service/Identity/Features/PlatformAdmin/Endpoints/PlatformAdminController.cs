@@ -59,8 +59,10 @@ public sealed class PlatformAdminController(IPlatformAdminService platformAdminS
         => Ok(await platformAdminService.ListImpersonationsAsync(cancellationToken));
 
     /// <summary>
-    /// Invites the first <c>TenancySuperAdmin</c> of a new organization, reusing the Phase 40.7 invite
-    /// machinery rather than adding a second way to create a membership.
+    /// Invites the first administrator of a new organization — <c>TenancyAdmin</c> or
+    /// <c>TenancySuperAdmin</c>, chosen by the request and defaulting to <c>TenancySuperAdmin</c>
+    /// when the field is omitted — reusing the Phase 40.7 invite machinery rather than adding a
+    /// second way to create a membership.
     /// </summary>
     [HttpPost("organizations/bootstrap-admin")]
     public async Task<ActionResult<BootstrapOrganizationAdminResponseDto>> BootstrapOrganizationAdmin(

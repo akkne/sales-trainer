@@ -105,11 +105,58 @@ describe("platform organization hooks", () => {
         });
 
         const { result } = renderHook(() => useBootstrapOrganizationAdmin(), { wrapper: createWrapper() });
+        await result.current.mutateAsync({
+            organizationId: ORGANIZATION_ID,
+            email: "admin@acme.com",
+            role: "TenancySuperAdmin",
+        });
+
+        expect(mockPost).toHaveBeenCalledWith("/admin/platform/organizations/bootstrap-admin", {
+            organizationId: ORGANIZATION_ID,
+            email: "admin@acme.com",
+            role: "TenancySuperAdmin",
+        });
+    });
+
+    it("defaults the role to TenancySuperAdmin when none is given", async () => {
+        mockPost.mockResolvedValueOnce({
+            inviteId: "invite-3",
+            organization: { id: ORGANIZATION_ID, name: "Acme Sales" },
+            email: "admin@acme.com",
+            expiresAt: "2026-08-22T00:00:00Z",
+            token: "raw-token",
+        });
+
+        const { result } = renderHook(() => useBootstrapOrganizationAdmin(), { wrapper: createWrapper() });
         await result.current.mutateAsync({ organizationId: ORGANIZATION_ID, email: "admin@acme.com" });
 
         expect(mockPost).toHaveBeenCalledWith("/admin/platform/organizations/bootstrap-admin", {
             organizationId: ORGANIZATION_ID,
             email: "admin@acme.com",
+            role: "TenancySuperAdmin",
+        });
+    });
+
+    it("sends TenancyAdmin when that role is chosen instead of the default", async () => {
+        mockPost.mockResolvedValueOnce({
+            inviteId: "invite-2",
+            organization: { id: ORGANIZATION_ID, name: "Acme Sales" },
+            email: "admin@acme.com",
+            expiresAt: "2026-08-22T00:00:00Z",
+            token: "raw-token",
+        });
+
+        const { result } = renderHook(() => useBootstrapOrganizationAdmin(), { wrapper: createWrapper() });
+        await result.current.mutateAsync({
+            organizationId: ORGANIZATION_ID,
+            email: "admin@acme.com",
+            role: "TenancyAdmin",
+        });
+
+        expect(mockPost).toHaveBeenCalledWith("/admin/platform/organizations/bootstrap-admin", {
+            organizationId: ORGANIZATION_ID,
+            email: "admin@acme.com",
+            role: "TenancyAdmin",
         });
     });
 

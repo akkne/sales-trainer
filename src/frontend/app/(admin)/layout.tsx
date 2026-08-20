@@ -25,6 +25,7 @@ const NAV_ICONS: Record<string, IconName> = {
     "/admin/gamification": "star",
     "/admin/users": "users",
     "/admin/organizations": "briefcase",
+    "/admin/demo-requests": "send",
 };
 
 export default function AdminLayout({
@@ -113,6 +114,7 @@ export default function AdminLayout({
     // roadmap block 40.20 and is waiting on the owner's design.
     const navItems = [
         { href: "/admin/organizations", label: "Organizations" },
+        { href: "/admin/demo-requests", label: "Demo requests" },
         { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
         { href: "/admin/skill-stages", label: "Skill Stages" },

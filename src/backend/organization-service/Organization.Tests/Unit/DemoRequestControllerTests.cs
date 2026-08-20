@@ -29,7 +29,7 @@ public sealed class DemoRequestControllerTests
     private static CreateDemoRequestRequestDto SampleRequest() => new(
         FullName: "Jane Doe",
         WorkEmail: "jane@example.com",
-        Phone: null,
+        Phone: "+7 900 123-45-67",
         CompanyName: "Acme Inc",
         JobTitle: null,
         SalesTeamSize: SalesTeamSize.SixToTwenty,

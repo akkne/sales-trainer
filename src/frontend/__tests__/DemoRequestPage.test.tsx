@@ -40,14 +40,17 @@ function renderDemoRequestPage() {
 interface FillOptions {
     tickDataProcessingConsent?: boolean;
     tickMarketingConsent?: boolean;
+    fillPhone?: boolean;
 }
 
 async function fillRequiredFields(options: FillOptions = {}) {
-    const { tickDataProcessingConsent = true, tickMarketingConsent = false } = options;
+    const { tickDataProcessingConsent = true, tickMarketingConsent = false, fillPhone = true } = options;
 
     await userEvent.type(screen.getByLabelText("Имя и фамилия"), "Иван Петров");
     await userEvent.type(screen.getByLabelText("Рабочий email"), "ivan@customer.test");
-    await userEvent.type(screen.getByLabelText("Телефон"), "+7 900 123-45-67");
+    if (fillPhone) {
+        await userEvent.type(screen.getByLabelText("Телефон"), "+7 900 123-45-67");
+    }
     await userEvent.type(screen.getByLabelText("Компания"), "ООО Ромашка");
     await userEvent.type(screen.getByLabelText("Должность"), "Руководитель отдела продаж");
     await userEvent.selectOptions(
@@ -127,6 +130,15 @@ describe("DemoRequestPage", () => {
         renderDemoRequestPage();
 
         await fillRequiredFields({ tickDataProcessingConsent: false });
+        await userEvent.click(screen.getByRole("button", { name: /Отправить заявку/ }));
+
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it("blocks submission when phone is left empty, now that the owner requires it", async () => {
+        renderDemoRequestPage();
+
+        await fillRequiredFields({ fillPhone: false });
         await userEvent.click(screen.getByRole("button", { name: /Отправить заявку/ }));
 
         expect(mockPost).not.toHaveBeenCalled();

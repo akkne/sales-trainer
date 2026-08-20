@@ -9,6 +9,7 @@ using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Invites.Services.Abstract;
+using Sellevate.Identity.Features.Invites.Services.Implementation;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Features.Organizations.Models;
 using Sellevate.Identity.Features.PlatformAdmin.Constants;
@@ -119,13 +120,15 @@ internal sealed class PlatformAdminService(
         PlatformAdminActor actor,
         CancellationToken cancellationToken = default)
     {
+        var requestedRole = ResolveBootstrapRole(request.Role);
+
         var organization = await RequireActiveOrganizationAsync(request.OrganizationId, cancellationToken);
 
         var hasActiveOrganizationAdmin = await databaseContext.Memberships
             .AsNoTracking()
             .AnyAsync(
                 membership => membership.OrganizationId == organization.OrganizationId
-                    && membership.Role == OrgRole.TenancySuperAdmin
+                    && (membership.Role == OrgRole.TenancyAdmin || membership.Role == OrgRole.TenancySuperAdmin)
                     && membership.Status == MembershipStatus.Active,
                 cancellationToken);
 
@@ -144,7 +147,7 @@ internal sealed class PlatformAdminService(
 
         var inviteService = organizationScope.ServiceProvider.GetRequiredService<IInviteService>();
         var createInvitesResponse = await inviteService.CreateAsync(
-            new CreateInvitesRequestDto(request.Email, Emails: null, Role: nameof(OrgRole.TenancySuperAdmin)),
+            new CreateInvitesRequestDto(request.Email, Emails: null, Role: requestedRole.ToString()),
             actor.UserId,
             cancellationToken);
 
@@ -159,9 +162,9 @@ internal sealed class PlatformAdminService(
         var createdInvite = createInvitesResponse.Created[0];
 
         logger.LogWarning(
-            "Bootstrap TenancySuperAdmin invited InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
+            "Bootstrap {Role} invited InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
             + "ActorUserId={ActorUserId}",
-            createdInvite.Id, organization.OrganizationId, actor.UserId);
+            requestedRole, createdInvite.Id, organization.OrganizationId, actor.UserId);
 
         return new BootstrapOrganizationAdminResponseDto(
             createdInvite.Id,
@@ -169,6 +172,34 @@ internal sealed class PlatformAdminService(
             createdInvite.Email,
             createdInvite.ExpiresAt,
             createdInvite.Token);
+    }
+
+    /// <summary>
+    /// Defaults an omitted or blank <see cref="BootstrapOrganizationAdminRequestDto.Role"/> to
+    /// <see cref="OrgRole.TenancySuperAdmin"/> so callers that predate the field keep working, then
+    /// parses it through <see cref="InviteService.ParseRole"/> — the same rules an ordinary invite
+    /// obeys, including the retired <c>OrgAdmin</c> name check — and finally narrows the result to
+    /// <see cref="OrgRole.TenancyAdmin"/> or <see cref="OrgRole.TenancySuperAdmin"/>. That last step
+    /// is what keeps this platform endpoint from minting a <see cref="OrgRole.Manager"/> or any
+    /// other organization role: it may only choose which rank of administrator it bootstraps.
+    /// </summary>
+    private static OrgRole ResolveBootstrapRole(string? requestedRoleName)
+    {
+        var roleName = string.IsNullOrWhiteSpace(requestedRoleName)
+            ? nameof(OrgRole.TenancySuperAdmin)
+            : requestedRoleName;
+
+        var parsedRole = InviteService.ParseRole(roleName);
+
+        if (parsedRole is not (OrgRole.TenancyAdmin or OrgRole.TenancySuperAdmin))
+        {
+            throw new ArgumentException(
+                $"Bootstrap admin role must be '{nameof(OrgRole.TenancyAdmin)}' or "
+                + $"'{nameof(OrgRole.TenancySuperAdmin)}', but was '{roleName}'.",
+                nameof(requestedRoleName));
+        }
+
+        return parsedRole;
     }
 
     private async Task<OrganizationReplica> RequireActiveOrganizationAsync(
@@ -197,10 +228,14 @@ internal sealed class PlatformAdminService(
     }
 
     /// <summary>
-    /// Refuses to bootstrap an organization that already has an unused <c>TenancySuperAdmin</c> invite
-    /// waiting. Runs in the target organization's own scope and inside an explicit transaction so
-    /// the row-level-security <c>SET LOCAL</c> has something to attach to — a bare <c>SELECT</c>
-    /// on a tenant-scoped table sees nothing otherwise (docs/TENANCY/TENANCY.md §1.5).
+    /// Refuses to bootstrap an organization that already has an unused administrator invite
+    /// waiting, of either <see cref="OrgRole.TenancyAdmin"/> or <see cref="OrgRole.TenancySuperAdmin"/>
+    /// rank — this answers "has this organization been bootstrapped already", not "does it have a
+    /// superadmin specifically", so a first <c>TenancyAdmin</c> invite counts exactly as much as a
+    /// <c>TenancySuperAdmin</c> one would. Runs in the target organization's own scope and inside an
+    /// explicit transaction so the row-level-security <c>SET LOCAL</c> has something to attach to —
+    /// a bare <c>SELECT</c> on a tenant-scoped table sees nothing otherwise
+    /// (docs/TENANCY/TENANCY.md §1.5).
     /// </summary>
     private static async Task EnsureNoPendingOrganizationAdminInviteAsync(
         IServiceProvider scopedServices,
@@ -215,7 +250,7 @@ internal sealed class PlatformAdminService(
         var hasPendingOrganizationAdminInvite = await scopedDatabaseContext.Invites
             .AsNoTracking()
             .AnyAsync(
-                invite => invite.Role == OrgRole.TenancySuperAdmin
+                invite => (invite.Role == OrgRole.TenancyAdmin || invite.Role == OrgRole.TenancySuperAdmin)
                     && invite.AcceptedAt == null
                     && invite.RevokedAt == null
                     && invite.ExpiresAt > now,

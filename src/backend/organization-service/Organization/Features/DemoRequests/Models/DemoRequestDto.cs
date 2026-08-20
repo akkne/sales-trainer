@@ -4,7 +4,7 @@ public sealed record DemoRequestDto(
     Guid Id,
     string FullName,
     string WorkEmail,
-    string? Phone,
+    string Phone,
     string CompanyName,
     string? JobTitle,
     string SalesTeamSize,

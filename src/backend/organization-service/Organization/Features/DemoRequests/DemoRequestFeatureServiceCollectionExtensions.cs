@@ -9,7 +9,9 @@ namespace Sellevate.Organization.Features.DemoRequests;
 /// nor binds <see cref="DemoRequestConfiguration"/> itself. <see cref="IDemoRequestService"/> is
 /// <c>Scoped</c> because it takes the request-scoped <c>OrganizationDbContext</c>;
 /// <see cref="IDemoRequestNotificationComposer"/> is <c>Singleton</c> because it is a pure formatter
-/// with no per-request state.
+/// with no per-request state. <see cref="FrontendConfiguration"/> is bound here rather than in
+/// <c>Program.cs</c> because the approval email's registration link is currently its only reader in
+/// this service.
 /// </summary>
 public static class DemoRequestFeatureServiceCollectionExtensions
 {
@@ -18,6 +20,8 @@ public static class DemoRequestFeatureServiceCollectionExtensions
     {
         services.Configure<DemoRequestConfiguration>(
             configuration.GetSection(DemoRequestConfiguration.SectionName));
+        services.Configure<FrontendConfiguration>(
+            configuration.GetSection(FrontendConfiguration.SectionName));
 
         services.AddScoped<IDemoRequestService, DemoRequestService>();
         services.AddSingleton<IDemoRequestNotificationComposer, DemoRequestNotificationComposer>();

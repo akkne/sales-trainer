@@ -32,6 +32,20 @@ public sealed class CreateDemoRequestRequestValidationTests
             .Single(parameter => parameter.Name == parameterName);
 
     /// <summary>
+    /// Phone is required as of the 2026-08-20 owner decision: the sales motion this form feeds is
+    /// phone-first, not because a reply technically needs it — <see cref="CreateDemoRequestRequestDto.WorkEmail"/>
+    /// already covers that.
+    /// </summary>
+    [Test]
+    public void The_phone_number_is_required()
+    {
+        var phone = Parameter(nameof(CreateDemoRequestRequestDto.Phone));
+
+        phone.ParameterType.Should().Be(typeof(string));
+        phone.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
+    }
+
+    /// <summary>
     /// <c>[Required]</c> on a <i>non-nullable</i> enum has nothing to reject: a body that omits the
     /// field binds to the zero member and <c>UpToFive</c> is stored as though a visitor had chosen the
     /// smallest bucket. Nullability is the whole mechanism, so it is asserted rather than assumed.

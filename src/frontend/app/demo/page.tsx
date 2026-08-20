@@ -157,6 +157,7 @@ export default function DemoRequestPage() {
                             type="tel"
                             className="field"
                             maxLength={40}
+                            required
                             value={phone}
                             onChange={(event) => setPhone(event.target.value)}
                         />

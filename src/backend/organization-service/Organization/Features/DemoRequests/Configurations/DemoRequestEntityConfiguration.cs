@@ -36,6 +36,7 @@ public sealed class DemoRequestEntityConfiguration : IEntityTypeConfiguration<De
         builder.HasIndex(demoRequest => demoRequest.WorkEmail);
 
         builder.Property(demoRequest => demoRequest.Phone)
+            .IsRequired()
             .HasMaxLength(40);
 
         builder.Property(demoRequest => demoRequest.CompanyName)

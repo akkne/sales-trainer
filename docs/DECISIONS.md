@@ -5463,6 +5463,11 @@ identity answers "who is this user", and a marketing lead is not a user and may 
 
 ### No confirmation email to the submitter — the abuse case beats the courtesy
 
+**Reversed 2026-08-20 — see "The submitter gets email" in the section below.** This was the
+original decision and the reasoning that follows was sound at the time; the owner decided the
+product cost of staying silent outweighed the risk, not that the risk stopped existing. Left in
+place rather than deleted so the tradeoff is on record.
+
 The obvious design sends the visitor a "we got your request" email. We deliberately do not.
 
 A public unauthenticated form that emails whatever address was typed into it is a mail relay
@@ -5499,12 +5504,100 @@ actually inside the product training — which is the same boundary the org pane
 
 ### Deferred to the owner
 
-- **Phone is optional.** Both Russian sales-training vendors whose live forms we could actually read
-  (Talent Rocks, Эквио) require it, and CIS B2B sales is phone-first, so requiring it is defensible.
-  We left it optional because a required phone number costs submissions from buyers who are willing
-  to start over email, and this form's job right now is volume. One `[Required]` attribute and one
-  `required` prop reverses it.
+- **Phone is optional.** ~~Both Russian sales-training vendors whose live forms we could actually
+  read (Talent Rocks, Эквио) require it, and CIS B2B sales is phone-first, so requiring it is
+  defensible. We left it optional because a required phone number costs submissions from buyers who
+  are willing to start over email, and this form's job right now is volume. One `[Required]`
+  attribute and one `required` prop reverses it.~~ **Resolved 2026-08-20 — the owner made it
+  required.** See the section below.
 - **Free-domain email is accepted.** Blocking gmail/mail.ru/yandex.ru raises lead quality in the US
   playbook, but in Russia those are routinely the real working addresses of SMBs and sole traders, so
   a hard block would refuse legitimate leads. If filtering is ever wanted, a soft warning beside the
   field is the shape to use, not a rejection.
+
+## 2026-08-20 — Demo request: phone required, the submitter gets email, `Qualified` renamed to `Approved`
+
+Three owner-directed changes on top of the 2026-08-19 feature (above), all following from the same
+underlying reconsideration: the form's job has moved from "capture volume" toward "run a phone-first
+sales motion," which changes what the previous section deferred.
+
+### Phone becomes required
+
+Resolves the "Deferred to the owner" bullet above. Both Russian vendors whose live forms could
+actually be read (Talent Rocks, Эквио) require phone, and CIS B2B sales moves over a call faster
+than over email — the owner decided the qualification value of a phone-first lead now outweighs the
+submissions a required field costs. `workEmail` still exists and still works as the reply channel on
+its own, so this is not a technical requirement of the endpoint; it is a decision about how the
+sales team wants to work leads once they land.
+
+### The submitter gets email — reversing the 2026-08-19 decision above
+
+**This reverses "No confirmation email to the submitter — the abuse case beats the courtesy"
+verbatim.** That section is left in place above rather than deleted, because the risk it describes
+did not go away — it was accepted, not solved. Restated honestly:
+
+A public unauthenticated form that emails whatever address was typed into it is a mail relay aimed
+at arbitrary third parties, and the abuse cost lands on the platform's sending reputation rather
+than on whoever typed the address in. That is still true today. What changed is not the risk; it is
+that the owner decided the product cost of staying silent to every submitter — no "we got it,"
+no "you're approved, here's how to log in" — was higher than that risk, given the two mitigations
+already in place.
+
+What is left carrying the risk, in full, is the honeypot and the per-email cooldown
+(docs/DEMO_REQUEST.md → "Anti-spam"). Neither was built to gate outbound mail to a third party: the
+honeypot only catches a bot filling a hidden field, and the cooldown only limits one address to one
+submission per `SubmissionCooldownSeconds` (default 300s) — a person filling in someone else's real
+address by hand, once, sails through both. If this endpoint is ever found being used to harass a
+third-party address, the fix is the same one already named for volume abuse: per-IP limiting at the
+gateway, not a new field on the form.
+
+Two emails result: a «Спасибо, что выбрали Sellevate» acknowledgement on submission, and a «Заявку
+одобрили» notification pointing at `{Frontend:Url}/register` on approval. Both are wrapped in the
+same try/catch-and-log pattern as the existing internal notification, for the same reason: the lead
+(or the status change) must survive a mail failure, because a saved record is recoverable and a
+failed write is not.
+
+### `Qualified` renamed to `Approved`
+
+The owner's word for this state is «одобрили», and the status that now triggers an email should be
+named after the act that triggers it, not left as a generic pipeline stage. `DemoRequestStatus` is
+`New | Contacted | Approved | Declined`.
+
+No migration was needed for the rename. The column is `character varying(32)` written through
+`HasConversion<string>()` with no `CHECK` constraint naming the allowed values (verified against the
+`AddDemoRequests` migration) — the only thing that referenced `"Qualified"` in the database was
+whatever rows already carried that string, and there were none to migrate in any environment this
+ran against. `PATCH /admin/demo-requests/{id}/status` sends the approval email only on an actual
+transition into `Approved` — a re-patch of an already-`Approved` lead (an admin refreshing or
+double-clicking) sends nothing, so approval mail cannot be sent to a submitter twice.
+
+## 2026-08-20 — Bootstrap-admin gets a role choice back, bounded to the two administrator ranks
+
+`BootstrapOrganizationAdminRequestDto` originally had no role field at all, on purpose: the
+endpoint could only ever issue a `TenancySuperAdmin` invite, because a role taken from the request
+would let a platform-only endpoint mint any organization role anywhere — a far larger blast radius
+than the one thing the endpoint exists to do (invite a brand new organization's first person). The
+owner asked for the choice back, so this reverses that restriction — but not by deleting it.
+
+The endpoint now accepts an optional `role` on the request, defaulting to `TenancySuperAdmin` when
+omitted or blank so every existing caller keeps working unchanged. It is parsed by the same
+`InviteService.ParseRole` an ordinary invite already goes through — promoted from `private` to
+`internal` rather than duplicated, so there is exactly one place that knows an `OrgAdmin` request is
+the retired name and exactly one place that knows which strings are `OrgRole` at all. The result is
+then narrowed to `TenancyAdmin` or `TenancySuperAdmin` only: `Manager` and anything unrecognized are
+a `400`. That narrowing is the bound that replaces the old absolute one — the endpoint still cannot
+mint an arbitrary organization role, it can only pick which rank of administrator it bootstraps.
+
+The two guards that decide whether an organization has "already been bootstrapped" — the active-
+membership pre-check and the pending-invite check — filtered strictly on `TenancySuperAdmin` before
+this change. Both now accept either administrator rank. They exist to answer "has this organization
+already got its first admin", not "does it specifically have a superadmin"; left unchanged, a first
+`TenancyAdmin` invite would have left an organization looking un-bootstrapped forever, and a second
+bootstrap call would have sailed straight through and issued a second, competing first-admin invite.
+
+Frontend: the platform organizations panel gets a per-row role `<select>` next to the existing
+admin-email input, defaulting to `TenancySuperAdmin`. Its two options are labelled by what the role
+actually grants — "Superadmin (can add and remove users)" / "Admin (cannot manage users)" — rather
+than by the bare enum name, because that add/remove-users line is the *only* thing separating the
+two ranks (docs/ADMIN_PANEL.md) and a platform operator picking blind from `TenancyAdmin` /
+`TenancySuperAdmin` alone would have no way to know which one is right.

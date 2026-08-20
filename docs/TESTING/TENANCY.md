@@ -171,8 +171,10 @@ Identity-service additionally carries `AuthorizationPolicyTests`, `RoleEnumContr
 | `…ImpersonationToken_CannotStartAnotherImpersonation` | chaining is refused — the dropped platform role is doing real work, not decoration |
 | `…StartImpersonation_ForUnknownOrganization_IsNotFound` | fails closed on an organization identity-service has never seen |
 | `…StartImpersonation_IntoSuspendedOrganization_IsForbidden` | suspension blocks platform staff too |
-| `…BootstrapOrganizationAdmin_CreatesATenancySuperAdminInviteThatCanBeAccepted` | the invite is a real Phase 40.7 invite: it is emailed, and accepting it produces an **active `TenancySuperAdmin` membership** — one rank below would leave the new organization unable to add anybody |
-| `…BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflict`, `…WhenATenancySuperAdminAlreadyExists_IsConflict` | the endpoint cannot be used as a back door into a running organization |
+| `…BootstrapOrganizationAdmin_CreatesAnInviteAtTheChosenRoleThatCanBeAccepted` (2, `TenancySuperAdmin`/`TenancyAdmin`) | the invite is a real Phase 40.7 invite at whichever rank the request chose: it is emailed, and accepting it produces an **active membership at that exact role** (2026-08-20 — the role used to be hardcoded to `TenancySuperAdmin`) |
+| `…BootstrapOrganizationAdmin_WhenRoleIsOmitted_DefaultsToTenancySuperAdmin` | a caller that predates the role field gets exactly what it always got |
+| `…BootstrapOrganizationAdmin_WithManagerRole_IsRejectedWithBadRequest`, `…WithAnUnknownRole_IsRejectedWithBadRequest` | the endpoint may only choose which rank of administrator it bootstraps — `Manager` and anything unrecognized are a `400`, never a silent fallback |
+| `…BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflictRegardlessOfItsRole` (2), `…WhenAnAdministratorAlreadyExists_IsConflictRegardlessOfRank` (2), `…AfterTheFirstAdministratorAcceptsTheInvite_ASecondBootstrapIsConflict` (2) | the endpoint cannot be used as a back door into a running organization, and neither guard was left checking only `TenancySuperAdmin` once the bootstrapped rank became selectable |
 | `…BootstrapOrganizationAdmin_ForSuspendedOrganization_IsForbidden` | a suspended tenant cannot be staffed |
 | `OrganizationSuspensionTests.Login_WhileOrganizationIsSuspended_IsForbidden` | a suspended organization actually blocks its users (`403`, not a silent success) |
 | `…Login_AfterTheOrganizationIsReactivated_Succeeds` | and resuming actually unblocks them |

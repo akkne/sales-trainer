@@ -4,6 +4,6 @@ public enum DemoRequestStatus
 {
     New,
     Contacted,
-    Qualified,
+    Approved,
     Declined,
 }
