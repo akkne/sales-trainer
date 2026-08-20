@@ -4,6 +4,27 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-20 — Night contract-audit fix: C-1 (docs/AUDIT_CONTRACTS.md)
+
+Fixing a blocker finding from the static contract audit, unattended (owner asleep): "the wrong
+kind of identifier reaches a route segment."
+
+### C-1 — resolving the skill's `iconicName` before calling `/admin/skills/{iconicName}/topics`
+
+`app/(admin)/admin/skills/[id]/topics/[topicId]/page.tsx` only had the skill's **GUID** (the route
+param) but the topics endpoint keys on `iconicName`. The neighboring skill-detail page already had
+the correct pattern — fetch `useAdminSkills()`, find the skill by GUID, pass `skill.iconicName`
+into `useAdminTopics` — so this page was made to match it rather than inventing a second approach.
+
+**Adjacent defect fixed in the same commit:** the same page's lesson-title link pointed at
+`.../lessons/{lessonId}` (no page exists there → `notFound()`), while the "Exercises →" link one
+column over already pointed at the correct `.../lessons/{lessonId}/exercises`. There is exactly one
+page for a lesson in this admin section (`exercises/page.tsx`) and a working link to it sitting right
+next to the broken one, so this was not treated as ambiguous — the title link was repointed to the
+same URL the working link already used. No `NIGHT_AUDIT_QUESTIONS.md` entry was needed.
+
+---
+
 ## 2026-08-18 — Phase 40.31: closing the loop from metric to content
 
 Roadmap block 40.31, the fourth of stage F (40.30 is deferred to the owner — the consent question).
@@ -5726,3 +5747,47 @@ writes, not a provisioning-specific fix.
 docs/DONT_FORGET.md). This is the first feature where that gap is load-bearing on the write path
 that matters most in this block — a demo lead never getting an administrator — rather than on a
 read that degrades gracefully. Recorded as a thing a human must actually do, not as done.
+
+## 2026-08-20 — Contract audit fixes: `TeamSkillMapMemberDto.DisplayName` stays nullable; `GET /skills/{slug}/lessons` splits "no skill" from "no lessons yet"
+
+Fixing docs/AUDIT_CONTRACTS.md C-4 and C-5 during an unattended run; both decisions below were made
+without the owner, per that run's rule to pick the reasonable option and record it here rather than
+block on a question.
+
+### C-4: the backend keeps `DisplayName` nullable; the frontend is what gets hardened
+
+The audit asked whether the backend should ever return `null` for a team member's display name. It
+already matches an established, deliberate pattern: `AssignmentDashboardRowDto.DisplayName` (docs/
+API_CONTRACTS.md, just above the skill-map section) is the same `string?`, for the same reason —
+read from `UserReplicas`, which lags a fresh signup until identity-service's `user.updated` event is
+consumed. Learning-service does not own identities and has no authority to invent a name; returning
+`null` and letting each consumer decide the fallback label is the existing house style, not a bug to
+fix by making the DTO lie with an empty string.
+
+The bug was that the *frontend* declared this field non-null (`displayName: string`) and then called
+`.localeCompare` on it directly in `use-team-directory.ts`'s `useTeamMemberNames` — a `TypeError` the
+moment any team had one unreplicated member. The sibling consumer,
+`features/org-team/utils/team-roster.ts`, already gets this right (`member.displayName || ...
+|| UNNAMED_MEMBER_LABEL`) but with the same dishonest input type, which is why the audit called it
+"correct" rather than "correctly typed."
+
+Fixed by making the *wire* type honest — `TeamSkillMapMember.displayName: string | null` — and
+resolving the fallback once, at the `useTeamMemberNames` boundary, into a *derived* type
+(`TeamMemberName.displayName: string`) that every downstream consumer (the O5 conversations filter,
+the audience picker, the review screen) can keep treating as an always-a-string label, same as it
+already did. `UNNAMED_MEMBER_LABEL = "Без имени"` is declared locally in `use-team-directory.ts`
+rather than imported from `org-team`/`org-people`/`org-dialogs`, matching how each of those three
+already carries its own private copy of the same string instead of a shared constant.
+
+### C-5: an existing skill with zero lessons is 200 `[]`; an unknown slug stays 404
+
+`ExerciseService.GetLessonsForSkillAsync` already looked up the skill by `IconicName` and could tell
+the two cases apart internally, but folded both into the same empty list, which the controller then
+turned into a 404 unconditionally. Split by making the service signature honest instead of adding a
+second lookup in the controller: it now returns `null` when the skill row itself does not exist, and
+an empty (or populated) list when it does — mirroring the same null-means-absent-not-empty vocabulary
+already used elsewhere on this DTO shape (`TeamSkillMapMemberDto.DisplayName` above, and the C-4 fix
+right next to it). `SkillsController.GetLessonsForSkill` returns `NotFound` only on `null`; `Ok`
+otherwise, empty array included. No frontend change was needed — `useLessonsForSkill` already treats
+a 200 with `[]` as "no lessons," and the pages already render an empty state for that; the bug was
+purely the backend manufacturing an error where there wasn't one.

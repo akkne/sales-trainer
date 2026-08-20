@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import { use } from "react";
 import {
+    useAdminSkills,
     useAdminTopics,
     useUpdateTopic,
     useAdminLessons,
@@ -55,7 +56,10 @@ export default function AdminTopicDetailPage({
 }) {
     const { id: skillId, topicId } = use(params);
 
-    const { data: topics = [] } = useAdminTopics(skillId);
+    const { data: skills = [] } = useAdminSkills();
+    const skill = skills.find((s) => s.id === skillId);
+
+    const { data: topics = [] } = useAdminTopics(skill?.iconicName || "");
     const topic = topics.find((t) => t.id === topicId);
 
     const updateTopic = useUpdateTopic(topicId);
@@ -338,7 +342,7 @@ export default function AdminTopicDetailPage({
                             >
                                 <td className="py-2.5 px-3 font-medium text-ink">
                                     <Link
-                                        href={`/admin/skills/${skillId}/topics/${topicId}/lessons/${lesson.id}`}
+                                        href={`/admin/skills/${skillId}/topics/${topicId}/lessons/${lesson.id}/exercises`}
                                         className="hover:underline"
                                     >
                                         {lesson.title}
