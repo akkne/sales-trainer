@@ -11,6 +11,7 @@ import {
     type AdminReferenceMaterial,
     type CreateReferenceMaterialBody,
 } from "@/features/admin/hooks/use-admin";
+import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminReferencePageWrapper({
     params,
@@ -22,7 +23,7 @@ export default function AdminReferencePageWrapper({
 }
 
 function AdminReferencePage({ skillId }: { skillId: string }) {
-    const { data: materials = [], isLoading } = useAdminReference(skillId);
+    const { data: materials = [], isLoading, isError, refetch } = useAdminReference(skillId);
     const createMaterial = useCreateReference(skillId);
     const deleteMaterial = useDeleteReference();
 
@@ -145,6 +146,8 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : materials.length === 0 ? (
                 <p className="text-sm text-ink-3">No reference materials yet.</p>
             ) : (

@@ -208,7 +208,7 @@
   косвенный намёк — кнопки экспорта, которые самоблокируются при `length === 0`.
 - **Severity:** major
 
-### [ ] E-15 `/admin/organizations`: пустая таблица организаций при отказе `/organizations`
+### [x] E-15 `/admin/organizations`: пустая таблица организаций при отказе `/organizations`
 - **Экран:** `/admin/organizations` — `app/(admin)/admin/organizations/page.tsx:41-42`,
   `180-196`, `293`
 - **Запрос:** `usePlatformOrganizations()` → `GET /organizations` и `useImpersonationAudit()` →
@@ -221,7 +221,7 @@
   ведёт к созданию дубликата (и к 409 slug-taken в лучшем случае).
 - **Severity:** major
 
-### [ ] E-16 Редакторы упражнений: «No exercises yet. Click "+ Add exercise" to create one» при отказе чтения
+### [x] E-16 Редакторы упражнений: «No exercises yet. Click "+ Add exercise" to create one» при отказе чтения
 - **Экран:** `/admin/lessons/<lessonId>/exercises` —
   `app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:146`, `305-308`;
   и его вложенный близнец
@@ -238,7 +238,7 @@
   к действию в тексте пустого стейта.
 - **Severity:** major
 
-### [ ] E-17 `/admin/skills/<id>`: вечное «Loading skill...» вместо ошибки
+### [x] E-17 `/admin/skills/<id>`: вечное «Loading skill...» вместо ошибки
 - **Экран:** `/admin/skills/<id>` — `app/(admin)/admin/skills/[id]/page.tsx:24-26`, `68-69`
 - **Запрос:** `useAdminSkills()` → `GET /admin/skills`. Навык ищется в списке
   (`skills.find(...)`), а ветка отказа выглядит так: `if (!skill) return <p>Loading skill...</p>;`.

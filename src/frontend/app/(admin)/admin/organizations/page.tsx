@@ -15,6 +15,7 @@ import {
     type OrganizationAdminRole,
     type PlatformOrganization,
 } from "@/features/admin/hooks/use-organizations";
+import { ErrorState } from "@/shared/components/error-state";
 
 const defaultAdminRole: OrganizationAdminRole = "TenancySuperAdmin";
 
@@ -38,8 +39,12 @@ export default function AdminOrganizationsPage() {
     // RequireSuperAdmin on the backend (docs/DECISIONS.md, 2026-08-16).
     const canManageUsers = canManagePlatformUsers(authenticatedUser?.role);
 
-    const { data: organizations = [], isLoading } = usePlatformOrganizations();
-    const { data: impersonations = [] } = useImpersonationAudit();
+    const { data: organizations = [], isLoading, isError, refetch } = usePlatformOrganizations();
+    const {
+        data: impersonations = [],
+        isError: isImpersonationsError,
+        refetch: refetchImpersonations,
+    } = useImpersonationAudit();
     const createOrganization = useCreateOrganization();
     const setOrganizationStatus = useSetOrganizationStatus();
     const bootstrapOrganizationAdmin = useBootstrapOrganizationAdmin();
@@ -179,6 +184,8 @@ export default function AdminOrganizationsPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                     <table className="w-full text-sm border-collapse min-w-[820px]">
@@ -290,7 +297,9 @@ export default function AdminOrganizationsPage() {
             )}
 
             <h2 className="text-base font-bold text-ink mt-10 mb-3">Recent impersonations</h2>
-            {impersonations.length === 0 ? (
+            {isImpersonationsError ? (
+                <ErrorState compact onRetry={() => refetchImpersonations()} />
+            ) : impersonations.length === 0 ? (
                 <p className="text-sm text-ink-3">Nobody has entered a customer organization yet.</p>
             ) : (
                 <ul className="space-y-2">

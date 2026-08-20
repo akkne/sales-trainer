@@ -9,6 +9,7 @@ import {
     useDeleteLeagueTier,
     type AdminLeagueTier,
 } from "@/features/admin/hooks/use-admin";
+import { ErrorState } from "@/shared/components/error-state";
 
 interface TierDraft {
     name: string;
@@ -19,7 +20,7 @@ interface TierDraft {
 const emptyNewTier = { key: "", name: "", color: "#888888", order: 1 };
 
 export default function AdminLeagueTiersPage() {
-    const { data: tiers = [], isLoading } = useAdminLeagueTiers();
+    const { data: tiers = [], isLoading, isError, refetch } = useAdminLeagueTiers();
     const createTier = useCreateLeagueTier();
     const updateTier = useUpdateLeagueTier();
     const deleteTier = useDeleteLeagueTier();
@@ -98,6 +99,8 @@ export default function AdminLeagueTiersPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                 <table className="w-full text-sm border-collapse min-w-[560px]">

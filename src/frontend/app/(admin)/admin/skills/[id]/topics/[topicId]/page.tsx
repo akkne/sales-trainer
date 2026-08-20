@@ -14,6 +14,7 @@ import {
     type AdminTopic,
     type LessonsImportResult,
 } from "@/features/admin/hooks/use-admin";
+import { ErrorState } from "@/shared/components/error-state";
 
 const LESSONS_TEMPLATE = JSON.stringify([
     {
@@ -56,17 +57,27 @@ export default function AdminTopicDetailPage({
 }) {
     const { id: skillId, topicId } = use(params);
 
-    const { data: skills = [] } = useAdminSkills();
+    const {
+        data: skills = [],
+        isLoading: skillsLoading,
+        isError: skillsError,
+        refetch: refetchSkills,
+    } = useAdminSkills();
     const skill = skills.find((s) => s.id === skillId);
 
-    const { data: topics = [] } = useAdminTopics(skill?.iconicName || "");
+    const {
+        data: topics = [],
+        isLoading: topicsLoading,
+        isError: topicsError,
+        refetch: refetchTopics,
+    } = useAdminTopics(skill?.iconicName || "");
     const topic = topics.find((t) => t.id === topicId);
 
     const updateTopic = useUpdateTopic(topicId);
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState<Omit<AdminTopic, "id" | "skillId"> | null>(null);
 
-    const { data: lessons = [], isLoading: lessonsLoading } = useAdminLessons(topic?.iconicName || "");
+    const { data: lessons = [], isLoading: lessonsLoading, isError: lessonsError, refetch: refetchLessons } = useAdminLessons(topic?.iconicName || "");
     const createLesson = useCreateLesson(topic?.iconicName || "");
     const deleteLesson = useDeleteLesson(topicId);
     const importLessons = useImportLessons();
@@ -116,8 +127,28 @@ export default function AdminTopicDetailPage({
         if (fileInputRef.current) fileInputRef.current.value = "";
     }
 
-    if (!topic) {
+    if (skillsLoading) {
         return <p className="text-sm text-ink-3">Loading topic...</p>;
+    }
+
+    if (skillsError) {
+        return <ErrorState onRetry={() => refetchSkills()} />;
+    }
+
+    if (!skill) {
+        return <p className="text-sm text-ink-3">Skill not found.</p>;
+    }
+
+    if (topicsLoading) {
+        return <p className="text-sm text-ink-3">Loading topic...</p>;
+    }
+
+    if (topicsError) {
+        return <ErrorState onRetry={() => refetchTopics()} />;
+    }
+
+    if (!topic) {
+        return <p className="text-sm text-ink-3">Topic not found.</p>;
     }
 
     return (
@@ -318,6 +349,8 @@ export default function AdminTopicDetailPage({
 
             {lessonsLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : lessonsError ? (
+                <ErrorState onRetry={() => refetchLessons()} />
             ) : lessons.length === 0 ? (
                 <p className="text-sm text-ink-3">No lessons yet.</p>
             ) : (

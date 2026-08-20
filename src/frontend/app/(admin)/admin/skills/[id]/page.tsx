@@ -13,6 +13,7 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { getStageMeta } from "@/features/skills/constants/skill-stages";
 import { useSkillStages } from "@/features/skills/hooks/use-skill-tree";
+import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminSkillDetailPage({
     params,
@@ -21,7 +22,12 @@ export default function AdminSkillDetailPage({
 }) {
     const { id } = use(params);
 
-    const { data: skills = [] } = useAdminSkills();
+    const {
+        data: skills = [],
+        isLoading: skillsLoading,
+        isError: skillsError,
+        refetch: refetchSkills,
+    } = useAdminSkills();
     const { stages } = useSkillStages();
     const skill = skills.find((s) => s.id === id);
 
@@ -29,7 +35,12 @@ export default function AdminSkillDetailPage({
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState<Omit<AdminSkill, "id"> | null>(null);
 
-    const { data: topics = [], isLoading: topicsLoading } = useAdminTopics(skill?.iconicName || "");
+    const {
+        data: topics = [],
+        isLoading: topicsLoading,
+        isError: topicsError,
+        refetch: refetchTopics,
+    } = useAdminTopics(skill?.iconicName || "");
     const createTopic = useCreateTopic(skill?.iconicName || "");
     const deleteTopic = useDeleteTopic(id);
 
@@ -65,8 +76,16 @@ export default function AdminSkillDetailPage({
         setShowTopicForm(false);
     }
 
-    if (!skill) {
+    if (skillsLoading) {
         return <p className="text-sm text-ink-3">Loading skill...</p>;
+    }
+
+    if (skillsError) {
+        return <ErrorState onRetry={() => refetchSkills()} />;
+    }
+
+    if (!skill) {
+        return <p className="text-sm text-ink-3">Skill not found.</p>;
     }
 
     return (
@@ -256,6 +275,8 @@ export default function AdminSkillDetailPage({
 
             {topicsLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : topicsError ? (
+                <ErrorState onRetry={() => refetchTopics()} />
             ) : topics.length === 0 ? (
                 <p className="text-sm text-ink-3">No topics yet.</p>
             ) : (

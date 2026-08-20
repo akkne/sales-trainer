@@ -13,6 +13,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { ImportPanel } from "@/features/admin/components/import-panel";
+import { ErrorState } from "@/shared/components/error-state";
 
 import {
     EXERCISE_TYPES,
@@ -143,7 +144,7 @@ export default function AdminLessonExercisesPage({
     params: Promise<{ lessonId: string }>;
 }) {
     const { lessonId } = use(params);
-    const { data: exercises = [], isLoading } = useAdminExercises(lessonId);
+    const { data: exercises = [], isLoading, isError, refetch } = useAdminExercises(lessonId);
 
     const createMut = useCreateExercise(lessonId);
     const deleteMut = useDeleteExercise(lessonId);
@@ -265,7 +266,8 @@ export default function AdminLessonExercisesPage({
                     </button>
                     <button
                         onClick={addExercise}
-                        className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                        disabled={isError}
+                        className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-40 transition-colors"
                     >
                         + Add exercise
                     </button>
@@ -302,10 +304,11 @@ export default function AdminLessonExercisesPage({
                 }}
             />
 
-            {rows.length === 0 && !isLoading && (
+            {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
+            {isError && <ErrorState onRetry={() => refetch()} />}
+            {!isLoading && !isError && rows.length === 0 && (
                 <p className="text-sm text-ink-3">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>
             )}
-            {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
 
             <div className="space-y-4">
                 {rows.map((row, index) => {
