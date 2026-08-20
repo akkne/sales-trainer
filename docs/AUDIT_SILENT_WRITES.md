@@ -207,7 +207,7 @@
 - **Ущерб:** нет сообщения (сообщение есть, но действие выглядит выполненным)
 - **Severity:** minor
 
-### [ ] W-12 Вход через Google: провал `POST /auth/google` не показывается нигде (и комментарий утверждает обратное)
+### [x] W-12 Вход через Google: провал `POST /auth/google` не показывается нигде (и комментарий утверждает обратное)
 - **Где:** `src/frontend/shared/components/google-login-button.tsx:12-19` — в `onError` от
   `<GoogleLogin>` стоит комментарий «error state handled inside useGoogleLogin mutation». В
   `features/auth/hooks/use-auth.ts:250-267` (`useGoogleLogin`) `onError` делает только
