@@ -57,8 +57,23 @@ export function Chip({
         transition: "all 0.15s ease",
     };
 
+    if (onClick) {
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                aria-pressed={active}
+                style={style}
+                className={className}
+            >
+                {icon}
+                {children}
+            </button>
+        );
+    }
+
     return (
-        <span onClick={onClick} style={style} className={className}>
+        <span style={style} className={className}>
             {icon}
             {children}
         </span>

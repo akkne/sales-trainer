@@ -241,7 +241,7 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Слой:** frontend
 - **Severity:** minor
 
-### [ ] O-8 Фильтры-чипсы в org-зоне недоступны с клавиатуры: это `<span onClick>` без роли и tabindex
+### [x] O-8 Фильтры-чипсы в org-зоне недоступны с клавиатуры: это `<span onClick>` без роли и tabindex
 - **Где:** `https://sellevate.site/org/assignments` (Все/Выдано/Черновики/Закрыто), `https://sellevate.site/org/content/generation` (Все/Ждёт проверки/…/Ошибка)
 - **Что делал:** искал фильтры среди `button` — не нашёл; проверил сами элементы и общий компонент.
 - **Что произошло:** элемент — `SPAN`, `role = null`, `tabindex = null`, `aria-pressed = null`. Мышью фильтр работает (клик по «Готово» на `/org/content/generation` дал `GET /admin/content-generation?status=completed` и корректное «В этом статусе прогонов нет»), но табом до него не добраться и скринридер прочитает его как обычный текст, а не как переключатель. Причина общая — `shared/components/chip.tsx` рендерит `<span onClick={…}>`. Рядом в том же разделе есть правильная реализация: `shared/components/tabs.tsx` использует `<button role="tab" aria-selected>` (так сделаны вкладки на `/org/content/adaptations`, `/org/reviews`, `/org/people`).
