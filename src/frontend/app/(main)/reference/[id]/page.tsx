@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { Icon } from "@/shared/components/icon";
 import { Skeleton } from "@/shared/components/skeleton";
+import { ErrorState } from "@/shared/components/error-state";
 import { useHandbook, useReferenceMaterials } from "@/features/skills/hooks/use-reference";
 
 interface ReferencePageProps {
@@ -21,13 +22,26 @@ interface ReferencePageProps {
 export default function ReferencePage({ params }: ReferencePageProps) {
     const { id: materialId } = use(params);
     const router = useRouter();
-    const { data: allMaterials, isLoading: isLoadingHandbook } = useHandbook();
+    const {
+        data: allMaterials,
+        isLoading: isLoadingHandbook,
+        isError: isHandbookError,
+        refetch: refetchHandbook,
+    } = useHandbook();
     const skillId = allMaterials?.find((material) => material.materialId === materialId)?.skillId;
-    const { data: referenceMaterials, isLoading: isLoadingSkillMaterials } =
-        useReferenceMaterials(skillId ?? "");
+    const {
+        data: referenceMaterials,
+        isLoading: isLoadingSkillMaterials,
+        isError: isSkillMaterialsError,
+        refetch: refetchSkillMaterials,
+    } = useReferenceMaterials(skillId ?? "");
     const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(materialId);
 
     const isLoading = isLoadingHandbook || (!!skillId && isLoadingSkillMaterials);
+    // E-1: when the handbook lookup itself fails, skillId never resolves, the materials query
+    // stays disabled, and isLoading turns false straight away — the empty state used to be the
+    // only thing that could render. Treat that as an error, not as "no materials".
+    const isError = isHandbookError || (!!skillId && isSkillMaterialsError);
 
     return (
         <div className="page">
@@ -68,6 +82,14 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                             <Skeleton key={i} height={64} rounded={15} />
                         ))}
                     </div>
+                ) : isError ? (
+                    <ErrorState
+                        title="Не удалось загрузить материалы"
+                        onRetry={() => {
+                            refetchHandbook();
+                            if (skillId) refetchSkillMaterials();
+                        }}
+                    />
                 ) : !referenceMaterials?.length ? (
                     <div className="ref-empty">
                         <Icon name="search" size="lg" color="var(--ink-4)" />
