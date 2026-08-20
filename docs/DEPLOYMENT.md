@@ -8,10 +8,10 @@
 > `api.${DOMAIN}` now points at the `gateway` service; "backend" below refers to this
 > gateway + service mesh unless it explicitly says monolith.
 
-There are two supported shapes:
+There is one supported production shape, plus an optional Kubernetes alternative:
 
-- **Option A — all-in-one server (current production).** Everything (frontend + backend + infra) runs via Docker Compose on a single EU cloud server behind Traefik with automatic HTTPS. See below.
-- **Option B — hybrid.** Frontend on Vercel, backend + infra via Docker Compose elsewhere.
+- **Option A — all-in-one server (current production).** Everything (frontend + backend + infra) runs via Docker Compose on a single EU cloud server behind Traefik with automatic HTTPS. The frontend is **self-hosted** here too — served by its own container, at `sellevate.site` — there is no separate frontend hosting provider. See below.
+- **Option C — Kubernetes via Helm (optional).** See below.
 
 > EU server is required: the backend calls OpenAI and Deepgram, which block Russian IPs. The production server runs in Amsterdam (Timeweb), Ubuntu 24.04.
 
@@ -35,12 +35,6 @@ Requirements in root `.env`: `DOMAIN` (base domain; defaults to `sellevate.site`
 DNS: A records for `sellevate.site` and `*.sellevate.site` → server IP; firewall open on 80/443. The wildcard already covers `grafana.sellevate.site` (and `api.`), so no extra record is needed; add a dedicated `grafana` A record only if you do not run a wildcard.
 
 > The full step-by-step server provisioning checklist (user, UFW, swap, Docker, build, verify) lives in the **gitignored `SERVER_SETUP.md`** at the repo root — it may contain the server IP and personal notes, so it is not committed.
-
----
-
-## Option B — hybrid (frontend on Vercel)
-
-Vercel cannot host the .NET server or the stateful infra, so only the frontend lives there. The Vercel frontend talks to the backend over the public API URL, and the backend whitelists the Vercel origin via CORS.
 
 ---
 
@@ -81,7 +75,7 @@ docker compose up --build -d gateway identity learning gamification ai social an
 (The monolith `backend` service no longer exists in `docker-compose.yml`; the gateway
 plus the per-service backends serve all traffic.)
 
-(The `frontend` service in `docker-compose.yml` is **not** deployed in production — the frontend goes to Vercel. It stays in the file only for the local full-Docker workflow.)
+(The `frontend` service in `docker-compose.yml` **is** deployed in production — see [§2 below](#2-frontend--self-hosted-via-docker-compose). It is the same self-hosted container for local full-Docker workflow and production; only the Traefik routing in `docker-compose.prod.yml` differs.)
 
 The backend listens on container port `8080`, published as `5001` on the host. Put it behind a reverse proxy / TLS so it is reachable as e.g. `https://api.sellevate.<domain>`.
 
@@ -90,39 +84,56 @@ The backend listens on container port `8080`, published as `5001` on the host. P
 The backend CORS allow-list comes from the `Frontend__Url` config key (`Frontend:Url` in `appsettings.json`). It accepts a **comma-separated list** of origins, so dev and prod can both be allowed:
 
 ```
-Frontend__Url=http://localhost:3000,https://sellevate.vercel.app
+Frontend__Url=http://localhost:3000,https://sellevate.site
 ```
 
 This is wired in `docker-compose.yml` from the `FRONTEND_URL` root-`.env` variable (defaults to the line above). `AllowCredentials()` is on, so origins must be listed explicitly — no wildcard.
 
 ---
 
-## 2. Frontend — Vercel
+## 2. Frontend — self-hosted via Docker Compose
 
-1. **Import the repo** in the Vercel dashboard → Add New → Project.
-2. **Root Directory** → `src/frontend` (monorepo layout; this is required so Vercel finds the Next.js app and `vercel.json`).
-3. Framework preset auto-detects as **Next.js**. Build/install commands come from `src/frontend/vercel.json` (`npm run build`, `npm ci`). The `output: "standalone"` in `next.config.ts` is for Docker and is ignored by Vercel.
-4. Set the **Environment Variables** (see below) in Project Settings.
-5. Deploy. Every push to the production branch triggers an automatic deploy.
+There is no separate frontend host or dashboard. `src/frontend/Dockerfile` multi-stage
+builds the Next.js app with `output: "standalone"` (`next.config.ts`) into a small
+`node:23-alpine` runner that serves it with `node server.js` on container port `3000`.
+The `frontend` service in `docker-compose.yml` builds that image and binds it to
+`127.0.0.1:3000` (Docker bypasses UFW, so it is not published to `0.0.0.0`); the
+`docker-compose.prod.yml` Traefik overlay then routes `Host(${DOMAIN:-sellevate.site})`
+to it and terminates TLS via Let's Encrypt (see [Option A](#option-a--all-in-one-server-with-traefik--auto-https)
+above). It ships and deploys with the exact same command as the rest of the stack:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+There is no separate "deploy the frontend" step and no automatic per-push deploy hook —
+a new frontend release ships whenever this command is re-run on the server with new code.
+
+Build-time and runtime variables come from two places:
+1. **Build args**, passed from the root `.env` (see `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in the
+   `frontend.build.args` block of `docker-compose.yml`).
+2. **`src/frontend/.env.production`**, committed (no secrets) and copied into the build —
+   sets `NEXT_PUBLIC_API_URL=https://api.sellevate.site` at build time and `LOKI_URL` at
+   container runtime via `env_file`.
 
 ### After the first deploy
 
-- **Google OAuth**: add `https://sellevate.vercel.app` to *Authorized JavaScript origins* in Google Cloud Console.
-- Confirm the backend's `Frontend__Url` includes `https://sellevate.vercel.app` (it does by default).
+- **Google OAuth**: add `https://sellevate.site` to *Authorized JavaScript origins* in Google Cloud Console.
+- Confirm the backend's `Frontend__Url` includes `https://sellevate.site` (it does by default).
 
 ---
 
 ## Environment variables
 
-### Vercel (frontend) — Project Settings → Environment Variables
+### Frontend — `src/frontend/.env.production` + Docker build args
 
 | Variable | Example | Notes |
 |----------|---------|-------|
-| `NEXT_PUBLIC_API_URL` | `https://api.sellevate.<domain>` | Public URL of the deployed backend. **Must be HTTPS** (browser blocks mixed content). Baked in at build time. |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `xxx.apps.googleusercontent.com` | Google OAuth client id. Build-time. |
-| `LOKI_URL` | `https://loki.<domain>` | Optional — only if shipping frontend logs to Loki; omit otherwise. Runtime. |
+| `NEXT_PUBLIC_API_URL` | `https://api.sellevate.site` | Public URL of the deployed backend. **Must be HTTPS** (browser blocks mixed content). Set in `src/frontend/.env.production`, baked in at build time. |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `xxx.apps.googleusercontent.com` | Google OAuth client id. Passed as a Docker build arg from the root `.env`'s `GOOGLE_CLIENT_ID`. Build-time. |
+| `LOKI_URL` | `http://loki:3100` | Optional — only if shipping frontend logs to Loki; omit otherwise. Set in `src/frontend/.env.production`, read at container runtime via `env_file`. |
 
-> `NEXT_PUBLIC_*` are inlined at build time, so changing them requires a redeploy.
+> `NEXT_PUBLIC_*` are inlined at build time, so changing them requires rebuilding the `frontend` image (`docker compose ... up --build -d frontend`).
 
 ### Backend host (root `.env`, read by docker-compose)
 
@@ -130,7 +141,7 @@ This is wired in `docker-compose.yml` from the `FRONTEND_URL` root-`.env` variab
 |----------|---------|
 | `DOMAIN` | Base domain for the Traefik prod overlay (`DOMAIN`/`api.`/`grafana.`). Defaults to `sellevate.site`. |
 | `ACME_EMAIL` | Let's Encrypt notification email (prod overlay only) |
-| `FRONTEND_URL` | CORS allow-list, e.g. `http://localhost:3000,https://sellevate.vercel.app` |
+| `FRONTEND_URL` | CORS allow-list, e.g. `http://localhost:3000,https://sellevate.site` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Postgres credentials |
 | `JWT_KEY` | JWT signing key (≥32 chars) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client id (backend token validation) |

@@ -40,7 +40,7 @@ services:
       # cannot run migrations — it would run them "successfully" against nothing.
       - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Kafka__BootstrapServers=kafka:29092
       - Logging__Loki__Url=http://loki:3100
       - Jwt__Key=${JWT_KEY}
@@ -212,7 +212,7 @@ services:
       - Kafka__BootstrapServers=kafka:29092
       # Phase 40.23: a practice conversation asks learning-service whether it is somebody's assignment.
       - LearningService__BaseUrl=http://learning:8080
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
       # no JWT and take their tenant from a header, so this is the only thing authenticating
@@ -274,7 +274,7 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__Redis=analytics-redis:6379
       - Kafka__BootstrapServers=kafka:29092
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
     depends_on:
@@ -298,7 +298,7 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
       # Notification e-mails go out through MailerSend — without these the sender
@@ -336,7 +336,7 @@ services:
       - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
       # --- Gamification tunables (override in .env; default is the in-code value) ---
@@ -372,7 +372,7 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
       - Kafka__BootstrapServers=kafka:29092
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
       - Storage__S3__Endpoint=http://minio:9000
@@ -419,7 +419,7 @@ services:
       # dialogue and the speech for it go through ai-service, which is where per-organization spend
       # is metered — the OpenAI__* and YandexTts__* variables that used to live here were the second
       # door around that meter.
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
       # no JWT and take their tenant from a header, so this is the only thing authenticating
@@ -453,7 +453,7 @@ services:
       # DDL connection: always the owning role, because a role its own tables' RLS applies to
       # cannot run migrations — it would run them "successfully" against nothing.
       - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
       # no JWT and take their tenant from a header, so this is the only thing authenticating
@@ -489,7 +489,7 @@ services:
       # DDL connection: always the owning role, because a role its own tables' RLS applies to
       # cannot run migrations — it would run them "successfully" against nothing.
       - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
       - Kafka__BootstrapServers=kafka:29092
@@ -502,6 +502,14 @@ services:
       - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
       - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
       - DemoRequests__NotificationEmail=${DEMO_REQUESTS_NOTIFICATION_EMAIL}
+      # Demo-request provisioning: the one call this service makes to identity-service, to bootstrap
+      # a brand-new organization's first administrator.
+      - IdentityService__BaseUrl=http://identity:8080
+      # The shared secret identity-service's InternalServiceAuthFilter checks on the receiving end.
+      # Absent outside Development, that filter refuses rather than allows (Phase 40.34) — see
+      # docs/DONT_FORGET.md for the fact that INTERNAL_SERVICE_SECRET is not actually provisioned
+      # anywhere yet.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -526,7 +534,7 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.site}
       - ReverseProxy__Clusters__ai__Destinations__d1__Address=http://ai:8080/
       - ReverseProxy__Clusters__analytics__Destinations__d1__Address=http://analytics:8080/
       - ReverseProxy__Clusters__notification__Destinations__d1__Address=http://notification:8080/

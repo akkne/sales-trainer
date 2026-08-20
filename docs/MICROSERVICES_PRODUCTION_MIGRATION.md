@@ -21,10 +21,11 @@
 | Mongo | `sallevate` (2 collections) | same `sallevate` DB, split by collection (ai: `dialog_sessions`, social: `chat_conversations`) |
 | Redis | 1 instance | 2 instances (`redis` + `analytics-redis`) |
 | New infra | — | **Kafka** (KRaft) + kafka-ui + kafka-exporter |
-| Frontend | Vercel | Vercel (unchanged — not on this server) |
+| Frontend | Self-hosted (Docker Compose, this server) | Self-hosted (unchanged — the `frontend` container already runs alongside the backend) |
 
-The frontend stays on Vercel. The only thing the frontend needs is that
-`api.DOMAIN` keeps answering — and it does, because the gateway now owns that host.
+The frontend keeps running self-hosted, in its own container on this same server. The
+only thing it needs is that `api.DOMAIN` keeps answering — and it does, because the
+gateway now owns that host.
 
 ---
 
@@ -221,7 +222,7 @@ done
 ```
 
 Then functional smoke test (through the public gateway):
-- [ ] `https://DOMAIN` loads (Vercel frontend) and talks to `api.DOMAIN`
+- [ ] `https://DOMAIN` loads (self-hosted frontend) and talks to `api.DOMAIN`
 - [ ] Log in (Google OAuth + super-admin) — exercises identity + JWT
 - [ ] Open a skill/lesson — learning content present (counts match the monolith)
 - [ ] Profile shows real progress points / activity consistency — gamification replica + data intact
