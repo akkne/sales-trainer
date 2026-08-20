@@ -12,6 +12,8 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { ErrorState } from "@/shared/components/error-state";
 
@@ -54,13 +56,6 @@ import {
 
 function typeBadgeColor(): string {
     return "bg-bg-2 text-ink-3 border border-line";
-}
-
-function moveExercise(exercises: ExerciseRow[], from: number, to: number): ExerciseRow[] {
-    const result = [...exercises];
-    const [moved] = result.splice(from, 1);
-    result.splice(to, 0, moved);
-    return result.map((ex, i) => ({ ...ex, sortOrder: i + 1 }));
 }
 
 interface ExerciseRow {
@@ -156,6 +151,10 @@ export default function AdminLessonExercisesPage({
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update exercise", { exerciseId: variables.exerciseId, lessonId, error: (error as Error).message });
+            toast.error(`Failed to update exercise: ${(error as Error).message}`);
+        },
     });
 
     const [localRows, setLocalRows] = useState<ExerciseRow[] | null>(null);
@@ -205,6 +204,10 @@ export default function AdminLessonExercisesPage({
                 customAiPrompt: null,
             });
         }
+        // Wait for the refetch so the server's copy is in hand before we drop localRows,
+        // otherwise the list would flash back to the pre-save state for a moment.
+        await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+        setLocalRows(null);
         setEditingId(null);
     }
 
@@ -222,9 +225,20 @@ export default function AdminLessonExercisesPage({
     function deleteRow(id: string | null) {
         if (!id) return;
         if (!confirm("Delete this exercise?")) return;
+        const previousRows = rows;
         setRows(rows.filter((r) => r.id !== id));
-        deleteMut.mutate(id);
         if (editingId === id) setEditingId(null);
+        deleteMut.mutate(id, {
+            onSuccess: async () => {
+                // Drop the local shadow now that the server agrees the row is gone -
+                // otherwise localRows keeps overriding every future refetch forever.
+                await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+                setLocalRows(null);
+            },
+            onError: () => {
+                setRows(previousRows);
+            },
+        });
     }
 
     function exportExercises() {
@@ -254,7 +268,7 @@ export default function AdminLessonExercisesPage({
                 </Link>
             </div>
 
-            <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-2">
                 <h1 className="text-lg font-semibold text-ink">Edit Exercises</h1>
                 <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -273,6 +287,11 @@ export default function AdminLessonExercisesPage({
                     </button>
                 </div>
             </div>
+            <p className="text-xs text-ink-3 mb-4">
+                Order is set when an exercise is created; there is no way to reorder existing
+                exercises yet (persisting a new order needs a backend endpoint that doesn&apos;t exist
+                today).
+            </p>
 
             <ImportPanel
                 title="Import Exercises"
@@ -320,20 +339,6 @@ export default function AdminLessonExercisesPage({
                         <div key={rowKey} className={cardCls}>
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
-                                    <div className="flex flex-col gap-0.5">
-                                        <button
-                                            disabled={index === 0}
-                                            onClick={() => setRows(moveExercise(rows, index, index - 1))}
-                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
-                                            title="Move up"
-                                        >▲</button>
-                                        <button
-                                            disabled={index === rows.length - 1}
-                                            onClick={() => setRows(moveExercise(rows, index, index + 1))}
-                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
-                                            title="Move down"
-                                        >▼</button>
-                                    </div>
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
                                         {TYPE_LABELS[row.type] ?? row.type}
                                     </span>
