@@ -148,7 +148,7 @@ function PathStageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen,
 
 // ─── Skill accordion list (shared: desktop sidebar + mobile bottom sheet) ───
 function PathSkillList({ onSelected }: { onSelected?: () => void }) {
-    const { data: allSkills, isLoading } = useSkills();
+    const { data: allSkills, isLoading, isError, refetch } = useSkills();
     const { stages } = useSkillStages();
     const { selectedSkill, setSelectedSkill } = useSelectedSkillStore();
 
@@ -198,6 +198,17 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
         );
     }
 
+    if (isError) {
+        return (
+            <ErrorState
+                compact
+                title="Не удалось загрузить навыки"
+                message="Список навыков не загрузился — это не значит, что записей на навыки нет."
+                onRetry={() => refetch()}
+            />
+        );
+    }
+
     if (enrolledSkills.length === 0) {
         return (
             <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", paddingTop: 20, lineHeight: 1.5 }}>
@@ -235,8 +246,21 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
 
 // ─── Overall path progress (skills mastered across the whole path) ──────────
 function PathOverallProgress() {
-    const { data: allSkills } = useSkills();
+    const { data: allSkills, isError } = useSkills();
     const enrolled = (allSkills ?? []).filter((s) => s.status !== "locked");
+
+    // E-5/E-12: this used to just disappear (`return null`) on a failed /skills fetch, same as
+    // "no enrolled skills" — the skill list right below already explains the failure with a
+    // retry, so here a narrow note is enough to stop the progress bar's disappearance from
+    // reading as "progress was reset".
+    if (isError) {
+        return (
+            <p style={{ fontSize: 12, color: "var(--ink-4)", padding: "0 2px 10px" }}>
+                Общий прогресс не загрузился.
+            </p>
+        );
+    }
+
     if (enrolled.length === 0) return null;
 
     const doneCount = enrolled.filter(
@@ -382,7 +406,7 @@ function PathCenterColumn({
     stageLabel: string;
     allSkills: SkillTreeNode[];
 }) {
-    const { data: lessons, isLoading } = useLessonsForSkill(skillSlug);
+    const { data: lessons, isLoading, isError, refetch } = useLessonsForSkill(skillSlug);
 
     const sorted = (lessons ?? [])
         .slice()
@@ -448,6 +472,16 @@ function PathCenterColumn({
     return (
         <div className="path-center">
             <div className="path-center-scroll" ref={scrollRef}>
+                {isError ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
+                        <ErrorState
+                            title="Не удалось загрузить уроки навыка"
+                            message="Статистика и уроки этого навыка не загрузились. Это не значит, что прогресс пропал — попробуй ещё раз."
+                            onRetry={() => refetch()}
+                        />
+                    </div>
+                ) : (
+                <>
                 {/* Breadcrumb */}
                 <nav className="path-breadcrumb" aria-label="Навигация по разделам">
                     <span className="path-bc-stage">{stageLabel}</span>
@@ -590,6 +624,8 @@ function PathCenterColumn({
                             );
                         })}
                     </div>
+                )}
+                </>
                 )}
             </div>
 

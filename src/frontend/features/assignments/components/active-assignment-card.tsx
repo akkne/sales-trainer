@@ -20,7 +20,19 @@ import {
  * the product has a home screen.
  */
 export function ActiveAssignmentCard() {
-    const { data: assignments } = useActiveAssignments();
+    const { data: assignments, isError } = useActiveAssignments();
+
+    // E-12: a failed fetch used to render nothing at all, same as "no assignment" — but an
+    // assignment with a deadline that silently vanished is worse than an empty homepage, so a
+    // failure gets a narrow one-line notice instead of the full strip (still never replacing
+    // the learning path below).
+    if (isError) {
+        return (
+            <p className="text-sm text-bad" style={{ margin: "0 0 12px" }} role="alert">
+                Не удалось загрузить активные задания. Обнови страницу, чтобы попробовать снова.
+            </p>
+        );
+    }
 
     if (!assignments || assignments.length === 0) {
         return null;
