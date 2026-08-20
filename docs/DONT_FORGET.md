@@ -4420,3 +4420,33 @@ runtime break.
 left alone. Its `AdminUserDetail` interface (around line 84) still declares those six fields as
 non-optional `number`s even though the backend no longer sends them. Whoever next edits that file
 should drop those six fields from the interface to match the real response shape.
+
+## T-2 (tenancy audit): prod overlay now forces `ASPNETCORE_ENVIRONMENT=Production` — verify `INTERNAL_SERVICE_SECRET` before the next deploy
+
+`docs/AUDIT_TENANCY.md` found that `docker-compose.yml` sets `ASPNETCORE_ENVIRONMENT=Development`
+for every .NET service and `docker-compose.prod.yml` never overrode it, so a real deploy through
+`scripts/deploy-prod.sh` plausibly ran as Development. That made `InternalServiceAuthFilter`
+no-op (allow) when `InternalAuth:ServiceSecret` is empty, let `POST /demo/token` mint tokens
+instead of 404ing, and left Swagger open.
+
+Fixed in the repo: `docker-compose.prod.yml` now overrides `ASPNETCORE_ENVIRONMENT=Production` for
+all ten .NET services (identity, ai, analytics, notification, gamification, social, learning,
+company, organization, gateway). Verified with `docker compose -f docker-compose.yml -f
+docker-compose.prod.yml config` that the merge resolves to `Production` for all ten, and that the
+base file alone (what `scripts/dev-*.sh` use) still resolves to `Development` — local dev is
+unaffected. `InternalServiceAuthFilter` itself already fails closed outside Development when the
+secret is empty (Phase 40.34, see `learning-service/Learning/Common/Security/InternalServiceAuthFilter.cs`).
+
+**What a human must do before/at the next prod deploy (cannot be verified from this repo):**
+1. Confirm the real prod `.env` actually sets `INTERNAL_SERVICE_SECRET` to the same non-empty value
+   read by identity/ai/learning/company/organization (this was already flagged above as unprovisioned
+   anywhere real). Once this compose change ships, prod stops silently no-op'ing the internal-auth
+   check — if the secret is still unset, every `/internal/*` and `/ai/*` service-to-service call
+   (membership roster, assignment practice-context, content pipeline, demo-request provisioning)
+   will start returning a **noisy 403** in prod instead of the previous silent allow. That is the
+   intended fail-closed behavior, but it means this compose change and setting the real secret need
+   to land together, or internal calls break on deploy.
+2. Confirm `POST /demo/token` now 404s in prod once redeployed (it already 404s outside Development
+   in code — this just makes prod actually be outside Development).
+3. Confirm Swagger UI is no longer reachable on any service in prod after redeploy.
+None of this can be checked from the repo alone; it requires the real server and `.env`.

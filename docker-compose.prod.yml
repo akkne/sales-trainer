@@ -48,12 +48,56 @@ services:
   # api.DOMAIN -> the YARP gateway, the single public API entry point. The monolith
   # is retired; the gateway routes every path to its owning microservice.
   gateway:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN:-sellevate.site}`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls.certresolver=le"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
+
+  # T-2 (docs/AUDIT_TENANCY.md): the base compose file sets ASPNETCORE_ENVIRONMENT=Development
+  # for every .NET service so `scripts/dev-*.sh` gets hot-reload/Swagger locally. This overlay
+  # overrides it back to Production for the prod shape only, so InternalServiceAuthFilter
+  # fails closed instead of no-op'ing when INTERNAL_SERVICE_SECRET is empty, POST /demo/token
+  # 404s, and Swagger stays closed. docker compose merges same-key environment entries with
+  # last-file-wins, so this line wins over the base file's Development value.
+  identity:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  ai:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  analytics:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  notification:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  gamification:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  social:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  learning:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  company:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  organization:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
 
   # Grafana published at https://grafana.${DOMAIN}. Protected by Grafana's own
   # login (anonymous disabled, signup disabled) — set a strong GRAFANA_ADMIN_PASSWORD

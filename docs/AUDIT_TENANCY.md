@@ -59,7 +59,18 @@
   `SELECT current_user, usesuper` — см. RUNBOOK шаг 11)
 - **Severity:** major
 
-### [ ] T-2 Прод запускается с `ASPNETCORE_ENVIRONMENT=Development`, что отключает `InternalServiceAuthFilter` при пустом секрете
+### [x] T-2 Прод запускается с `ASPNETCORE_ENVIRONMENT=Development`, что отключает `InternalServiceAuthFilter` при пустом секрете
+
+**Исправлено (2026-08-21, ночной прогон).** `docker-compose.prod.yml` теперь переопределяет
+`ASPNETCORE_ENVIRONMENT=Production` для всех десяти .NET-сервисов (identity, ai, analytics,
+notification, gamification, social, learning, company, organization, gateway). Проверено
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml config` — во всех десяти
+резолвится `Production`; база одна (`scripts/dev-*.sh`) по-прежнему резолвится в `Development` —
+локальная разработка не тронута. `InternalServiceAuthFilter` уже fail-closed вне Development при
+пустом секрете (40.34) — теперь эта ветка реально доступна в проде. Остаток — человеку, записан в
+`docs/DONT_FORGET.md`: подтвердить, что `INTERNAL_SERVICE_SECRET` реально задан в прод-`.env`
+(иначе после деплоя internal-вызовы начнут шумно отвечать 403 вместо тихого allow), и что
+`/demo/token`/Swagger действительно закрылись на живом стенде.
 - **Эндпоинт:** все `/internal/*` и `/ai/*` маршруты. Фильтр:
   `learning-service/Learning/Common/Security/InternalServiceAuthFilter.cs:40-46`
   (а также идентичные копии `identity-service/Identity/Common/Security/InternalServiceAuthFilter.cs`,
