@@ -125,7 +125,11 @@ export default function ContentAdaptationsPage() {
     if (jobsQuery.isError) {
         return (
             <>
-                <PageHeader title="Массовая правка и ревью" />
+                <PageHeader
+                    title="Массовая правка и ревью"
+                    backHref="/org/content"
+                    backLabel="Контент"
+                />
                 <ErrorState
                     title="Не удалось загрузить пакеты"
                     message="Проверьте подключение и попробуйте снова."
@@ -140,6 +144,8 @@ export default function ContentAdaptationsPage() {
             <PageHeader
                 title="Массовая правка и ревью"
                 subtitle="Пакет — это один этап воронки. Модель предлагает, отвечаете вы: по одному упражнению за раз."
+                backHref="/org/content"
+                backLabel="Контент"
                 action={
                     <Button variant="primary" onClick={() => setIsStartDialogOpen(true)}>
                         Переписать этап под свой продукт

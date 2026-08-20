@@ -188,7 +188,7 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Слой:** frontend
 - **Severity:** minor
 
-### [ ] O-5 С `/org/content/adaptations` и `/org/content/overrides` некуда вернуться: нет ни хлебной крошки, ни пункта в сайдбаре
+### [x] O-5 С `/org/content/adaptations` и `/org/content/overrides` некуда вернуться: нет ни хлебной крошки, ни пункта в сайдбаре
 - **Где:** `https://sellevate.site/org/content/adaptations`, `https://sellevate.site/org/content/overrides`
 - **Что делал:** попал на оба экрана с `/org/content` (только оттуда на них и ссылаются), затем искал обратную ссылку: `[...document.querySelectorAll('main a')]` → пустой массив.
 - **Что произошло:** ни на одном из двух экранов нет кнопки/крошки «Контент». В сайдбаре тоже есть только `/org/content`, самих подстраниц там нет. Соседний экран того же раздела — `/org/content/generation` — крошку имеет (`PageHeader backHref="/org/content"`, `app/(org)/org/content/generation/page.tsx:117`); у adaptations и overrides `backHref` не передан вовсе. Вернуться можно только кнопкой «назад» браузера или кликом по `/org/content` в сайдбаре — и второе неочевидно, потому что пункт «Контент» при этом уже подсвечен как активный.

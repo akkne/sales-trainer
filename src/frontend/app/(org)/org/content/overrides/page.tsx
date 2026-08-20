@@ -90,7 +90,12 @@ export default function OrganizationContentOverridesPage() {
     if (learningQuery.isError) {
         return (
             <>
-                <PageHeader title="Свои версии материалов" subtitle={SUBTITLE} />
+                <PageHeader
+                    title="Свои версии материалов"
+                    subtitle={SUBTITLE}
+                    backHref="/org/content"
+                    backLabel="Контент"
+                />
                 <ErrorState
                     message="Не удалось прочитать список ваших копий."
                     onRetry={() => {
@@ -106,7 +111,12 @@ export default function OrganizationContentOverridesPage() {
 
     return (
         <>
-            <PageHeader title="Свои версии материалов" subtitle={SUBTITLE} />
+            <PageHeader
+                title="Свои версии материалов"
+                subtitle={SUBTITLE}
+                backHref="/org/content"
+                backLabel="Контент"
+            />
 
             {dialogModesQuery.isError && (
                 <div
