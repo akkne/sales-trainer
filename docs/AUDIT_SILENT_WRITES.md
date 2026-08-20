@@ -181,7 +181,7 @@
 - **Ущерб:** потеря данных (перестановка) + ложный вывод «переставил и сохранилось»
 - **Severity:** major
 
-### [ ] W-10 Оверрайд режима диалога: «Взять базу» и «Оставить своё» падают молча
+### [x] W-10 Оверрайд режима диалога: «Взять базу» и «Оставить своё» падают молча
 - **Где:** `src/frontend/app/(org)/org/content/overrides/[kind]/[overrideId]/page.tsx` —
   `DialogModeOverrideReviewScreen` (с `:285`), кнопки на `:403` (`keepOverride.mutate`) и `:435`
   (`acceptBase.mutate` из `ConfirmDialog`).

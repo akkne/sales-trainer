@@ -423,6 +423,12 @@ function DialogModeOverrideReviewScreen({ overrideId }: { overrideId: string }) 
                 </>
             )}
 
+            {(acceptBase.isError || keepOverride.isError) && (
+                <p className="mt-4 text-sm text-bad" role="alert">
+                    Действие не прошло. Обновите страницу и попробуйте ещё раз.
+                </p>
+            )}
+
             <ConfirmDialog
                 open={isConfirmingAcceptBase}
                 title="Вернуться к общему режиму?"
