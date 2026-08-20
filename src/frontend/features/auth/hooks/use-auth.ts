@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ApiError, apiClient } from "@/shared/api/api-client";
 import { useAuthStore, type OrgRole, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 
 const PENDING_VERIFICATION_EMAIL_KEY = "pendingVerificationEmail";
 
@@ -266,6 +267,11 @@ export function useGoogleLogin() {
     });
 }
 
+/**
+ * A failed server-side revoke must never leave a signed-in browser: the local session is cleared
+ * and the user is sent to `/login` in `onSettled`, regardless of whether the request succeeded.
+ * `onError` only adds the notice that the server-side session may still be alive.
+ */
 export function useLogout() {
     const router = useRouter();
     const { clearAuthSession } = useAuthStore();
@@ -274,6 +280,17 @@ export function useLogout() {
         mutationFn: () => apiClient.post<void>("/auth/logout", {}),
         onSuccess: () => {
             clientLogger.info("User logged out");
+        },
+        onError: (error) => {
+            clientLogger.warn("Logout request failed; clearing local session anyway", {
+                error: (error as Error).message,
+            });
+            toast.error(
+                `Не удалось завершить сессию на сервере: ${(error as Error).message}. ` +
+                    "Вы вышли на этом устройстве, но советуем сменить пароль, если устройство не ваше."
+            );
+        },
+        onSettled: () => {
             clearAuthSession();
             router.push("/login");
         },

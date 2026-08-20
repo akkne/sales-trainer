@@ -135,7 +135,7 @@
 - **Ущерб:** нет сообщения (по всей админке; правки контента теряются молча)
 - **Severity:** major
 
-### [ ] W-7 «Выйти»: провал `POST /auth/logout` оставляет сессию живой и ничего не говорит
+### [x] W-7 «Выйти»: провал `POST /auth/logout` оставляет сессию живой и ничего не говорит
 - **Где:** `src/frontend/features/auth/hooks/use-auth.ts:269-282` (`useLogout`). Вызовы:
   `app/(main)/settings/page.tsx:160` (кнопка «Выйти» в настройках) и
   `features/auth/components/awaiting-organization-gate.tsx:75` (единственный выход для
