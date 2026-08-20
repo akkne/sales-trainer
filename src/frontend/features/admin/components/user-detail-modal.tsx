@@ -37,6 +37,18 @@ export function UserDetailModal({ userId, canManageUser, isSelf, onClose }: User
         if (user) setDisplayName(user.displayName);
     }, [user]);
 
+    // This modal predates shared/components/modal.tsx and isn't a drop-in swap for it: the
+    // header here is a rich avatar/name/badges block, not the plain string title Modal's own
+    // header supports, so switching would mean redesigning the header layout rather than a
+    // small safe change. Escape-to-close is added directly instead, matching Modal's behavior.
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") onClose();
+        };
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [onClose]);
+
     const trimmedName = displayName.trim();
     const nameValid = trimmedName.length >= 2 && trimmedName.length <= 50;
     const nameChanged = !!user && trimmedName !== user.displayName;
