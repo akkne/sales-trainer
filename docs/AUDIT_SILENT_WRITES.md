@@ -109,7 +109,7 @@
   расходится с серверной, по которой считается оценка)
 - **Severity:** blocker (обучение против того, чего сервер не видел — тот же класс, что E-18)
 
-### [ ] W-6 Вся контентная админка: `onError` пишет только в `clientLogger`, на экран не выходит ничего
+### [x] W-6 Вся контентная админка: `onError` пишет только в `clientLogger`, на экран не выходит ничего
 - **Где:** `src/frontend/features/admin/hooks/use-admin.ts` — 49 мутаций, у 48 есть `onError`, и
   каждый — только `clientLogger.error(...)` (примеры: `:111`, `:126`, `:140`, `:172`, `:187`,
   `:202`, `:234`, `:249`). Ни один экран этих ошибок не читает: страницы вызывают
@@ -150,7 +150,7 @@
   выполнен)
 - **Severity:** major
 
-### [ ] W-8 Редактор упражнений: строка исчезает из списка до ответа сервера и не возвращается
+### [x] W-8 Редактор упражнений: строка исчезает из списка до ответа сервера и не возвращается
 - **Где:** `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:222-228`
   (`deleteRow`) и её копия
   `src/frontend/app/(admin)/admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx:222-228`
@@ -167,7 +167,7 @@
 - **Ущерб:** ложный вывод «удалено» + расхождение экрана с базой (нет сообщения)
 - **Severity:** major
 
-### [ ] W-9 Редактор упражнений: перестановка ▲▼ вообще не отправляется на сервер
+### [x] W-9 Редактор упражнений: перестановка ▲▼ вообще не отправляется на сервер
 - **Где:** `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:326,332`
   (`setRows(moveExercise(rows, index, ±1))`, `moveExercise` на `:59-64` пересчитывает `sortOrder`) и
   та же пара строк в копии под `admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises`.
