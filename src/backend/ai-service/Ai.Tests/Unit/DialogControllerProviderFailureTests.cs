@@ -10,6 +10,7 @@ using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -37,6 +38,7 @@ public class DialogControllerProviderFailureTests
             _dialogService,
             Substitute.For<IScenarioValidationService>(),
             _databaseContext,
+            Substitute.For<ISkillLookupClient>(),
             NullLogger<DialogController>.Instance)
         {
             ControllerContext = new ControllerContext

@@ -7,6 +7,7 @@ using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Features.Dialog;
 
@@ -40,17 +41,20 @@ public sealed class DialogController : ControllerBase
     private readonly IDialogService _dialogService;
     private readonly IScenarioValidationService _scenarioValidationService;
     private readonly AiDbContext _databaseContext;
+    private readonly ISkillLookupClient _skillLookupClient;
     private readonly ILogger<DialogController> _logger;
 
     public DialogController(
         IDialogService dialogService,
         IScenarioValidationService scenarioValidationService,
         AiDbContext databaseContext,
+        ISkillLookupClient skillLookupClient,
         ILogger<DialogController> logger)
     {
         _dialogService = dialogService;
         _scenarioValidationService = scenarioValidationService;
         _databaseContext = databaseContext;
+        _skillLookupClient = skillLookupClient;
         _logger = logger;
     }
 
@@ -63,7 +67,8 @@ public sealed class DialogController : ControllerBase
         }
 
         var bundles = await _dialogService.GetActiveBundlesAsync(cancellationToken);
-        var bundleDtos = bundles.Select(DialogBundleDto.FromEntity).ToList();
+        var skillLookup = await _skillLookupClient.GetSkillSummariesAsync(cancellationToken);
+        var bundleDtos = bundles.Select(bundle => DialogBundleDto.FromEntity(bundle, skillLookup)).ToList();
         return Ok(bundleDtos);
     }
 

@@ -39,6 +39,7 @@ public static class DialogServiceCollectionExtensions
 
         services.AddScoped<IOrganizationProfileProvider, OrganizationProfileProvider>();
         services.AddLearningAssignmentClient(configuration);
+        services.AddLearningSkillLookupClient(configuration);
 
         return services;
     }

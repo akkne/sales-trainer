@@ -54,4 +54,35 @@ public static class LearningClientServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// C-3 audit fix. Registers the typed client dialog bundles read the skill catalog with, so their
+    /// DTO can carry the slug and title the frontend has always declared (docs/AUDIT_CONTRACTS.md).
+    /// Mirrors <see cref="AddLearningAssignmentClient"/> — same secret handshake, same clamped timeout.
+    /// </summary>
+    public static IServiceCollection AddLearningSkillLookupClient(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<LearningServiceConfiguration>(
+            configuration.GetSection(LearningServiceConfiguration.SectionName));
+
+        services.AddHttpClient<ISkillLookupClient, SkillLookupClient>(httpClient =>
+        {
+            var internalServiceSecret = configuration[InternalServiceAuthentication.SecretConfigurationKey];
+            if (!string.IsNullOrWhiteSpace(internalServiceSecret))
+            {
+                httpClient.DefaultRequestHeaders.Add(
+                    InternalServiceAuthentication.HeaderName, internalServiceSecret);
+            }
+
+            var timeoutSeconds = configuration.GetValue<int?>(
+                $"{LearningServiceConfiguration.SectionName}:{nameof(LearningServiceConfiguration.TimeoutSeconds)}")
+                ?? DefaultTimeoutSeconds;
+            httpClient.Timeout = TimeSpan.FromSeconds(
+                Math.Clamp(timeoutSeconds, MinimumTimeoutSeconds, MaximumTimeoutSeconds));
+        });
+
+        return services;
+    }
 }

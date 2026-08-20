@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Learning;
 using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.Dialog;
@@ -52,27 +53,31 @@ public sealed class AdminDialogController : ControllerBase
     private const string JsonFileExtension = ".json";
 
     private readonly AiDbContext _databaseContext;
+    private readonly ISkillLookupClient _skillLookupClient;
     private readonly ILogger<AdminDialogController> _logger;
 
-    public AdminDialogController(AiDbContext databaseContext, ILogger<AdminDialogController> logger)
+    public AdminDialogController(
+        AiDbContext databaseContext, ISkillLookupClient skillLookupClient, ILogger<AdminDialogController> logger)
     {
         _databaseContext = databaseContext;
+        _skillLookupClient = skillLookupClient;
         _logger = logger;
     }
 
     [HttpGet("bundles")]
-    public async Task<IActionResult> GetAllBundles()
+    public async Task<IActionResult> GetAllBundles(CancellationToken cancellationToken)
     {
         var bundles = await _databaseContext.DialogBundles
             .OrderBy(bundle => bundle.SortOrder)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        var bundleDtos = bundles.Select(DialogBundleDto.FromEntity).ToList();
+        var skillLookup = await _skillLookupClient.GetSkillSummariesAsync(cancellationToken);
+        var bundleDtos = bundles.Select(bundle => DialogBundleDto.FromEntity(bundle, skillLookup)).ToList();
         return Ok(bundleDtos);
     }
 
     [HttpGet("bundles/{bundleId:guid}")]
-    public async Task<IActionResult> GetBundle(Guid bundleId)
+    public async Task<IActionResult> GetBundle(Guid bundleId, CancellationToken cancellationToken)
     {
         var bundle = await _databaseContext.DialogBundles
             .FirstOrDefaultAsync(bundle => bundle.Id == bundleId);
@@ -82,11 +87,13 @@ public sealed class AdminDialogController : ControllerBase
             return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
-        return Ok(DialogBundleDto.FromEntity(bundle));
+        var skillLookup = await _skillLookupClient.GetSkillSummariesAsync(cancellationToken);
+        return Ok(DialogBundleDto.FromEntity(bundle, skillLookup));
     }
 
     [HttpPost("bundles")]
-    public async Task<IActionResult> CreateBundle([FromBody] CreateBundleRequestDto request)
+    public async Task<IActionResult> CreateBundle(
+        [FromBody] CreateBundleRequestDto request, CancellationToken cancellationToken)
     {
         var bundle = new DialogBundle
         {
@@ -103,11 +110,14 @@ public sealed class AdminDialogController : ControllerBase
 
         _logger.LogInformation("Created dialog bundle {BundleId}: {Title}", bundle.Id, bundle.Title);
 
-        return CreatedAtAction(nameof(GetBundle), new { bundleId = bundle.Id }, DialogBundleDto.FromEntity(bundle));
+        var skillLookup = await _skillLookupClient.GetSkillSummariesAsync(cancellationToken);
+        return CreatedAtAction(
+            nameof(GetBundle), new { bundleId = bundle.Id }, DialogBundleDto.FromEntity(bundle, skillLookup));
     }
 
     [HttpPut("bundles/{bundleId:guid}")]
-    public async Task<IActionResult> UpdateBundle(Guid bundleId, [FromBody] UpdateBundleRequestDto request)
+    public async Task<IActionResult> UpdateBundle(
+        Guid bundleId, [FromBody] UpdateBundleRequestDto request, CancellationToken cancellationToken)
     {
         var bundle = await _databaseContext.DialogBundles
             .FirstOrDefaultAsync(bundle => bundle.Id == bundleId);
@@ -135,7 +145,8 @@ public sealed class AdminDialogController : ControllerBase
 
         _logger.LogInformation("Updated dialog bundle {BundleId}", bundleId);
 
-        return Ok(DialogBundleDto.FromEntity(bundle));
+        var skillLookup = await _skillLookupClient.GetSkillSummariesAsync(cancellationToken);
+        return Ok(DialogBundleDto.FromEntity(bundle, skillLookup));
     }
 
     [HttpDelete("bundles/{bundleId:guid}")]

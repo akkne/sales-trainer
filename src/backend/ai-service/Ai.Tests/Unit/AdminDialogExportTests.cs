@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NSubstitute;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -19,7 +21,7 @@ public sealed class AdminDialogExportTests
     }
 
     private static AdminDialogController CreateController(AiDbContext databaseContext) =>
-        new(databaseContext, NullLogger<AdminDialogController>.Instance)
+        new(databaseContext, Substitute.For<ISkillLookupClient>(), NullLogger<AdminDialogController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

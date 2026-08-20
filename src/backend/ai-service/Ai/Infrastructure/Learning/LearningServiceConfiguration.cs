@@ -11,6 +11,9 @@ public sealed class LearningServiceConfiguration
 
     public string PracticeContextPath { get; init; } = "/internal/assignments/practice-context";
 
+    /// <summary>C-3 audit fix. Where the global skill catalog is read from, for labelling dialog bundles.</summary>
+    public string SkillLookupPath { get; init; } = "/internal/skills/lookup";
+
     /// <summary>
     /// Short, because this call sits in front of a learner pressing "start". The lookup degrades to
     /// "no assignment" on timeout, so a slow learning-service costs an un-personalised practice
