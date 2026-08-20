@@ -16,6 +16,9 @@ interface TheoryLessonPlayerProps {
     onComplete: () => void;
     /** True while the completion submission is in flight. */
     isCompleting: boolean;
+    /** Set when the last completion attempt failed, so the learner sees a reason
+     * instead of the button just going idle again (docs/AUDIT_SILENT_WRITES.md W-3). */
+    completeError?: string | null;
     onExit: () => void;
 }
 
@@ -24,7 +27,7 @@ interface TheoryLessonPlayerProps {
  * indicator on top, and a "Finish" button on the last card. Reaching the end is
  * what marks the lesson complete (handled by the caller via onComplete).
  */
-export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: TheoryLessonPlayerProps) {
+export function TheoryLessonPlayer({ cards, onComplete, isCompleting, completeError, onExit }: TheoryLessonPlayerProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const total = cards.length;
@@ -108,20 +111,30 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
             </div>
 
             {/* Footer: prev arrow + next/finish */}
-            <div className="theory-footer">
-                <button
-                    className="btn btn-ghost"
-                    onClick={goPrev}
-                    disabled={currentIndex === 0}
-                    aria-label="Назад"
-                >
-                    <Icon name="arrow-left" size={18} />
-                </button>
-                <button className="btn btn-primary btn-lg grow" onClick={goNext} disabled={isCompleting}>
-                    {isLast ? (isCompleting ? "Сохранение…" : "Завершить") : "Далее"}
-                    {!isLast && <Icon name="arrow-right" size={18} />}
-                    {isLast && !isCompleting && <Icon name="check" size={18} />}
-                </button>
+            <div
+                className="theory-footer"
+                style={completeError ? { flexDirection: "column", alignItems: "stretch", gap: 10 } : undefined}
+            >
+                {completeError && (
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--heart)", textAlign: "center" }} role="alert">
+                        {completeError}
+                    </p>
+                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+                    <button
+                        className="btn btn-ghost"
+                        onClick={goPrev}
+                        disabled={currentIndex === 0}
+                        aria-label="Назад"
+                    >
+                        <Icon name="arrow-left" size={18} />
+                    </button>
+                    <button className="btn btn-primary btn-lg grow" onClick={goNext} disabled={isCompleting}>
+                        {isLast ? (isCompleting ? "Сохранение…" : "Завершить") : "Далее"}
+                        {!isLast && <Icon name="arrow-right" size={18} />}
+                        {isLast && !isCompleting && <Icon name="check" size={18} />}
+                    </button>
+                </div>
             </div>
         </div>
     );

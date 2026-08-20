@@ -557,6 +557,7 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
     const startTimeRef = useRef<number>(0);
     const [completed, setCompleted] = useState(false);
     const [durationSeconds, setDurationSeconds] = useState(0);
+    const [completeError, setCompleteError] = useState<string | null>(null);
 
     useEffect(() => {
         startTimeRef.current = Date.now();
@@ -565,17 +566,29 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
     const cards = exercises.map((ex) => ex.content as TheoryCardContent);
 
     async function handleComplete() {
-        // The backend marks a lesson complete only when every exercise in it has a
-        // correct attempt. Theory cards always evaluate as correct, so we must submit
-        // ALL cards (not just the last one) or a multi-card lesson never completes.
-        for (const exercise of exercises) {
-            await submitExerciseMutation.mutateAsync({
-                exerciseId: exercise.exerciseId,
-                answer: {},
-            });
+        setCompleteError(null);
+        try {
+            // The backend marks a lesson complete only when every exercise in it has a
+            // correct attempt. Theory cards always evaluate as correct, so we must submit
+            // ALL cards (not just the last one) or a multi-card lesson never completes.
+            for (const exercise of exercises) {
+                await submitExerciseMutation.mutateAsync({
+                    exerciseId: exercise.exerciseId,
+                    answer: {},
+                });
+            }
+            setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
+            setCompleted(true);
+        } catch (submitError) {
+            // A mid-loop failure must not be silent: without this the screen just goes
+            // back to "Завершить" with no explanation, and the lesson never closes
+            // because the backend never saw every card submitted (docs/AUDIT_SILENT_WRITES.md W-3).
+            setCompleteError(
+                submitError instanceof Error
+                    ? submitError.message
+                    : "Не удалось сохранить прогресс. Попробуй ещё раз."
+            );
         }
-        setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
-        setCompleted(true);
     }
 
     if (completed) {
@@ -594,6 +607,7 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
             cards={cards}
             onComplete={handleComplete}
             isCompleting={submitExerciseMutation.isPending}
+            completeError={completeError}
             onExit={() => router.push(exitHref)}
         />
     );
