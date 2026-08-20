@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 
 // --- Types ---
 
@@ -110,6 +111,7 @@ export function useCreateSkill() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create skill", { iconicName: variables.iconicName, error: (error as Error).message });
+            toast.error(`Failed to create skill: ${(error as Error).message}`);
         },
     });
 }
@@ -125,6 +127,7 @@ export function useUpdateSkill(id: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update skill", { skillId: id, error: (error as Error).message });
+            toast.error(`Failed to update skill: ${(error as Error).message}`);
         },
     });
 }
@@ -139,6 +142,7 @@ export function useDeleteSkill() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete skill", { skillId: id, error: (error as Error).message });
+            toast.error(`Failed to delete skill: ${(error as Error).message}`);
         },
     });
 }
@@ -171,6 +175,7 @@ export function useCreateTopic(skillIconicName: string) {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create topic", { skillIconicName, iconicName: variables.iconicName, error: (error as Error).message });
+            toast.error(`Failed to create topic: ${(error as Error).message}`);
         },
     });
 }
@@ -186,6 +191,7 @@ export function useUpdateTopic(topicId: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update topic", { topicId, error: (error as Error).message });
+            toast.error(`Failed to update topic: ${(error as Error).message}`);
         },
     });
 }
@@ -201,6 +207,7 @@ export function useDeleteTopic(skillId: string) {
         },
         onError: (error, topicId) => {
             clientLogger.error("Failed to delete topic", { topicId, skillId, error: (error as Error).message });
+            toast.error(`Failed to delete topic: ${(error as Error).message}`);
         },
     });
 }
@@ -233,6 +240,7 @@ export function useCreateLesson(topicIconicName: string) {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create lesson", { topicIconicName, title: variables.title, error: (error as Error).message });
+            toast.error(`Failed to create lesson: ${(error as Error).message}`);
         },
     });
 }
@@ -248,6 +256,7 @@ export function useUpdateLesson(lessonId: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update lesson", { lessonId, error: (error as Error).message });
+            toast.error(`Failed to update lesson: ${(error as Error).message}`);
         },
     });
 }
@@ -263,6 +272,7 @@ export function useDeleteLesson(topicId: string) {
         },
         onError: (error, lessonId) => {
             clientLogger.error("Failed to delete lesson", { lessonId, topicId, error: (error as Error).message });
+            toast.error(`Failed to delete lesson: ${(error as Error).message}`);
         },
     });
 }
@@ -289,6 +299,7 @@ export function useCreateExercise(lessonId: string) {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create exercise", { lessonId, type: variables.type, error: (error as Error).message });
+            toast.error(`Failed to create exercise: ${(error as Error).message}`);
         },
     });
 }
@@ -304,6 +315,7 @@ export function useUpdateExercise(lessonId: string, exerciseId: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update exercise", { exerciseId, lessonId, error: (error as Error).message });
+            toast.error(`Failed to update exercise: ${(error as Error).message}`);
         },
     });
 }
@@ -319,6 +331,7 @@ export function useDeleteExercise(lessonId: string) {
         },
         onError: (error, exerciseId) => {
             clientLogger.error("Failed to delete exercise", { exerciseId, lessonId, error: (error as Error).message });
+            toast.error(`Failed to delete exercise: ${(error as Error).message}`);
         },
     });
 }
@@ -345,6 +358,7 @@ export function useImportExercises(lessonId: string) {
         },
         onError: (error) => {
             clientLogger.error("Exercises import failed", { lessonId, error: (error as Error).message });
+            toast.error(`Exercises import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -398,6 +412,7 @@ export function useCreateReference(skillId: string) {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create reference material", { skillId, title: variables.title, error: (error as Error).message });
+            toast.error(`Failed to create reference material: ${(error as Error).message}`);
         },
     });
 }
@@ -416,6 +431,7 @@ export function useUpdateReference(materialId: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update reference material", { materialId, error: (error as Error).message });
+            toast.error(`Failed to update reference material: ${(error as Error).message}`);
         },
     });
 }
@@ -431,6 +447,7 @@ export function useDeleteReference() {
         },
         onError: (error, materialId) => {
             clientLogger.error("Failed to delete reference material", { materialId, error: (error as Error).message });
+            toast.error(`Failed to delete reference material: ${(error as Error).message}`);
         },
     });
 }
@@ -479,6 +496,7 @@ export function useImportSkills() {
         },
         onError: (error) => {
             clientLogger.error("Skills seeder import failed", { error: (error as Error).message });
+            toast.error(`Skills seeder import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -505,6 +523,7 @@ export function useImportTopics() {
         },
         onError: (error) => {
             clientLogger.error("Topics seeder import failed", { error: (error as Error).message });
+            toast.error(`Topics seeder import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -531,6 +550,7 @@ export function useImportLessons() {
         },
         onError: (error) => {
             clientLogger.error("Lessons seeder import failed", { error: (error as Error).message });
+            toast.error(`Lessons seeder import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -574,6 +594,7 @@ export function useImportBundle() {
         },
         onError: (error) => {
             clientLogger.error("Bundle seeder import failed", { error: (error as Error).message });
+            toast.error(`Bundle seeder import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -719,6 +740,7 @@ export function useCreateTechnique() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create technique", { slug: variables.slug, error: (error as Error).message });
+            toast.error(`Failed to create technique: ${(error as Error).message}`);
         },
     });
 }
@@ -734,6 +756,7 @@ export function useUpdateTechnique(id: string) {
         },
         onError: (error) => {
             clientLogger.error("Failed to update technique", { techniqueId: id, error: (error as Error).message });
+            toast.error(`Failed to update technique: ${(error as Error).message}`);
         },
     });
 }
@@ -748,6 +771,7 @@ export function useDeleteTechnique() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete technique", { techniqueId: id, error: (error as Error).message });
+            toast.error(`Failed to delete technique: ${(error as Error).message}`);
         },
     });
 }
@@ -772,6 +796,7 @@ export function useImportTechniques() {
         },
         onError: (error) => {
             clientLogger.error("Techniques import failed", { error: (error as Error).message });
+            toast.error(`Techniques import failed: ${(error as Error).message}`);
         },
     });
 }
@@ -818,6 +843,7 @@ export function useCreateDailyQuote() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create daily quote", { date: variables.date, error: (error as Error).message });
+            toast.error(`Failed to create daily quote: ${(error as Error).message}`);
         },
     });
 }
@@ -833,6 +859,7 @@ export function useUpdateDailyQuote() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to update daily quote", { quoteId: variables.id, error: (error as Error).message });
+            toast.error(`Failed to update daily quote: ${(error as Error).message}`);
         },
     });
 }
@@ -847,6 +874,7 @@ export function useDeleteDailyQuote() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete daily quote", { quoteId: id, error: (error as Error).message });
+            toast.error(`Failed to delete daily quote: ${(error as Error).message}`);
         },
     });
 }
@@ -879,6 +907,7 @@ export function useChangeUserRole() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to change user role", { userId: variables.id, role: variables.role, error: (error as Error).message });
+            toast.error(`Failed to change user role: ${(error as Error).message}`);
         },
     });
 }
@@ -894,6 +923,7 @@ export function useUpdateUser() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to update user", { userId: variables.id, error: (error as Error).message });
+            toast.error(`Failed to update user: ${(error as Error).message}`);
         },
     });
 }
@@ -908,6 +938,7 @@ export function useDeleteUserAvatar() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to reset user avatar", { userId: id, error: (error as Error).message });
+            toast.error(`Failed to reset user avatar: ${(error as Error).message}`);
         },
     });
 }
@@ -1003,6 +1034,7 @@ export function useUpdateLeagueSettings() {
         },
         onError: (error) => {
             clientLogger.error("Failed to update league settings", { error: (error as Error).message });
+            toast.error(`Failed to update league settings: ${(error as Error).message}`);
         },
     });
 }
@@ -1017,6 +1049,7 @@ export function useCloseCurrentLeagueWeek() {
         },
         onError: (error) => {
             clientLogger.error("Failed to close league week", { error: (error as Error).message });
+            toast.error(`Failed to close league week: ${(error as Error).message}`);
         },
     });
 }
@@ -1032,6 +1065,7 @@ export function useResyncLeague() {
         },
         onError: (error, leagueId) => {
             clientLogger.error("Failed to resync league", { leagueId, error: (error as Error).message });
+            toast.error(`Failed to resync league: ${(error as Error).message}`);
         },
     });
 }
@@ -1055,6 +1089,7 @@ export function useMoveMembershipTier() {
                 tier: variables.tier,
                 error: (error as Error).message,
             });
+            toast.error(`Failed to move membership tier: ${(error as Error).message}`);
         },
     });
 }
@@ -1078,6 +1113,7 @@ export function useAdjustMembershipXp() {
                 delta: variables.delta,
                 error: (error as Error).message,
             });
+            toast.error(`Failed to adjust membership XP: ${(error as Error).message}`);
         },
     });
 }
@@ -1093,6 +1129,7 @@ export function useRemoveLeagueMembership() {
         },
         onError: (error, membershipId) => {
             clientLogger.error("Failed to remove league membership", { membershipId, error: (error as Error).message });
+            toast.error(`Failed to remove league membership: ${(error as Error).message}`);
         },
     });
 }
@@ -1117,6 +1154,7 @@ export function useCreateLeagueTier() {
         },
         onError: (error) => {
             clientLogger.error("Failed to create league tier", { error: (error as Error).message });
+            toast.error(`Failed to create league tier: ${(error as Error).message}`);
         },
     });
 }
@@ -1132,6 +1170,7 @@ export function useUpdateLeagueTier() {
         },
         onError: (error) => {
             clientLogger.error("Failed to update league tier", { error: (error as Error).message });
+            toast.error(`Failed to update league tier: ${(error as Error).message}`);
         },
     });
 }
@@ -1146,6 +1185,7 @@ export function useDeleteLeagueTier() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete league tier", { id, error: (error as Error).message });
+            toast.error(`Failed to delete league tier: ${(error as Error).message}`);
         },
     });
 }
@@ -1179,6 +1219,7 @@ export function useCreateSkillStage() {
         },
         onError: (error) => {
             clientLogger.error("Failed to create skill stage", { error: (error as Error).message });
+            toast.error(`Failed to create skill stage: ${(error as Error).message}`);
         },
     });
 }
@@ -1195,6 +1236,7 @@ export function useUpdateSkillStage() {
         },
         onError: (error) => {
             clientLogger.error("Failed to update skill stage", { error: (error as Error).message });
+            toast.error(`Failed to update skill stage: ${(error as Error).message}`);
         },
     });
 }
@@ -1210,6 +1252,7 @@ export function useDeleteSkillStage() {
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete skill stage", { id, error: (error as Error).message });
+            toast.error(`Failed to delete skill stage: ${(error as Error).message}`);
         },
     });
 }
@@ -1249,6 +1292,7 @@ export function useUpdateExerciseTypePrompt() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to update exercise type prompt", { exerciseType: variables.exerciseType, error: (error as Error).message });
+            toast.error(`Failed to update exercise type prompt: ${(error as Error).message}`);
         },
     });
 }
@@ -1295,6 +1339,7 @@ export function useUpdateGamificationSettings() {
         },
         onError: (error) => {
             clientLogger.error("Failed to update gamification settings", { error: (error as Error).message });
+            toast.error(`Failed to update gamification settings: ${(error as Error).message}`);
         },
     });
 }
@@ -1317,6 +1362,7 @@ export function useUpdateExerciseTypeReward() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to update exercise reward", { exerciseType: variables.exerciseType, error: (error as Error).message });
+            toast.error(`Failed to update exercise reward: ${(error as Error).message}`);
         },
     });
 }
@@ -1338,6 +1384,7 @@ export function useCreateStreakMilestone() {
         },
         onError: (error) => {
             clientLogger.error("Failed to create streak milestone", { error: (error as Error).message });
+            toast.error(`Failed to create streak milestone: ${(error as Error).message}`);
         },
     });
 }
@@ -1352,6 +1399,7 @@ export function useUpdateStreakMilestone() {
         },
         onError: (error) => {
             clientLogger.error("Failed to update streak milestone", { error: (error as Error).message });
+            toast.error(`Failed to update streak milestone: ${(error as Error).message}`);
         },
     });
 }
@@ -1366,6 +1414,7 @@ export function useDeleteStreakMilestone() {
         },
         onError: (error) => {
             clientLogger.error("Failed to delete streak milestone", { error: (error as Error).message });
+            toast.error(`Failed to delete streak milestone: ${(error as Error).message}`);
         },
     });
 }

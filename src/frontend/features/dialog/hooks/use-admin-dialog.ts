@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface AdminDialogBundle {
     id: string;
@@ -117,6 +119,10 @@ export function useImportDialog() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles"] });
         },
+        onError: (error) => {
+            clientLogger.error("Failed to import dialog bundles", { error: (error as Error).message });
+            toast.error(`Failed to import dialog bundles: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -159,6 +165,10 @@ export function useCreateBundle() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles"] });
         },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to create dialog bundle", { title: variables.title, error: (error as Error).message });
+            toast.error(`Failed to create dialog bundle: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -169,6 +179,10 @@ export function useUpdateBundle() {
             apiClient.put<AdminDialogBundle>(`/admin/dialog/bundles/${bundleId}`, request),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update dialog bundle", { bundleId: variables.bundleId, error: (error as Error).message });
+            toast.error(`Failed to update dialog bundle: ${(error as Error).message}`);
         },
     });
 }
@@ -181,6 +195,10 @@ export function useDeleteBundle() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles"] });
         },
+        onError: (error, bundleId) => {
+            clientLogger.error("Failed to delete dialog bundle", { bundleId, error: (error as Error).message });
+            toast.error(`Failed to delete dialog bundle: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -191,6 +209,10 @@ export function useCreateMode() {
             apiClient.post<AdminDialogMode>(`/admin/dialog/bundles/${bundleId}/modes`, request),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles", variables.bundleId, "modes"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to create dialog mode", { bundleId: variables.bundleId, error: (error as Error).message });
+            toast.error(`Failed to create dialog mode: ${(error as Error).message}`);
         },
     });
 }
@@ -203,6 +225,10 @@ export function useUpdateMode() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog"] });
         },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update dialog mode", { modeId: variables.modeId, error: (error as Error).message });
+            toast.error(`Failed to update dialog mode: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -213,6 +239,10 @@ export function useDeleteMode() {
             apiClient.delete(`/admin/dialog/modes/${modeId}`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin", "dialog"] });
+        },
+        onError: (error, modeId) => {
+            clientLogger.error("Failed to delete dialog mode", { modeId, error: (error as Error).message });
+            toast.error(`Failed to delete dialog mode: ${(error as Error).message}`);
         },
     });
 }
