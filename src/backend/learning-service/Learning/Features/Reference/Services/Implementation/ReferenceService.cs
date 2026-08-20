@@ -9,10 +9,26 @@ namespace Sellevate.Learning.Features.Reference.Services.Implementation;
 internal sealed class ReferenceService(LearningDbContext databaseContext) : IReferenceService
 {
     public async Task<IReadOnlyList<ReferenceMaterialDto>> GetReferenceMaterialsForSkillAsync(
-        Guid skillId,
+        string skillIdentifier,
         CancellationToken cancellationToken = default)
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        Guid skillId;
+        if (Guid.TryParse(skillIdentifier, out var parsedSkillId))
+        {
+            skillId = parsedSkillId;
+        }
+        else
+        {
+            var skill = await databaseContext.Skills
+                .FirstOrDefaultAsync(candidate => candidate.IconicName == skillIdentifier, cancellationToken);
+
+            if (skill is null)
+                return Array.Empty<ReferenceMaterialDto>();
+
+            skillId = skill.Id;
+        }
 
         return await databaseContext.ReferenceMaterials.ResolveOverrides(databaseContext)
             .Where(material => material.SkillId == skillId)

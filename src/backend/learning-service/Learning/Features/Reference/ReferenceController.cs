@@ -9,13 +9,18 @@ namespace Sellevate.Learning.Features.Reference;
 [Authorize]
 public sealed class ReferenceController(IReferenceService referenceService) : ControllerBase
 {
-    [HttpGet("skills/{skillId:guid}/reference")]
+    /// <summary>
+    /// Accepts either the skill's GUID or its slug (<c>IconicName</c>), matching the sibling
+    /// <c>/skills/{id}/lessons</c> endpoint's dual acceptance instead of requiring callers to
+    /// know a skill's GUID just because this route happens to sit next to it.
+    /// </summary>
+    [HttpGet("skills/{skillIdentifier}/reference")]
     public async Task<ActionResult<IReadOnlyList<ReferenceMaterialDto>>> GetReferenceMaterials(
-        Guid skillId,
+        string skillIdentifier,
         CancellationToken cancellationToken)
     {
         var referenceMaterials =
-            await referenceService.GetReferenceMaterialsForSkillAsync(skillId, cancellationToken);
+            await referenceService.GetReferenceMaterialsForSkillAsync(skillIdentifier, cancellationToken);
         return Ok(referenceMaterials);
     }
 
