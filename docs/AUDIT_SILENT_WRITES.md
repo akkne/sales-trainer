@@ -47,7 +47,7 @@
 - **Ущерб:** потеря данных (набранное сообщение) + ложный вывод «отправлено»
 - **Severity:** major
 
-### [ ] W-2 Сессия урока: провал `POST /exercises/{id}/submit` молчит в 9 из 10 типов упражнений
+### [x] W-2 Сессия урока: провал `POST /exercises/{id}/submit` молчит в 9 из 10 типов упражнений
 - **Где:** `src/frontend/app/session/[lessonId]/page.tsx:99-124` (`handleExerciseSubmit`,
   `submitExerciseMutation.mutate` на строке 101) — экран прохождения урока, кнопка «Проверить».
 - **Мутация:** `POST /exercises/{id}/submit` через `useSubmitExercise`

@@ -22,6 +22,7 @@ interface FreeTextExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function FreeTextExercise({
@@ -31,6 +32,7 @@ export function FreeTextExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: FreeTextExerciseProps) {
     const [text, setText] = useState("");
 
@@ -192,6 +194,7 @@ export function FreeTextExercise({
                     submitLabel="Отправить"
                     canSubmit={isValidLength}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="Enter — отправить · Shift+Enter — перенос"
                 />
             )}

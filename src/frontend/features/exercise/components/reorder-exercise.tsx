@@ -24,6 +24,7 @@ interface ReorderExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function ReorderExercise({
@@ -33,6 +34,7 @@ export function ReorderExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: ReorderExerciseProps) {
     const shuffledIndices = useMemo(() => {
         const indices = content.items.map((_, i) => i);
@@ -217,6 +219,7 @@ export function ReorderExercise({
                     onSubmit={() => onSubmit({ order: orderedIndices })}
                     canSubmit={true}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="↑↓ порядок · Enter — проверить"
                 />
             )}

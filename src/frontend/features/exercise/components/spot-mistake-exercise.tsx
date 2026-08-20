@@ -24,6 +24,7 @@ interface SpotMistakeExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function SpotMistakeExercise({
@@ -33,6 +34,7 @@ export function SpotMistakeExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: SpotMistakeExerciseProps) {
     const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
     const [explanation, setExplanation] = useState("");
@@ -172,6 +174,7 @@ export function SpotMistakeExercise({
                     onSubmit={handleSubmit}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="Enter — проверить"
                 />
             )}

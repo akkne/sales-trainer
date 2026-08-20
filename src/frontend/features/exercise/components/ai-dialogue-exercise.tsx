@@ -34,6 +34,7 @@ interface AiDialogueExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function AiDialogueExercise({
@@ -44,6 +45,7 @@ export function AiDialogueExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: AiDialogueExerciseProps) {
     const [mode, setMode] = useState<DialogueMode | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -353,6 +355,14 @@ export function AiDialogueExercise({
                         paddingBottom: "max(20px, env(safe-area-inset-bottom))",
                     }}
                 >
+                    {submitError && (
+                        <p
+                            style={{ fontSize: 13, color: "var(--heart)", margin: "0 auto 12px", maxWidth: 820, textAlign: "center" }}
+                            role="alert"
+                        >
+                            Произошла ошибка при проверке. Попробуй ещё раз.
+                        </p>
+                    )}
                     <div
                         style={{
                             display: "flex",

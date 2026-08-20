@@ -23,6 +23,7 @@ interface MatchPairsExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 const PAIR_COLORS = ["var(--success)", "var(--primary)", "var(--flame)", "var(--violet)"];
@@ -35,6 +36,7 @@ export function MatchPairsExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: MatchPairsExerciseProps) {
     const leftItems = useMemo(() => content.pairs.map(p => p.left), [content.pairs]);
     const rightItems = useMemo(() => {
@@ -250,6 +252,7 @@ export function MatchPairsExercise({
                     onSubmit={() => onSubmit({ pairs: userPairs })}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="Enter — проверить"
                 />
             )}

@@ -277,6 +277,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.FillBlank && (
@@ -288,6 +289,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.Reorder && (
@@ -299,6 +301,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.MatchPairs && (
@@ -310,6 +313,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.Categorize && (
@@ -321,6 +325,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.SpotMistake && (
@@ -332,6 +337,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.Rewrite && (
@@ -356,6 +362,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.EvaluateCall && (
@@ -367,6 +374,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                     {currentExercise.type === ExerciseTypes.FreeText && (
@@ -378,6 +386,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
                             onContinue={handleContinueAfterResult}
                             isSubmitting={submitExerciseMutation.isPending}
                             submittedResult={lastSubmissionResult}
+                            submitError={submitExerciseMutation.error}
                         />
                     )}
                 </div>

@@ -11,6 +11,13 @@ interface ExerciseActionFooterProps {
     isSubmitting: boolean;
     /** Optional keyboard hint shown on pointer-fine devices. */
     keyboardHint?: string;
+    /**
+     * Set when the last submit attempt was rejected by the server. Shown above the button
+     * row so a failed check reads as "try again", not as "the button did nothing" — every
+     * exercise type that renders this shared footer gets the message for free instead of
+     * needing its own copy (docs/AUDIT_SILENT_WRITES.md W-2).
+     */
+    submitError?: Error | null;
 }
 
 /**
@@ -24,6 +31,7 @@ export function ExerciseActionFooter({
     canSubmit,
     isSubmitting,
     keyboardHint,
+    submitError,
 }: ExerciseActionFooterProps) {
     const disabled = !canSubmit || isSubmitting;
 
@@ -41,6 +49,13 @@ export function ExerciseActionFooter({
                 paddingBottom: "max(18px, env(safe-area-inset-bottom))",
             }}
         >
+            {submitError && (
+                <div className="session-foot-inner" style={{ paddingBottom: 10 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--heart)" }} role="alert">
+                        Произошла ошибка при проверке. Попробуй ещё раз.
+                    </p>
+                </div>
+            )}
             <div className="session-foot-inner between grow">
                 {onSkip ? (
                     <button className="btn btn-ghost" onClick={onSkip} disabled={isSubmitting}>

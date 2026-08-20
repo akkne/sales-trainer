@@ -21,6 +21,7 @@ interface FillBlankExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function FillBlankExercise({
@@ -30,6 +31,7 @@ export function FillBlankExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: FillBlankExerciseProps) {
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
@@ -156,6 +158,7 @@ export function FillBlankExercise({
                     }}
                     canSubmit={selectedOptionIndex !== null}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="1–4 выбор · Enter — проверить"
                 />
             )}

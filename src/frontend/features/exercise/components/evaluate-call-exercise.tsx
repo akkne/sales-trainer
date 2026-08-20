@@ -29,6 +29,7 @@ interface EvaluateCallExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function EvaluateCallExercise({
@@ -38,6 +39,7 @@ export function EvaluateCallExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: EvaluateCallExerciseProps) {
     const [ratings, setRatings] = useState<Record<string, number>>({});
     const [overallComment, setOverallComment] = useState("");
@@ -215,6 +217,7 @@ export function EvaluateCallExercise({
                     submitLabel="Отправить оценку"
                     canSubmit={allRated}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="Enter — отправить"
                 />
             )}

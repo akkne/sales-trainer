@@ -24,6 +24,7 @@ interface CategorizeExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 const CATEGORY_COLORS = [
@@ -39,6 +40,7 @@ export function CategorizeExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: CategorizeExerciseProps) {
     const [mapping, setMapping] = useState<Record<number, string>>({});
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
@@ -302,6 +304,7 @@ export function CategorizeExercise({
                     onSubmit={() => onSubmit({ mapping })}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="Enter — проверить"
                 />
             )}

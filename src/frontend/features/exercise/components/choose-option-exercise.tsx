@@ -21,6 +21,7 @@ interface ChooseOptionExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function ChooseOptionExercise({
@@ -30,6 +31,7 @@ export function ChooseOptionExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: ChooseOptionExerciseProps) {
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
@@ -129,6 +131,7 @@ export function ChooseOptionExercise({
                     }}
                     canSubmit={selectedOptionIndex !== null}
                     isSubmitting={isSubmitting}
+                    submitError={submitError}
                     keyboardHint="1–4 выбор · Enter — проверить"
                 />
             )}
