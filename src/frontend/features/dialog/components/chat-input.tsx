@@ -4,7 +4,10 @@ import { useState, FormEvent } from "react";
 import { Icon } from "@/shared/components/icon";
 
 interface ChatInputProps {
-    onSend: (content: string) => void;
+    // Returns whether the send actually succeeded. The composer only clears the draft on
+    // `true` — on `false` (or a caller that never resolves it) the typed text stays put so a
+    // rejected send never looks like it went out (docs/AUDIT_SILENT_WRITES.md W-5).
+    onSend: (content: string) => Promise<boolean>;
     disabled: boolean;
     placeholder?: string;
 }
@@ -12,13 +15,13 @@ interface ChatInputProps {
 export function ChatInput({ onSend, disabled, placeholder = "Напиши сообщение…" }: ChatInputProps) {
     const [inputValue, setInputValue] = useState("");
 
-    const handleSubmit = (submitEvent: FormEvent) => {
+    const handleSubmit = async (submitEvent: FormEvent) => {
         submitEvent.preventDefault();
         const trimmedValue = inputValue.trim();
         if (!trimmedValue || disabled) return;
 
-        onSend(trimmedValue);
-        setInputValue("");
+        const succeeded = await onSend(trimmedValue);
+        if (succeeded) setInputValue("");
     };
 
     const canSend = !disabled && inputValue.trim().length > 0;

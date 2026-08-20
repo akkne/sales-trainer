@@ -138,8 +138,8 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bundleId, modeId, allSessions, isInitialized]);
 
-    const handleSendMessage = async (content: string) => {
-        if (isSending) return;
+    const handleSendMessage = async (content: string): Promise<boolean> => {
+        if (isSending) return false;
 
         let currentSessionId = sessionId;
 
@@ -155,7 +155,7 @@ export default function ChatPage() {
             } catch (sessionError) {
                 setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
                 setIsLoading(false);
-                return;
+                return false;
             } finally {
                 setIsLoading(false);
             }
@@ -180,8 +180,14 @@ export default function ChatPage() {
                 setIsEnded(true);
                 autoCompleteSession(currentSessionId);
             }
+            return true;
         } catch (sendError) {
+            // The server never saw this turn — roll back the optimistic bubble instead of
+            // leaving a reply on screen that diverges from the transcript it will grade
+            // (docs/AUDIT_SILENT_WRITES.md W-5).
+            setMessages((previousMessages) => previousMessages.slice(0, -1));
             setError(sendError instanceof Error ? sendError.message : "Ошибка отправки");
+            return false;
         } finally {
             setIsSending(false);
         }

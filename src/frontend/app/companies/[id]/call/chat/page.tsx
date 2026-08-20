@@ -145,8 +145,8 @@ export default function CompanyChatCallPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isCompleting, queryClient, goal]);
 
-    const handleSendMessage = async (content: string) => {
-        if (!sessionId || isSending) return;
+    const handleSendMessage = async (content: string): Promise<boolean> => {
+        if (!sessionId || isSending) return false;
 
         const userMessage: DialogMessage = {
             role: "user",
@@ -165,8 +165,14 @@ export default function CompanyChatCallPage() {
                 setIsEnded(true);
                 autoCompleteSession(sessionId);
             }
+            return true;
         } catch (sendError) {
+            // The server never saw this turn — roll back the optimistic bubble instead of
+            // leaving a reply on screen that diverges from the transcript it will grade
+            // (docs/AUDIT_SILENT_WRITES.md W-5).
+            setMessages((previous) => previous.slice(0, -1));
             setError(sendError instanceof Error ? sendError.message : "Не удалось отправить сообщение");
+            return false;
         } finally {
             setIsSending(false);
         }
