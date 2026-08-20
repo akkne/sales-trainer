@@ -41,6 +41,7 @@ export default function AdminDialogPage() {
         iconEmoji: "📞",
         sortOrder: 0,
         isActive: true,
+        isHidden: false,
     });
 
     const resetForm = () => {
@@ -51,6 +52,7 @@ export default function AdminDialogPage() {
             iconEmoji: "📞",
             sortOrder: 0,
             isActive: true,
+            isHidden: false,
         });
         setIsCreating(false);
         setEditingBundleId(null);
@@ -80,6 +82,7 @@ export default function AdminDialogPage() {
             iconEmoji: bundle.iconEmoji,
             sortOrder: bundle.sortOrder,
             isActive: bundle.isActive,
+            isHidden: bundle.isHidden,
         });
         setEditingBundleId(bundle.id);
         setIsCreating(false);
@@ -109,6 +112,7 @@ export default function AdminDialogPage() {
             iconEmoji: "📞",
             sortOrder: bundles?.length ?? 0,
             isActive: true,
+            isHidden: false,
         });
         setIsCreating(true);
         setEditingBundleId(null);
@@ -292,7 +296,7 @@ export default function AdminDialogPage() {
                                 placeholder="Bundle description..."
                             />
                         </div>
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-2 flex items-center gap-6">
                             <label className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -300,6 +304,14 @@ export default function AdminDialogPage() {
                                     onChange={(changeEvent) => setFormData({ ...formData, isActive: changeEvent.target.checked })}
                                 />
                                 <span className="text-sm text-ink">Active</span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.isHidden ?? false}
+                                    onChange={(changeEvent) => setFormData({ ...formData, isHidden: changeEvent.target.checked })}
+                                />
+                                <span className="text-sm text-ink">Hidden (not offered in the student picker)</span>
                             </label>
                         </div>
                     </div>
@@ -354,12 +366,14 @@ export default function AdminDialogPage() {
                                 <td className="px-4 py-3">
                                     <span
                                         className={`px-2 py-1 text-xs rounded-full ${
-                                            bundle.isActive
-                                                ? "bg-indigo-soft text-indigo-ink"
-                                                : "bg-bg-2 text-ink-3"
+                                            bundle.isHidden
+                                                ? "bg-warn-soft text-warn"
+                                                : bundle.isActive
+                                                    ? "bg-indigo-soft text-indigo-ink"
+                                                    : "bg-bg-2 text-ink-3"
                                         }`}
                                     >
-                                        {bundle.isActive ? "Active" : "Inactive"}
+                                        {bundle.isHidden ? "Hidden" : bundle.isActive ? "Active" : "Inactive"}
                                     </span>
                                 </td>
                                 <td className="px-4 py-3">

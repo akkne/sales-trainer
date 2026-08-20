@@ -13,6 +13,7 @@ export interface AdminDialogBundle {
     iconEmoji: string;
     sortOrder: number;
     isActive: boolean;
+    isHidden: boolean;
 }
 
 export interface AdminDialogMode {
@@ -36,6 +37,7 @@ export interface CreateBundleRequest {
     iconEmoji: string;
     sortOrder: number;
     isActive: boolean;
+    isHidden?: boolean;
 }
 
 export interface UpdateBundleRequest {
@@ -45,6 +47,7 @@ export interface UpdateBundleRequest {
     iconEmoji?: string;
     sortOrder?: number;
     isActive?: boolean;
+    isHidden?: boolean;
 }
 
 export interface CreateModeRequest {
