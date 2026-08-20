@@ -17,7 +17,7 @@
 
 ---
 
-### [ ] E-1 `/reference/<id>`: 404/500 справочника выглядит как «материалов нет»
+### [x] E-1 `/reference/<id>`: 404/500 справочника выглядит как «материалов нет»
 - **Экран:** `/reference/<materialId>` — `app/(main)/reference/[id]/page.tsx:26-72`
 - **Запрос:** `useHandbook()` → `GET /reference` и `useReferenceMaterials(skillId)` →
   `GET /skills/{skillId}/reference` (`features/skills/hooks/use-reference.ts:16-37`).
@@ -30,7 +30,7 @@
   (`GET /skills/first-contact/reference` → 404 из-за slug вместо GUID, а экран молчал).
 - **Severity:** major
 
-### [ ] E-2 `/profile`: падение `/skills/progress-summary` даёт «Точность —» и «Навыки 0»
+### [x] E-2 `/profile`: падение `/skills/progress-summary` даёт «Точность —» и «Навыки 0»
 - **Экран:** `/profile` — плитки статистики, `app/(main)/profile/page.tsx:38`, `175-231`
 - **Запрос:** `useProgressSummary()` → `GET /skills/progress-summary`
   (`features/skills/hooks/use-progress-summary.ts:22`). `isError`/`error` не читаются:
@@ -44,7 +44,7 @@
   «я ничего не освоил», хотя прогресс есть и виден на `/tree`.
 - **Severity:** major
 
-### [ ] E-3 `/profile`: падение `/skills` → «Пока нет навыков. Обратись к администратору», а `/profile` → пустой экран
+### [x] E-3 `/profile`: падение `/skills` → «Пока нет навыков. Обратись к администратору», а `/profile` → пустой экран
 - **Экран:** `/profile` — `app/(main)/profile/page.tsx:35`, `66`, `102`, `251-260`
 - **Запрос:** `useSkills()` → `GET /skills` (`features/skills/hooks/use-skill-tree.ts:51`).
   `isError` не читается; везде подставляется `(allSkills ?? [])`. Отдельно: `useProfile()` →
@@ -57,7 +57,7 @@
   который читается как «страница сломалась/пустая», без возможности повторить.
 - **Severity:** major
 
-### [ ] E-4 `/tree`: падение `/skills/<slug>/lessons` обнуляет всю статистику навыка и советует «попросить администратора»
+### [x] E-4 `/tree`: падение `/skills/<slug>/lessons` обнуляет всю статистику навыка и советует «попросить администратора»
 - **Экран:** `/tree`, центральная колонка — `app/(main)/tree/page.tsx:385`, `387-399`,
   `477-507`, `511-520`
 - **Запрос:** `useLessonsForSkill(skillSlug)` → `GET /skills/{slug}/lessons`
@@ -73,7 +73,7 @@
   ложное утверждение, что контента нет. Это самая заметная точка входа в приложение.
 - **Severity:** major
 
-### [ ] E-5 `/tree`: падение `/skills` → «Нет активных навыков» в списке слева
+### [x] E-5 `/tree`: падение `/skills` → «Нет активных навыков» в списке слева
 - **Экран:** `/tree`, левая колонка и мобильный пикер — `app/(main)/tree/page.tsx:151`,
   `182-210`, `238-240`
 - **Запрос:** `useSkills()` → `GET /skills`. `isError` не читается; `(allSkills ?? [])`.
@@ -85,7 +85,7 @@
   прогресса тоже не объясняется.
 - **Severity:** major
 
-### [ ] E-6 `/skill/<slug>`: та же обнулённая шапка + slug вместо названия навыка
+### [x] E-6 `/skill/<slug>`: та же обнулённая шапка + slug вместо названия навыка
 - **Экран:** `/skill/<slug>` — `app/(main)/skill/[id]/page.tsx:74-101`, `170-198`
 - **Запрос:** `useLessonsForSkill(slug)` → `GET /skills/{slug}/lessons` и `useSkills()` →
   `GET /skills`. Ни один `isError` не читается; экран знает только «спиннер» и «данные».
@@ -97,14 +97,14 @@
   в проде (A-3), причина другая, но симптом идентичен.
 - **Severity:** major
 
-### [ ] E-7 `/skill/<slug>/map`: кольцо прогресса рисует 0 % при ошибке
+### [x] E-7 `/skill/<slug>/map`: кольцо прогресса рисует 0 % при ошибке
 - **Экран:** `/skill/<slug>/map` — `app/(main)/skill/[id]/map/page.tsx:74-97`, `132-159`
 - **Запрос:** те же `useLessonsForSkill` + `useSkills`, `isError` не проверяется.
 - **Что видит пользователь:** круговой индикатор «0 %» и подпись «0 из 0 уроков завершено»,
   заголовок — slug. Ложный вывод: «прогресс сброшен». Ниже — пустой «Путь обучения».
 - **Severity:** major
 
-### [ ] E-8 `/guidebook`: отказ `/techniques` показывается как «Ничего не найдено» — вина перекладывается на запрос пользователя
+### [x] E-8 `/guidebook`: отказ `/techniques` показывается как «Ничего не найдено» — вина перекладывается на запрос пользователя
 - **Экран:** `/guidebook` — `app/(main)/guidebook/page.tsx:133-134`, `173-176`, `254-259`
 - **Запрос:** `useTechniques({...})` → `GET /techniques` и `useTechniquesMeta()` →
   `GET /techniques/meta` (`features/skills/hooks/use-techniques.ts:79-105`). Оба `isError`
@@ -117,7 +117,7 @@
   дошёл до сервера. Ложный вывод: «в справочнике нет техник по моему навыку».
 - **Severity:** major
 
-### [ ] E-9 `/companies/<id>`: история звонков и контакты исчезают молча
+### [x] E-9 `/companies/<id>`: история звонков и контакты исчезают молча
 - **Экран:** `/companies/<id>` — `app/(main)/companies/[id]/page.tsx:72`, `77`, `80`,
   `300-327`; пустые стейты в `features/companies/components/company-timeline.tsx:113-115`
   и `features/companies/components/company-contacts-card.tsx:106-107`
@@ -133,7 +133,7 @@
   заново (дубли).
 - **Severity:** major
 
-### [ ] E-10 `/friends` и `/friends/<userId>`: ошибка выдаётся за «нет друзей» и «пользователь не найден»
+### [x] E-10 `/friends` и `/friends/<userId>`: ошибка выдаётся за «нет друзей» и «пользователь не найден»
 - **Экран:** `/friends` — `app/(main)/friends/page.tsx:32-38`, `86`, `127-153`;
   `/friends/<userId>` — `app/(main)/friends/[userId]/page.tsx:21`, `50-61`
 - **Запрос:** `useFriends()` → `GET /friends`, `useFriendRequests()` → `GET /friends/requests`,
@@ -147,7 +147,7 @@
 - **Severity:** minor (социальная зона: неверный вывод не влияет на обучение и цифры прогресса,
   но текст «Пользователь не найден» — прямая ложь о состоянии данных)
 
-### [ ] E-11 `/session/<lessonId>`: при ошибке спиннер крутится вечно
+### [x] E-11 `/session/<lessonId>`: при ошибке спиннер крутится вечно
 - **Экран:** `/session/<lessonId>` — `app/session/[lessonId]/page.tsx:573-578` и `164-170`
 - **Запрос:** `useExercisesForLesson(lessonId)` → `GET /lessons/{id}/exercises`
   (`features/exercise/hooks/use-lesson.ts:47-51`). `isError` не читается ни в `SessionRouter`,
@@ -160,7 +160,7 @@
   То же самое произойдёт, если бэкенд легально вернёт пустой список упражнений.
 - **Severity:** blocker
 
-### [ ] E-12 `/tree`: активное задание с дедлайном при ошибке просто не показывается
+### [x] E-12 `/tree`: активное задание с дедлайном при ошибке просто не показывается
 - **Экран:** `/tree`, полоса задания — `features/assignments/components/active-assignment-card.tsx:23-27`
 - **Запрос:** `useActiveAssignments()` → `GET /assignments/active`
   (`features/assignments/hooks/use-assignments.ts:49-59`). Компонент берёт только `data` и

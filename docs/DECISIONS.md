@@ -6012,3 +6012,40 @@ O-7 (`material-run-dialog.tsx`'s unmarked required title) and O-8 (`shared/compo
 rendering filter chips as `<span onClick>`) each had one clear fix matching an existing sibling
 pattern already in the codebase (`start-generation-modal.tsx`'s `required` + `error` title field;
 `shared/components/common.tsx`'s button-based `Chip`) — no owner call or recorded alternative needed.
+
+### E-1..E-12: learner-area error masking, `docs/AUDIT_ERROR_MASKING.md`
+
+Twelve findings, one shared shape: `useQuery` results consumed as `data ?? []` / `data ?? 0` with
+`isError` never read, so a failed request (500/404) rendered exactly the same screen as a
+legitimately empty one — sometimes actively misleading ("Попроси администратора добавить уроки"
+on a skill with 7/21 lessons done; "Пользователь не найден" for a live account; "0 skills
+mastered"). `shared/components/error-state.tsx` already existed and `app/(org)/org/program/page.tsx`
+already had the house pattern for using it: read `isLoading`/`isError`/`refetch` off the query,
+render `<ErrorState onRetry={refetch} />` before falling through to the data-driven branches. All
+twelve findings were fixed by applying that same pattern rather than inventing per-screen handling.
+
+**One deviation from "always render a full `ErrorState`", made without asking:** three spots
+(`ActiveAssignmentCard`, `PathOverallProgress` on `/tree`, the friend-requests section on
+`/friends`) are additive strips above a screen that must keep working as a whole even when they
+fail — the code at `active-assignment-card.tsx`'s top already documents that this card must never
+replace the learning-path home screen. A full-height `ErrorState` block would visually compete with
+the content below it for no benefit, so these three render a single narrow inline line ("Не удалось
+загрузить …" + a retry action) instead. Every other finding — anything that *is* the primary content
+of its region (a lesson list, a skill's stat grid, a contacts card, a search grid) — got the full
+`ErrorState` with retry, matching `org/program/page.tsx`.
+
+**Where a screen aggregates several queries (E-9 `/companies/<id>`'s logs/practice-calls/contacts,
+E-1's handbook+materials, E-4/E-6/E-7's lessons+skills), an error in any one of them now blocks that
+region's data-driven render** rather than only gating on the query that happened to already have
+error handling. `CompanyTimeline`/`CompanyContactsCard` follow the `errorMessage`/`isLoading` prop
+pattern `CompanyReadinessCard` already used on the same page, rather than owning their own queries.
+
+**E-11 also fixed a second, related bug in the same file, not literally "isError unread" but the
+same failure mode:** `SessionFlow`'s `exerciseQueue.length === 0` loading gate never distinguished
+"still populating from a fresh non-empty list" from "loaded an empty list" — a lesson with zero
+exercises (misconfigured content, not just a network failure) would also spin forever. Fixed
+alongside the isError gate in `SessionRouter` since both produce the identical user-visible symptom
+the finding described.
+
+E-13..E-18 (admin screens, the AI-dialogue exercise) are out of this pass's scope — owned by a
+concurrent agent per the audit doc's own scoping note.
