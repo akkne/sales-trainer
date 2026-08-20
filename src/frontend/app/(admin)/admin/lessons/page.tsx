@@ -91,15 +91,15 @@ export default function LessonsPage() {
     }, [lessons, filterTopicId, filterSkillId, filteredTopicsBySkill, search, sortKey, sortDir]);
 
     const groupedByTopic = useMemo(() => {
+        // `filtered` is already ordered per the chosen sortKey/sortDir (Title or Order);
+        // grouping here must only bucket rows by topic, not re-sort them — a forced
+        // re-sort by orderInTopic would silently discard the user's chosen column sort.
         const groups: Record<string, { topicTitle: string; lessons: AdminLessonWithTopic[] }> = {};
         for (const lesson of filtered) {
             if (!groups[lesson.topicId]) {
                 groups[lesson.topicId] = { topicTitle: lesson.topicTitle, lessons: [] };
             }
             groups[lesson.topicId].lessons.push(lesson);
-        }
-        for (const group of Object.values(groups)) {
-            group.lessons.sort((a, b) => a.orderInTopic - b.orderInTopic);
         }
         return Object.entries(groups);
     }, [filtered]);
