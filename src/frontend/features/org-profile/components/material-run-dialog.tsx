@@ -33,8 +33,9 @@ export function MaterialRunDialog({
     const [title, setTitle] = useState("");
     const [material, setMaterial] = useState("");
 
+    const titleFailure = title.trim().length === 0 ? "Впишите название прогона." : null;
     const isReadyToStart =
-        title.trim().length > 0 && material.trim().length >= MINIMUM_MATERIAL_LENGTH;
+        titleFailure === null && material.trim().length >= MINIMUM_MATERIAL_LENGTH;
 
     return (
         <Modal
@@ -66,8 +67,10 @@ export function MaterialRunDialog({
 
                 <TextInput
                     label="Название прогона"
+                    required
                     placeholder="Например: презентация продукта, август"
                     value={title}
+                    error={titleFailure ?? undefined}
                     disabled={isStarting}
                     onChange={(event) => setTitle(event.target.value)}
                 />
