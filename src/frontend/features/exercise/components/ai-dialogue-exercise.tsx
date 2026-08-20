@@ -51,6 +51,7 @@ export function AiDialogueExercise({
     const [isSending, setIsSending] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
     const [voiceError, setVoiceError] = useState<string | null>(null);
+    const [textError, setTextError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
@@ -100,6 +101,7 @@ export function AiDialogueExercise({
         setMessages(prev => [...prev, { role: "user", content: messageText }]);
         setInputText("");
         setIsSending(true);
+        setTextError(null);
 
         try {
             const data = await apiClient.post<{ response: string; isComplete: boolean; isFinished: boolean }>(
@@ -112,10 +114,11 @@ export function AiDialogueExercise({
             if (data.isComplete || data.isFinished) setIsComplete(true);
         } catch (error) {
             console.error("Failed to send message:", error);
-            setMessages(prev => [...prev, {
-                role: "assistant",
-                content: "Понял. Что ещё хотел обсудить?"
-            }]);
+            // The AI client never saw this turn — it was not sent, saved, or scored.
+            // Roll back the optimistic bubble instead of inventing a reply it never produced.
+            setMessages(prev => prev.slice(0, -1));
+            setInputText(messageText);
+            setTextError("Не удалось отправить реплику. Проверь подключение и попробуй снова.");
         } finally {
             setIsSending(false);
         }
@@ -266,6 +269,11 @@ export function AiDialogueExercise({
             )}
 
             {/* Text input */}
+            {showInput && textError && (
+                <p style={{ fontSize: 12, color: "var(--heart)", margin: 0 }} role="alert">
+                    {textError}
+                </p>
+            )}
             {showInput && (
                 <div style={{ display: "flex", gap: 8 }}>
                     <input
