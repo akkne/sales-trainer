@@ -238,7 +238,14 @@ export default function AdminTechniquesPage() {
             ) : isError ? (
                 <ErrorState onRetry={() => refetch()} />
             ) : techniques.length === 0 ? (
-                <p className="text-sm text-ink-3">No techniques found.</p>
+                <p className="text-sm text-ink-3">
+                    {selectedSkill
+                        ? `No techniques are linked to "${
+                              skillOptions.find((option) => option.iconicName === selectedSkill)?.label ??
+                              selectedSkill
+                          }" yet.`
+                        : "No techniques found."}
+                </p>
             ) : (
                 <div className="space-y-4">
                     {techniques.map((technique) => (

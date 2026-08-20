@@ -341,3 +341,75 @@ gets the same treatment and it's worth deciding the general policy once rather t
 **Нужно решение:** pick (a), (b), or (c) above for `pipeline-management`, and whether any other future
 skill is allowed to ship without a stage assignment at all (in which case an explicit "unassigned"
 stage might belong in the stage registry itself, not just in the frontend's fallback rendering).
+
+### Q-12 — AD-3: all 45 production techniques carry no skill links at all — content gap, not a code bug; nobody has written the data
+
+`docs/AUDIT_PROD.md` AD-3: `/admin/techniques`'s skill filter returns 0 techniques for every one of
+the 13 skills, because in production every one of the 45 techniques has `primarySkillId: null` and
+`additionalSkillIds: []`. Explicitly not a duplicate of A-5 (already fixed, `9b3080a`) — A-5 was a
+code bug in `GET /techniques/meta`'s counting (it only matched `PrimarySkillId`, missing techniques
+that only carry `AdditionalSkills`); AD-3 is that **both** fields are empty for every row, so no
+counting fix can find a link that was never written.
+
+**Traced the whole path end to end looking for a code bug that drops the link, and found none:**
+
+- The join table (`TechniqueSkill`/`AdditionalSkills`) and `Technique.PrimarySkillId` are populated
+  correctly by every write path that was checked: `AdminTechniquesController.ApplyPayload` /
+  `SyncAdditionalSkills` reconcile the child rows in place from whatever `PrimarySkillId` /
+  `AdditionalSkillIds` the payload carries, and round-trip correctly through `Export` →
+  `MapToWriteRequest` (which includes both fields) → re-`Import`.
+- The admin edit form (`src/frontend/app/(admin)/admin/techniques/page.tsx`, `startEdit`/`handleSave`)
+  seeds `primarySkillId`/`additionalSkillIds` from the loaded row and sends the whole form back
+  unchanged unless the operator edits the "Primary skill" field — an ordinary wording edit does not
+  silently wipe the links.
+- A local, **untracked** (`.gitignore`'d, `.claude/` is entirely ignored) dev fixture,
+  `.claude/local-seed/techniques.json` + `.claude/local-seed/seed.py`, does the skill-linking
+  correctly: the JSON carries `primarySkillIconicName`/`additionalSkillIconicNames` as human-readable
+  strings, and `seed.py`'s `seed_techniques()` resolves them to real skill GUIDs before
+  `POST /admin/techniques/import`. This is local-only tooling (never committed, cannot have produced
+  anything in a deployed environment) with only 10 techniques in it anyway — nowhere close to
+  production's 45 — so it is not, and could not be, the origin of production's rows.
+- No other technique content of any size exists anywhere in this repository or its leftover
+  `.claude/worktrees/*` — nothing that could account for 45 rows.
+
+**Conclusion:** production's 45 techniques were authored or imported through some process this
+repository has no record of (a one-off admin-UI JSON import, or content written before skill-tagging
+existed), and none of it was ever skill-tagged. This is a content-authoring gap, not a bug — per the
+run's instructions, not inventing the missing links. Fixed instead what was fixable without touching
+data: `/admin/techniques`'s empty state, which used to say the generic "No techniques found." even
+when a skill filter is what produced the zero, now says `No techniques are linked to "<skill
+name>" yet.` when a skill filter is active — an honest, specific message instead of a blank-looking
+generic line for exactly the situation this audit finding is about.
+
+**Нужно решение:** who owns going through the 45 real techniques and assigning each a primary (and
+where relevant, additional) skill through the existing, working `/admin/techniques` edit form or a
+prepared `/admin/techniques/import` JSON — this is content work, not a technical fix, and the run did
+not invent placeholder skill assignments for real content.
+
+### Q-13 — X-11: аккаунт `admin@sellevate.site` навсегда застрял на 7 из 21 урока; нужен бэкфилл прогресса на проде
+
+**Что видно на проде (прогон 4, аудит упражнений).** В навыке «Первый контакт» все 7 уроков темы 1
+(`topicOrder: 1`) имеют статус `completed`, а первый урок темы 2 («Четыре секунды и 86% голоса») и все
+остальные 13 уроков — `locked`. Ученику в интерфейсе делать нечего: `/tree` показывает «7 / 21» и
+«ОСТАЛОСЬ 14», и ни один урок не открывается.
+
+**Почему само не починится.** Разблокировка первого урока следующей темы (`2fbac93`, «fix: unlock next
+topic's first lesson on topic completion», 2026-07-24, уже в `origin/main`) висит на переходе
+`!= Completed → Completed`: `ExerciseService.UpdateLessonProgressAsync` выставляет
+`transitionedToCompleted` только при этом переходе (`:583-587`), и лишь под этим флагом вызывается
+`UnlockNextLessonInTopicAsync` (`:596-603`). Для аккаунта, который закрыл тему раньше, перехода больше
+никогда не будет. Проверено эмпирически: все детерминированные упражнения последнего урока темы 1
+(`85cbff07-…`, 3 × `choose_option` + 1 × `reorder`) отправлены заново и приняты с `score: 100` —
+статус урока 8 не изменился. Ни в админке, ни в org-зоне нет экрана, который правит прогресс
+пользователя (там правится контент), так что руками через интерфейс это тоже не открыть.
+
+**Нужно решение (две развилки, обе требуют человека).**
+1. Чинить ли это кодом — пересчитывать доступность при чтении дерева (`GetLessonsForSkillAsync`
+   уже знает и порядок тем, и все progress-строки: «первый незавершённый после последнего
+   завершённого» вычисляется там же без событий) — или писать разовую миграцию/бэкфилл, которая
+   пройдёт по всем пользователям и откроет первый урок следующей темы там, где предыдущая тема
+   закрыта целиком. Первое лечит и будущие расхождения, второе не меняет поведение сервиса.
+2. Разблокировать ли этот конкретный аккаунт на проде **сейчас**, чтобы аудит смог дойти до
+   остальных 14 уроков (в них, среди прочего, единственный шанс проверить типы упражнений, которых
+   нет в теме 1). Это запись в прод-данные, поэтому агент её не делал: правка `UserLessonProgress`
+   на живой базе — решение владельца, а не аудита.
