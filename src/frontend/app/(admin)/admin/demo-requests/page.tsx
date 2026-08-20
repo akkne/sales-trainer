@@ -53,7 +53,10 @@ interface ProvisionedDetails {
     organizationName: string;
     organizationSlug: string;
     inviteEmail: string;
-    inviteExpiresAt: string;
+    /// `null` when this call landed on the `alreadyProvisioned` fast path — the backend never
+    /// re-asks identity-service for an already-issued invite's expiry (docs/AUDIT_CONTRACTS.md
+    /// finding C-6).
+    inviteExpiresAt: string | null;
 }
 
 export default function AdminDemoRequestsPage() {
@@ -353,7 +356,7 @@ export default function AdminDemoRequestsPage() {
                                                             </p>
                                                             <p className="text-ink-3">
                                                                 Expires:{" "}
-                                                                {cachedDetails
+                                                                {cachedDetails?.inviteExpiresAt
                                                                     ? new Date(cachedDetails.inviteExpiresAt).toLocaleString()
                                                                     : "unknown (not provisioned this session)"}
                                                             </p>

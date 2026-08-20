@@ -62,7 +62,10 @@ export interface ProvisionDemoRequestResult {
     organization: ProvisionedOrganizationReference;
     inviteId: string;
     inviteEmail: string;
-    inviteExpiresAt: string;
+    /// `null` on an `alreadyProvisioned` response — that timestamp lives only on identity-service's
+    /// `Invite` row and is never re-fetched on the no-side-effect retry path (docs/AUDIT_CONTRACTS.md
+    /// finding C-6; see the backend's own `DemoRequestProvisioningResultDto.InviteExpiresAt` comment).
+    inviteExpiresAt: string | null;
     alreadyProvisioned: boolean;
 }
 
