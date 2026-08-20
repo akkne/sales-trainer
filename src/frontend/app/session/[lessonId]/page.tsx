@@ -23,6 +23,7 @@ import { TheoryLessonPlayer } from "@/features/exercise/components/theory-lesson
 import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
 import { useEnterAction } from "@/features/exercise/hooks/use-enter-action";
 import { Icon } from "@/shared/components/icon";
+import { ErrorState } from "@/shared/components/error-state";
 
 const PASSING_SCORE_THRESHOLD = 7;
 
@@ -161,7 +162,26 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
         setSessionState("playing");
     }
 
-    if (isLoading || exerciseQueue.length === 0) {
+    if (isLoading) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            </div>
+        );
+    }
+
+    // E-11: an empty (but successfully loaded) exercise list must not spin forever — the queue
+    // only ever fills from a non-empty `exercises`, so `exerciseQueue.length === 0` would
+    // otherwise never resolve.
+    if (!exercises || exercises.length === 0) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ink-3)", background: "var(--bg)" }}>
+                Упражнения не найдены
+            </div>
+        );
+    }
+
+    if (exerciseQueue.length === 0) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
@@ -571,11 +591,39 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
 }
 
 function SessionRouter({ lessonId }: { lessonId: string }) {
-    const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
+    const router = useRouter();
+    const { data: exercises, isLoading, isError, refetch } = useExercisesForLesson(lessonId);
     const searchParams = useSearchParams();
     const exitHref = resolveExitHref(searchParams.get("exit"));
 
-    if (isLoading || !exercises) return <SessionLoader />;
+    if (isLoading) return <SessionLoader />;
+
+    // E-11: a failed exercises fetch used to leave isLoading===false and exercises===undefined,
+    // which both loading gates in this file treat as "still loading" — the spinner then never
+    // stops, and there is no way out of the screen. Show the error and a way back instead.
+    if (isError || !exercises) {
+        return (
+            <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
+                <div className="session-top">
+                    <button
+                        className="icon-btn"
+                        onClick={() => router.push(exitHref)}
+                        aria-label="Выйти"
+                        style={{ flex: "none" }}
+                    >
+                        <Icon name="close" size={20} />
+                    </button>
+                </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <ErrorState
+                        title="Не удалось загрузить урок"
+                        message="Проверь подключение и попробуй снова."
+                        onRetry={() => refetch()}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     const isTheoryLesson =
         exercises.length > 0 && exercises.every((ex) => ex.type === ExerciseTypes.TheoryCard);
