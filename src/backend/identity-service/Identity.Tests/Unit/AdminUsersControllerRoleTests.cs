@@ -9,7 +9,6 @@ using Sellevate.Identity.Features.Admin;
 using Sellevate.Identity.Features.Admin.Models;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars.Services.Abstract;
-using Sellevate.Identity.Features.Profile.Services.Abstract;
 using Sellevate.Identity.Tests.Helpers;
 
 namespace Sellevate.Identity.Tests.Unit;
@@ -27,7 +26,6 @@ public class AdminUsersControllerRoleTests
         var controller = new AdminUsersController(
             databaseContext,
             Substitute.For<IAvatarService>(),
-            Substitute.For<IProfileService>(),
             NullLogger<AdminUsersController>.Instance);
 
         controller.ControllerContext = new ControllerContext

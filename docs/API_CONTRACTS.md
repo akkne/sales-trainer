@@ -1487,9 +1487,13 @@ Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "a
 
 > Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
 > Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
-> shapes are unchanged. The `AdminUserDetailDto` activity stats (activity-consistency/progress-points/skills/score)
-> are owned by gamification/learning, so identity returns them as `0` for now — same
-> caveat as `GET /profile`. Lists/manages users platform-wide (not scoped to one
+> shapes are unchanged. `AdminUserDetailDto` used to also carry activity stats
+> (streaks/XP/skills/score) sourced from the same identity-service method that hard-codes them to
+> `0` for `GET /profile` — so the admin "Activity" card reported "Skills 0/0" for every user even
+> though the system has real skills and completions (2026-08-21 admin audit, AD-1). Consistent with
+> the `GET /profile` fix (see below), those fields were dropped from the response rather than wired
+> to invented data; the admin "Activity" card was already removed from the UI for the same reason.
+> Lists/manages users platform-wide (not scoped to one
 > organization), so the controller is Sellevate-staff-only throughout: reading is
 > `RequirePlatformAdmin`, every mutation is `RequireSuperAdmin`. Role changes move between the
 > three platform roles (`User`/`Admin`/`SuperAdmin`) — organization roles are a different axis and
@@ -1504,7 +1508,7 @@ Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "a
 | PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` (SuperAdmin only) |
 
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider ("Google"|"Password"), hasCustomAvatar, avatarUrl}`
-`AdminUserDetailDto`: `AdminUserDto` + `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`
+`AdminUserDetailDto`: `AdminUserDto` + `{persona}`
 
 Reading the roster and a user's detail is open to both platform staff roles. Renaming, avatar moderation and role changes all mutate a user and are `RequireSuperAdmin`-only, so a platform `Admin` sees the modal read-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
 

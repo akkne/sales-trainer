@@ -8,7 +8,6 @@ using Sellevate.Identity.Features.Admin.Models;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Avatars.Services.Abstract;
-using Sellevate.Identity.Features.Profile.Services.Abstract;
 using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Admin;
@@ -30,7 +29,6 @@ namespace Sellevate.Identity.Features.Admin;
 public sealed class AdminUsersController(
     IdentityDbContext database,
     IAvatarService avatarService,
-    IProfileService profileService,
     ILogger<AdminUsersController> logger) : ControllerBase
 {
     private const int DisplayNameMinimumLength = 2;
@@ -69,7 +67,8 @@ public sealed class AdminUsersController(
             return NotFound();
         }
 
-        var stats = await profileService.GetProfileStatsForUserAsync(id, cancellationToken);
+        var userProfile = await database.UserProfiles.AsNoTracking()
+            .FirstOrDefaultAsync(profile => profile.UserId == id, cancellationToken);
 
         return Ok(new AdminUserDetailDto(
             user.Id,
@@ -81,13 +80,7 @@ public sealed class AdminUsersController(
             user.GoogleId != null ? AuthProviderLabels.Google : AuthProviderLabels.Password,
             user.AvatarType == AvatarKind.Uploaded,
             AvatarUrls.For(user.Id),
-            stats.CurrentStreakDayCount,
-            stats.LongestStreakDayCount,
-            stats.TotalXpAmount,
-            stats.CompletedSkillCount,
-            stats.TotalSkillCount,
-            stats.AverageExerciseScore,
-            stats.Persona));
+            userProfile?.Persona));
     }
 
     [HttpPut("{id:guid}")]

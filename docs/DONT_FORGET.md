@@ -4405,3 +4405,18 @@ code path in this repo can emit 503" findings above.
 
 The existing client-side mitigation (`a83ef12`, a 5s timeout on the tracking POST) already prevents this
 from blocking the UI; that mitigation is not touched by this note.
+
+## AD-1 follow-up: stale fields in `features/admin/hooks/use-admin.ts` (out of scope for this run)
+
+Fixing AD-1 (`docs/AUDIT_PROD.md`) removed the fake activity-stat fields from the backend
+`AdminUserDetailDto` (`GET /admin/users/:id` no longer returns `currentStreakDayCount`,
+`longestStreakDayCount`, `totalXpAmount`, `completedSkillCount`, `totalSkillCount`,
+`averageExerciseScore` — see `src/backend/identity-service/Identity/Features/Admin/Models/AdminUserDtos.cs`
+and `docs/API_CONTRACTS.md`). Nothing renders them any more (the "Activity" card was already
+dropped from `features/admin/components/user-detail-modal.tsx` in `b724a2c`), so this is not a
+runtime break.
+
+`features/admin/hooks/use-admin.ts` is on the concurrent-agent do-not-touch list tonight, so it was
+left alone. Its `AdminUserDetail` interface (around line 84) still declares those six fields as
+non-optional `number`s even though the backend no longer sends them. Whoever next edits that file
+should drop those six fields from the interface to match the real response shape.

@@ -300,15 +300,16 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 `docs/AUDIT_PROD.md` (A-*, O-*), `docs/AUDIT_CONTRACTS.md` (C-*),
 `docs/AUDIT_NULLSAFETY.md` (N-*), `docs/AUDIT_ERROR_MASKING.md` (E-*) — дубли не заводились.
 
-### [ ] AD-1 Блок «Activity» в карточке пользователя всегда нулевой, `totalSkillCount = 0` при 13 навыках в системе
+### [x] AD-1 Блок «Activity» в карточке пользователя всегда нулевой, `totalSkillCount = 0` при 13 навыках в системе
 - **Где:** `/admin/users` → «Manage» у любой строки, блок «Activity» (Total XP / Current streak / Longest streak / Skills / Avg score)
 - **Что делал:** открыл модалку для admin@sellevate.site, затем прогнал `GET /admin/users/{id}` по всем 18 пользователям.
 - **Что произошло:** у **всех 18** пользователей бэкенд отдаёт `currentStreakDayCount:0, longestStreakDayCount:0, totalXpAmount:0, completedSkillCount:0, totalSkillCount:0, averageExerciseScore:0`. `totalSkillCount: 0` — заведомо неверно: `GET /admin/skills` в этот же момент отдаёт 13 навыков, то есть знаменатель «Skills 0/0» не зависит от пользователя и всё равно нулевой. Ошибок в сети/консоли нет — 200 OK с нулями.
 - **Ожидалось:** «Skills» показывает `завершено / 13`, `Avg score` — реальный средний балл (в системе есть попытки и диалоги — см. A-2/A-3/A-11).
 - **Слой:** backend (агрегация в `GET /admin/users/{id}` не подключена к прогрессу; фронт честно рисует то, что пришло)
 - **Severity:** major
+- **Резолюция:** тот же корень, что и A-2, и фикс `b724a2c` его не покрыл. `AdminUsersController.GetById` брал эти шесть полей из `IProfileService.GetProfileStatsForUserAsync` — того самого identity-service-метода, который явно хардкодит их в `0` (identity больше не владеет данными об обучении после микросервисного разделения; A-2 переехал на `learning-service`/`GET /skills/progress-summary`, но только для `/profile`). `b724a2c` убрал фейковый блок «Activity» из UI модалки (`user-detail-modal.tsx`), но сам backend-контракт `AdminUserDetailDto` продолжал отдавать выдуманные нули по сети — именно это поймал аудит через прямой вызов API. Фикс этого прогона: `currentStreakDayCount/longestStreakDayCount/totalXpAmount/completedSkillCount/totalSkillCount/averageExerciseScore` убраны из `AdminUserDetailDto` и из ответа `AdminUsersController.GetById` (persona теперь читается прямо из `UserProfiles`, без вызова `profileService`); `docs/API_CONTRACTS.md` обновлён. `features/admin/hooks/use-admin.ts` (тип `AdminUserDetail`) не тронут — файл в списке занятых другим агентом; там до сих пор объявлены шесть полей, которых больше нет в ответе, но ничего их не рендерит (see `docs/DONT_FORGET.md`). Сборка/тесты identity-service зелёные (см. коммит).
 
-### [ ] AD-2 Навык со стадией `general` (нет в справочнике стадий): в таблице виден сырой ключ, а форма Edit молча подменяет стадию на `preparation`
+### [ ] AD-2 Навык со стадией `general` (её нет в справочнике стадий): в таблице виден сырой ключ, а форма Edit показывает вместо неё «Подготовку»
 - **Где:** `/admin/skills` (колонка Stage), `/admin/skills/131a011b-efc5-4f7d-b8c5-ecede2dab7cf` («Управление воронкой», `pipeline-management`), `/admin/skill-stages`
 - **Что делал:** сверил `GET /admin/skills` и `GET /skills/stages`, открыл карточку навыка и нажал «Edit», прочитал `value` и список `options` селекта Stage.
 - **Что произошло:** `GET /skills/stages` отдаёт ровно 5 стадий (`preparation, discovery, engagement, closing, retention`), а у навыка `pipeline-management` в базе `stage: "general"`. Следствия: (1) в таблице `/admin/skills` и в карточке навыка в поле Stage напечатан сырой ключ **`general`**, тогда как у остальных 12 навыков — русская метка стадии (в локальном `main` это по дизайну: `getStageMeta` для неизвестного ключа отдаёт `label = ключ`, — но админ видит английский слаг в русской колонке и не понимает, что стадия «не назначена»). (2) Хуже: в форме «Edit» селект Stage содержит только 5 известных ключей, поэтому в DOM его `value` = **`preparation`**, то есть форма показывает «Подготовка» как текущую стадию навыка, который на самом деле в стадии `general`. Форма лжёт о текущем значении: админ, который хочет оставить всё как есть, ничего не трогает и не узнаёт, что стадия неверна; админ, который хочет поставить именно «Подготовку», видит её уже выбранной и не нажимает ничего — стадия остаётся `general`. Save на проде **не нажимался**, поэтому не проверено, что именно уходит в PUT (в локальном `main` селект контролируемый, так что состояние остаётся `general` — перезаписи нет, но и починить стадию через форму нельзя).
@@ -324,3 +325,69 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Ожидалось:** техники размечены навыками (иначе фильтр и «Primary skill» бессмысленны); при пустом результате фильтра — явное сообщение, а не пустая область.
 - **Слой:** data (+ frontend: нет пустого состояния у отфильтрованного списка)
 - **Severity:** major
+
+### [ ] AD-4 `/admin/lessons`: сортировка по «Title» и «Order» ничего не сортирует — строки всегда идут по `orderInTopic`
+- **Где:** `/admin/lessons`, заголовки колонок «Title↕» и «Order↕» в каждой группе тем
+- **Что делал:** кликал по «Title» (1 и 2 раза) и по «Order» (1 и 2 раза), каждый раз снимал порядок строк первой группы.
+- **Что произошло:** индикатор сортировки честно переключается (`Title↕ → Title↑ → Title↓`, `Order↑ → Order↓`), но **порядок строк не меняется никогда**: в группе всегда `1,2,3,4,5,6,7` по колонке Order. При «Title↑» первая группа идёт «Четыре секунды…, Своими словами…, Собери вход…, Твой ход…, Разбор звонков…, Распознай…, Босс-раунд…» — это не алфавит ни в одну сторону. При «Order↓» строки всё равно `1,2,3,4,5,6,7`. Единственное, что реально меняется от клика, — порядок самих групп-тем (побочный эффект сортировки плоского списка до группировки).
+- **Причина (подтверждена в коде, тот же баг и в локальном `main`):** `src/frontend/app/(admin)/admin/lessons/page.tsx:102` — после группировки каждая группа безусловно пересортировывается: `group.lessons.sort((a, b) => a.orderInTopic - b.orderInTopic);`, что затирает выбранную пользователем сортировку (`page.tsx:83-89`).
+- **Ожидалось:** клик по «Title» упорядочивает уроки внутри группы по названию, клик по «Order» — по порядку и в обратную сторону тоже.
+- **Слой:** frontend
+- **Severity:** minor
+
+### [ ] AD-5 `/admin/organizations/<id>/quota` показывает и обещает сохранить квоту НЕ той организации, что в URL
+- **Где:** `/admin/organizations/fe5e6a48-38c1-4d9d-9bb5-dd8c8740d6b7/quota` («Acme Sales») и `/admin/organizations/00000000-0000-4000-8000-000000000001/quota` («Sellevate · default»)
+- **Что делал:** открыл обе страницы «AI Quota» по ссылке «Quota» из таблицы `/admin/organizations` и сравнил все цифры.
+- **Что произошло:** обе страницы показывают **одинаковые** данные — 600 мин/день, 6 000 мин/месяц, 20 000 000 токенов, резерв 10 %, «This month: 4 486 tokens used · 3 model calls», те же две модели `gpt-4.1`/`gpt-4o`. То есть в шапке написано «Acme Sales · acme-sales · Active», а под ней — квота и расход организации из сессии (`00000000-…-0001`). Экран сам это признаёт: «This screen cannot write to that organization… GET/PUT /admin/ai-quota resolve the organization from the session token, never from this URL», и «Save quota» на чужой организации отключён. Но: (1) блок лимитов подписан «In effect now», хотя это лимиты другой организации; (2) фраза «This organization has no quota row yet… Saving creates the row» относится к чужой организации; (3) значит, квотой организации-клиента платформенный админ управлять не может вообще — ссылка «Quota» в таблице ведёт на страницу, которая не может выполнить своё назначение. Дополнительно там же указано, что имперсонация выдаёт токен с `role: User`, который не проходит `RequirePlatformAdmin`, — то есть обходного пути тоже нет.
+- **Ожидалось:** `GET/PUT /admin/ai-quota` принимает id организации (из URL), либо ссылка «Quota» у чужих организаций не ведёт на страницу, которая показывает чужие цифры под именем выбранной организации.
+- **Слой:** backend (эндпоинт квоты берёт организацию только из токена) + frontend (цифры чужой организации подписаны как «в силе сейчас» для организации из URL)
+- **Severity:** major
+
+### [ ] AD-6 `/admin/dialog`: флаг «скрытый пакет» (`isHidden`) не показывается и не редактируется — два из пяти бандлов помечены в таблице как обычные «Active»
+- **Где:** `/admin/dialog`, таблица «Dialog Bundles» (колонка Status) и форма «Edit» бандла
+- **Что делал:** сверил таблицу с `GET /admin/dialog/bundles`, открыл форму «Edit» у бандла «Звонок по компании» и перечислил её поля.
+- **Что произошло:** API отдаёт `isHidden: true` у бандлов «Звонок по компании» и «Кастомный сценарий» (это системные пакеты, недоступные в общем списке `/dialog`), но в таблице у них в колонке Status стоит то же самое «Active», что и у трёх обычных пакетов, — отличить их в админке нельзя. В форме «Edit» есть поля Skill, Title, Icon Emoji, Sort Order, Description и единственный чекбокс «Active»; чекбокса/переключателя «Hidden» нет. При этом `PUT /admin/dialog/bundles/{id}` принимает `isHidden` (`UpdateBundleRequestDto.IsHidden`), а строки `isHidden` во всём фронтенде нет ни одной (`grep -rn "isHidden" src/frontend` — пусто).
+- **Ожидалось:** отдельный статус «Hidden» в таблице и переключатель в форме — иначе админ не видит, что пакет скрыт от учеников, и не может ни скрыть, ни раскрыть пакет из интерфейса.
+- **Слой:** frontend (бэкенд поле отдаёт и принимает)
+- **Severity:** minor
+
+### [ ] AD-7 `/admin/voice/usage`: неудачный «Refresh» не даёт никакого сигнала — на экране остаются устаревшие цифры
+- **Где:** `/admin/voice/usage`, кнопка «Refresh»
+- **Что делал:** на уже загруженной странице подменил `window.fetch` так, чтобы `GET /admin/voice/usage` отвечал `500 {"message":"boom"}`, и дважды нажал «Refresh» (счётчик подтвердил ровно 2 заблокированных запроса, ретраев нет), подождал 8 с.
+- **Что произошло:** таблица осталась с прежними (кэшированными) цифрами, плашка «Couldn't load stats. Try refreshing.» **не появилась**, тоста тоже нет. Админ, обновляющий отчёт по минутам, получает старые числа и уверен, что они свежие. Причина: ветка ошибки в `src/frontend/app/(admin)/admin/voice/usage/page.tsx:82` висит на `isError`, а в TanStack Query v5 при наличии успешно закэшированных данных упавший refetch не переводит запрос в статус `error` — нужен `isRefetchError`/`error`, либо тост на `onError`.
+- **Ожидалось:** после неуспешного «Refresh» — явное сообщение об ошибке (или тост), а не молча устаревшие данные.
+- **Слой:** frontend
+- **Severity:** minor
+
+### [ ] AD-8 Модалка карточки пользователя в `/admin/users` не закрывается по Escape
+- **Где:** `/admin/users` → «Manage» (модалка `features/admin/components/user-detail-modal.tsx`)
+- **Что делал:** открыл модалку, нажал Escape двумя способами — реальным нажатием клавиши через браузер и синтетическим `keydown` на `document`/`window`; затем кликнул по затемнённому фону.
+- **Что произошло:** Escape не закрывает модалку ни в одном из вариантов (проверено дважды), закрывается только по «✕» и по клику в фон. В модалке при этом есть селект «Role» (User/Admin/SuperAdmin) — то есть пользователь, привыкший «отменить Escape», остаётся в форме с опасным полем. В пользовательской зоне для этого есть общий `shared/components/modal.tsx` с обработкой Escape, но ни одна админская модалка его не использует: `grep -c Escape` по `features/admin/components/user-detail-modal.tsx`, `app/(admin)/admin/dialog/page.tsx`, `app/(admin)/admin/dialog/[bundleId]/page.tsx`, `app/(admin)/admin/lessons/page.tsx`, `app/(admin)/admin/discuss/page.tsx` — везде **0**.
+- **Ожидалось:** Escape закрывает модалку, как в остальном приложении.
+- **Слой:** frontend
+- **Severity:** minor
+
+### Проверено, дефектов не обнаружено (прогон 3)
+- Все 17 пунктов админского сайдбара открываются: `/admin` (редирект на `/admin/skills`), `skills`, `skill-stages`, `topics`, `lessons`, `reference`, `techniques`, `quotes`, `dialog`, `discuss`, `prompts`, `voice/usage`, `leagues`, `gamification`, `users`, `organizations`, `demo-requests`, `import`. `/admin/bulk-lessons` редиректит на `/admin/lessons` (отдельного экрана нет).
+- Прямой прогон 30 админских GET-эндпоинтов (`/admin/skills`, `/admin/topics`, `/admin/lessons`, `/admin/reference`, `/admin/reference/categories`, `/admin/techniques`, `/admin/techniques/export`, `/admin/seeder/{skills,topics,lessons,bundle}/export`, `/admin/users`, `/admin/users/{id}`, `/admin/daily-quotes`, `/admin/exercise-type-prompts`, `/admin/gamification/*`, `/admin/leagues*`, `/admin/skill-stages`, `/admin/dialog/bundles`, `/admin/dialog/export`, `/admin/discuss/{threads,tags}`, `/admin/demo-requests`, `/organizations`, `/admin/platform/impersonation`, `/admin/ai-quota`, `/admin/ai-usage`, `/admin/voice/usage`) — все **200**, ни одного 4xx/5xx. JS-исключений и React-ошибок ни на одном экране не зафиксировано.
+- Без токена те же эндпоинты отдают **401** — админская зона на бэкенде закрыта.
+- Пустые экраны проверены на подмену ошибки пустотой: `/admin/reference` (`GET /admin/reference` → 200 `[]`), `/admin/discuss` (`threads` → `totalCount: 0`, `tags` → `[]`), `/admin/demo-requests` (200 `[]`) — пусты по-настоящему.
+- `/admin/quotes`: цитаты в базе только на 2026-06-15 и 2026-06-16; календарь показывает их именно в июне, а июль/август пусты законно. Навигация по месяцам (←/→) работает.
+- `/admin/topics`: поиск и фильтр по навыку работают («openers» находит, «zzzzzz» даёт «No topics found»); темы есть только у `first-contact` (9), у остальных 12 навыков их и в API нет — пустота не ложная.
+- `/admin/lessons`: фильтры «Skill»/«Topic», «Clear filters» и поиск считают корректно (21 total / 21 shown; навык без тем → «0 shown»). Инлайн-редактор строки предзаполняется. У всех 21 урока есть упражнения (0 пустых).
+- Редактор упражнений (`/admin/lessons/<id>/exercises` и вложенный близнец под `/admin/skills/.../lessons/.../exercises`): формы предзаполняются реальным содержимым, «Create»/«Save changes» действительно не заблокированы при пустых полях, но валидация есть — и на клиенте (`rowErrors`, `page.tsx:381-389`), и на бэкенде (`ExerciseContentValidator`), поэтому это не дефект.
+- `/admin/skill-stages` и `/admin/leagues/tiers` читаются и предзаполняются; серый сваточек цвета у стадии `preparation` — намеренный фолбэк `asHex()` для значения `var(--indigo)`, реальное значение сохраняется в текстовом поле.
+- `/admin/dialog`: у всех 5 бандлов режимы читаются (1/1/7/7/7), у всех режимов заполнены `chatSystemPrompt` и `feedbackSystemPrompt`. `/admin/prompts`: все 5 системных промптов непустые (982–2027 символов).
+- `/admin/leagues`: фильтры по неделе и тиру считают верно; экран лиги и «Settings» открываются.
+- Хлебные крошки и «назад» проверены и работают: «← All skills», «← Back to skill», «← Back to lessons», «← Back to topic», «← All leagues», «Organizations» на странице квоты.
+- Модалка `/admin/users` закрывается по «✕» и по клику в фон (по Escape — нет, см. AD-8); зависших модалок не найдено.
+
+### Уже известные дефекты, воспроизведённые на проде (не заводились повторно)
+- **C-1** — `/admin/skills/<guid>/topics/<topicId>` вечно висит на «Loading topic...»: `GET /admin/skills/76732f3f-…/topics` → **404** `Skill '76732f3f-…' not found` (бэкенд ждёт iconicName). Из-за этого путь «навык → тема → уроки» в проде недоступен целиком.
+- **C-3** — в `/admin/dialog` колонка Skill пуста у всех 5 бандлов, на странице режимов «Skill: ()»: `skillTitle` в `GET /admin/dialog/bundles` всегда `""`.
+- **E-14** (тот же системный шаблон) дополнительно воспроизведён на `/admin/leagues`: при подменённом ответе `GET /admin/leagues` → 500 экран рисует «No leagues found.» без единого признака ошибки.
+
+### Не проверено (осознанно)
+- Любые изменяющие действия — прод: Create/Save/Delete во всех редакторах, «Import» (skills/topics/lessons/exercises/techniques/dialog/bundle), «Invite», «Suspend», «Impersonate», «Save quota», approve/reject демо-заявок, «Close current week», «Force XP re-sync», «Apply/Remove» в лиге, смена роли пользователя, стрелки ▲▼ переупорядочивания упражнений. Поэтому серверная валидация форм на отказ невалидного ввода не проверена — только состояние кнопок и клиентские сообщения.
+- Кнопки «Export JSON» / «Download template» / «Export tree» не нажимались (скачивание файлов); соответствующие эндпоинты проверены запросом напрямую — 200.
+- `read_network_requests` в этом прогоне ловил только preflight `OPTIONS`, поэтому сетевой лог собирался перехватом `window.fetch`; консоль на проде забита логами постороннего расширения (`chext_driver.js`), фильтровалась по паттерну.
