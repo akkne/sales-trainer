@@ -181,7 +181,30 @@ notification, gamification, social, learning, company, organization, gateway). �
 - **Уверенность:** defence-in-depth
 - **Severity:** minor
 
-### [ ] T-5 В ai-service пять из шести читающих методов `DialogService` не открывают тенант-транзакцию
+### [x] T-5 В ai-service пять из шести читающих методов `DialogService` не открывают тенант-транзакцию
+
+**Исправлено частично, осознанно (2026-08-21, ночной прогон).** Добавил
+`AiTenantTransactionScope.BeginReadAsync` в начало всех пяти методов (:84, :92, :119, :128, :138) —
+тот же короткий read-scope, что уже стоит в `GetActiveModesForBundleAsync`. Скоуп реентерабельный,
+так что `GetModeByIdAsync`, вызванный из `StartSessionAsync`/`SendMessageAsync`/
+`CompleteSessionAsync`, либо открывает свой короткий скоуп, либо становится no-op внутри уже
+открытого снаружи.
+
+**Не стал** навешивать `[TenantTransaction]` классом на `DialogController`, хотя аудит называет
+это частью той же находки (по аналогии с `AdminDialogController`/`AdminDialogSessionsController`/
+`AdminDialogOverridesController`). Причина: тот фильтр держит транзакцию открытой на всё время
+действия и коммитит только в конце, а `POST /dialog/sessions/{id}/messages` и
+`.../complete` внутри себя делают внешний вызов к OpenAI (секунды), который не является чтением/
+записью Postgres. Держать пуловое соединение и открытую транзакцию на время сетевого вызова к
+LLM — это новый риск (истощение пула соединений, удержание блокировок), которого не было ни у
+одного из «сестринских» admin-контроллеров (у них нет внешних вызовов внутри транзакции). Точечные
+read-scope'ы в `DialogService` дают тот же defence-in-depth без этого риска. Если это неверное
+решение — обсуждается в ревью, не форсирую.
+
+Сборка (`dotnet build Ai/Sellevate.Ai.csproj`) — 0 ошибок; юнит-тесты
+(`dotnet test Ai.Tests/Sellevate.Ai.Tests.csproj`) — 170 passed, 0 failed, 11 skipped
+(интеграционные, требуют живой Postgres); `scripts/tenancy-boundary-lint.sh` и
+`scripts/tenancy-pool-lint.sh` — чисто.
 - **Эндпоинт:** `GET /dialog/bundles`, `GET /dialog/company-call-mode`, `GET /dialog/custom-scenario-mode`,
   `POST /dialog/sessions` (через `GetModeByIdAsync`) —
   `ai-service/Ai/Features/Dialog/Services/Implementation/DialogService.cs:84,92,119,128,138`;

@@ -81,18 +81,29 @@ internal sealed class DialogService : IDialogService
 
     public bool IsOpenAiConfigured => _openAiChatService.IsConfigured;
 
+    /// <summary>
+    /// T-5 (docs/AUDIT_TENANCY.md, tenancy audit): opens the same short read scope
+    /// <see cref="GetActiveModesForBundleAsync"/> already does, for the same reason — a bundle can be
+    /// an organization's own copy, and without <c>SET LOCAL app.organization_id</c> in force the
+    /// content policy would only ever show the global rows.
+    /// </summary>
     public async Task<List<DialogBundle>> GetActiveBundlesAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogBundles
             .Where(bundle => bundle.IsActive && !bundle.IsHidden)
             .OrderBy(bundle => bundle.SortOrder)
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>T-5 — see <see cref="GetActiveBundlesAsync"/>.</summary>
     public async Task<DialogBundle?> GetBundleByIdAsync(
         Guid bundleId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogBundles
             .FirstOrDefaultAsync(bundle => bundle.Id == bundleId, cancellationToken);
     }
@@ -116,17 +127,28 @@ internal sealed class DialogService : IDialogService
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// T-5 — see <see cref="GetActiveBundlesAsync"/>. Also called from
+    /// <see cref="StartSessionAsync"/>, <see cref="SendMessageAsync"/> and
+    /// <see cref="CompleteSessionAsync"/>; the scope is re-entrant so it is a no-op there if an
+    /// outer scope is already open, and owns its own short-lived one otherwise.
+    /// </summary>
     public async Task<DialogMode?> GetModeByIdAsync(
         Guid modeId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogModes
             .Include(mode => mode.Bundle)
             .FirstOrDefaultAsync(mode => mode.Id == modeId, cancellationToken);
     }
 
+    /// <summary>T-5 — see <see cref="GetActiveBundlesAsync"/>.</summary>
     public async Task<DialogMode?> GetCompanyCallModeAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogModes
             .Include(mode => mode.Bundle)
             .FirstOrDefaultAsync(
@@ -135,8 +157,11 @@ internal sealed class DialogService : IDialogService
                 cancellationToken);
     }
 
+    /// <summary>T-5 — see <see cref="GetActiveBundlesAsync"/>.</summary>
     public async Task<DialogMode?> GetCustomScenarioModeAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogModes
             .Include(mode => mode.Bundle)
             .FirstOrDefaultAsync(
