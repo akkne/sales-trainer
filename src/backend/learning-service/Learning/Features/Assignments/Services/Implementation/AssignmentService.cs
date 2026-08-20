@@ -148,6 +148,7 @@ internal sealed class AssignmentService(
         var sourceType = generatedSource?.SourceType ?? RequireSourceType(requestDto.SourceType);
         var sourceRef = generatedSource?.SourceRef ?? NormalizeSourceRef(sourceType, requestDto.SourceRef);
         RequireConsistentSchedule(requestDto.OpensAt, requestDto.Deadline);
+        RequireDeadlineNotInPast(requestDto.Deadline);
 
         var content = requestDto.Content is { Count: > 0 }
             ? requestDto.Content
@@ -875,6 +876,20 @@ internal sealed class AssignmentService(
         if (opensAt is not null && deadline is not null && deadline <= opensAt)
         {
             throw new AssignmentValidationException("The deadline must come after the opening time.");
+        }
+    }
+
+    /// <summary>
+    /// docs/AUDIT_PROD.md O-6. A brand-new draft with a deadline already in the past would be
+    /// overdue the moment it is issued, so <see cref="CreateAsync"/> refuses it up front — unlike
+    /// <see cref="UpdateAsync"/>, which must still allow re-saving an assignment whose deadline has
+    /// simply elapsed while it was running.
+    /// </summary>
+    private static void RequireDeadlineNotInPast(DateTime? deadline)
+    {
+        if (deadline is not null && deadline < DateTime.UtcNow)
+        {
+            throw new AssignmentValidationException("The deadline cannot be in the past.");
         }
     }
 }

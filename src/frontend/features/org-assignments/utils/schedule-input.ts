@@ -38,6 +38,28 @@ export function readOpensAtInput(dateTimeValue: string): string | null {
     return parsedDate.toISOString();
 }
 
+/**
+ * O-6 (`docs/AUDIT_PROD.md`) — a deadline dated before today reads as issued-already-overdue to
+ * whoever it lands on. `readDeadlineInput` already reads the input as the end of that day, so this
+ * only flags a day that has fully passed, not "today".
+ */
+export function isDeadlineInPast(dateValue: string): boolean {
+    const deadlineIso = readDeadlineInput(dateValue);
+    return deadlineIso !== null && new Date(deadlineIso).getTime() < Date.now();
+}
+
+/**
+ * O-6 — mirrors the server's own `RequireConsistentSchedule` (deadline must come after the opening
+ * time) so the screen refuses before the request does.
+ */
+export function isOpensAtAfterDeadline(dateTimeValue: string, dateValue: string): boolean {
+    const opensAtIso = readOpensAtInput(dateTimeValue);
+    const deadlineIso = readDeadlineInput(dateValue);
+    if (opensAtIso === null || deadlineIso === null) return false;
+
+    return new Date(deadlineIso).getTime() <= new Date(opensAtIso).getTime();
+}
+
 /** An ISO instant back into the `yyyy-mm-ddThh:mm` a datetime-local input can hold. */
 export function writeDateTimeInput(isoInstant: string | null): string {
     if (!isoInstant) return "";

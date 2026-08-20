@@ -39,7 +39,12 @@ import {
     DEFAULT_REPEAT_OFFSET_DAYS,
     REPEAT_SCHEDULE_LIMITS,
 } from "@/features/org-assignments/utils/repeat-schedule";
-import { readDeadlineInput, readOpensAtInput } from "@/features/org-assignments/utils/schedule-input";
+import {
+    isDeadlineInPast,
+    isOpensAtAfterDeadline,
+    readDeadlineInput,
+    readOpensAtInput,
+} from "@/features/org-assignments/utils/schedule-input";
 
 type SubmitPhase = "idle" | "creating" | "activating";
 
@@ -89,13 +94,24 @@ export default function CreateAssignmentPage() {
     const completionRuleValidation = validateCompletionRuleDraft(completionRuleDraft, contentKinds);
     const audienceFailure = validateAudienceRule(audience);
     const repeatFailure = isRepeatEnabled ? validateRepeatOffsetDays(repeatOffsetDays) : null;
+    const deadlineFailure =
+        deadlineInput.length > 0 && isDeadlineInPast(deadlineInput)
+            ? "Срок не может быть в прошлом."
+            : null;
+    const opensAtFailure =
+        deadlineFailure === null && opensAtInput.length > 0 && deadlineInput.length > 0
+            && isOpensAtAfterDeadline(opensAtInput, deadlineInput)
+            ? "«Открыть» не может быть позже срока."
+            : null;
+    const scheduleFailure = deadlineFailure ?? opensAtFailure;
 
     const canIssue =
         titleFailure === null &&
         contentFailure === null &&
         completionRuleValidation === null &&
         audienceFailure === null &&
-        repeatFailure === null;
+        repeatFailure === null &&
+        scheduleFailure === null;
 
     const buildRequest = (): CreateAssignmentRequest | null => {
         const completionRule = buildCompletionRuleDocument(completionRuleDraft);
@@ -268,6 +284,7 @@ export default function CreateAssignmentPage() {
                                     type="datetime-local"
                                     label="Открыть"
                                     hint="Пусто — задание открывается сразу."
+                                    error={opensAtFailure ?? undefined}
                                     value={opensAtInput}
                                     disabled={isBusy}
                                     onChange={(changeEvent) =>
@@ -278,6 +295,7 @@ export default function CreateAssignmentPage() {
                                     type="date"
                                     label="Срок"
                                     hint="Срок считается до конца выбранного дня."
+                                    error={deadlineFailure ?? undefined}
                                     value={deadlineInput}
                                     disabled={isBusy}
                                     onChange={(changeEvent) =>
@@ -403,12 +421,18 @@ export default function CreateAssignmentPage() {
                                 contentFailure ??
                                 titleFailure ??
                                 audienceFailure ??
+                                scheduleFailure ??
                                 repeatFailure}
                         </span>
                     )}
                     <Button
                         variant="secondary"
-                        disabled={isBusy || titleFailure !== null || completionRuleValidation !== null}
+                        disabled={
+                            isBusy ||
+                            titleFailure !== null ||
+                            completionRuleValidation !== null ||
+                            scheduleFailure !== null
+                        }
                         loading={submitPhase === "creating"}
                         onClick={() => void saveDraft()}
                     >
