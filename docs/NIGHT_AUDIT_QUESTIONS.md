@@ -195,3 +195,34 @@ SECURITY` не применяется — RLS не фильтрует ничег
 порядок упражнений внутри урока не важным для продукта и оставить фиксированным при создании. Если
 решат заводить: нужна миграция/эндпойнт в learning-service + фронтовая мутация, которая шлёт весь
 новый порядок одним запросом (не по одной строке — иначе частичный отказ снова разъедет `sortOrder`).
+
+### Q-9 — AD-7: production showed no error on a failed refetch even though the installed
+### `@tanstack/react-query` (and `main`'s `page.tsx`) should have surfaced one — needs a live-prod recheck once prod catches up to `main`
+
+`docs/AUDIT_PROD.md` AD-7 claimed "isError does not fire in TanStack Query v5 on a background
+refetch failure when a cache already exists." Checked this against the actual installed package
+(`@tanstack/react-query@5.96.0` / `query-core@5.96.0`) by reading `query.js`'s reducer and
+`queryObserver.js`'s `createResult`, and by running a live `QueryObserver` script against the real
+package: `isError` (and the more specific `isRefetchError`) reliably become `true` on a failed
+refetch, with the stale `data` preserved alongside. Full derivation in `docs/DECISIONS.md` under
+"AD-7". So the generalized claim does not hold for this repo's version, and E-1..E-18
+(`docs/AUDIT_ERROR_MASKING.md`) are not undermined by it — no need to redo them.
+
+What's unresolved: the auditor's actual manual browser test against **production** genuinely showed
+no banner and no toast after a forced 500 on "Refresh," twice, over 8 seconds — a real observation,
+not a misread. Production is confirmed to run a build older than `origin/main` (this audit's own
+preamble note), so its bundled `@tanstack/react-query` version and its copy of `voice/usage/page.tsx`
+may differ from what's in `main` today; I could not reconcile the two without either a prod
+bundle/version diff or re-running the same forced-500 test against a `main` deploy, and this run's
+scope didn't cover redeploying or touching prod.
+
+**Нужно решение / follow-up:** once prod is redeployed from current `main` (which now has the
+`isLoadingError`/`isRefetchError` fix, commit hash in `docs/AUDIT_PROD.md`'s AD-7 entry), re-run the
+auditor's exact repro (stub `window.fetch` to 500, click "Refresh" twice, wait ~8s) against prod to
+confirm the banner now appears. If it still doesn't, that would mean something prod-specific (a
+proxy/CDN swallowing the 500, a service worker, a different bundler output) is masking the failure
+independently of TanStack Query, and is worth its own investigation rather than more `isError`
+plumbing. Given this now checks out at the library level, a full re-verification sweep of the other
+17 `isError`-gated fixes against actual refetch failures (not just initial-load failures) is
+probably not necessary — but a couple of spot checks on `main` (not prod) would close out any
+remaining doubt cheaply if someone wants extra confidence.

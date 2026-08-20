@@ -46,7 +46,7 @@ function formatLastCall(value: string | null): string {
 }
 
 export default function AdminVoiceUsagePage() {
-    const { data, isLoading, isError, refetch } = useAdminVoiceUsage();
+    const { data, isLoading, isLoadingError, isRefetchError, isFetching, error, refetch } = useAdminVoiceUsage();
 
     return (
         <div className="p-6 max-w-7xl">
@@ -65,9 +65,10 @@ export default function AdminVoiceUsagePage() {
                 </div>
                 <button
                     onClick={() => refetch()}
-                    className="px-4 py-2 rounded-xl bg-surface border border-line text-sm text-ink hover:bg-bg-2 transition-colors"
+                    disabled={isFetching}
+                    className="px-4 py-2 rounded-xl bg-surface border border-line text-sm text-ink hover:bg-bg-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                    Refresh
+                    {isFetching ? "Refreshing…" : "Refresh"}
                 </button>
             </div>
 
@@ -79,10 +80,18 @@ export default function AdminVoiceUsagePage() {
                 </div>
             )}
 
-            {isError && (
-                <div className="bg-bad-soft text-bad rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+            {isLoadingError && (
+                <div className="bg-bad-soft text-bad rounded-xl px-4 py-3 text-sm flex items-center gap-2" role="alert">
                     <Icon name="warning" size="sm" />
-                    Couldn't load stats. Try refreshing.
+                    Couldn't load stats{(error as Error)?.message ? `: ${(error as Error).message}` : ""}. Try refreshing.
+                </div>
+            )}
+
+            {isRefetchError && (
+                <div className="bg-bad-soft text-bad rounded-xl px-4 py-3 text-sm flex items-center gap-2 mb-4" role="alert">
+                    <Icon name="warning" size="sm" />
+                    Refresh failed{(error as Error)?.message ? `: ${(error as Error).message}` : ""}. Showing the
+                    last data that loaded successfully — it may be stale.
                 </div>
             )}
 

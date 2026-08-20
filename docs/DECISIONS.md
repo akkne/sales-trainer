@@ -6049,3 +6049,42 @@ the finding described.
 
 E-13..E-18 (admin screens, the AI-dialogue exercise) are out of this pass's scope — owned by a
 concurrent agent per the audit doc's own scoping note.
+
+### AD-7: verified against the installed `@tanstack/react-query` — the "isError never fires on a
+### background refetch failure" claim is false for this repo's version; fixed the screen anyway
+
+`docs/AUDIT_PROD.md` AD-7 (`/admin/voice/usage`, a failed "Refresh" showed no error and left stale
+numbers on screen) came with a specific claim: "isError does not fire in TanStack Query v5 when a
+cache already exists — a background refetch failure keeps `status: 'success'` with stale data." If
+true, this would partially undermine E-1..E-18 (`docs/AUDIT_ERROR_MASKING.md`), which all gate on
+`isError`.
+
+Checked the installed version directly rather than trusting the claim: `src/frontend/package.json`
+pins `@tanstack/react-query@^5.96.0`, resolving to `query-core@5.96.0`
+(`node_modules/@tanstack/query-core/build/modern/query.js`). The reducer's `case "error"`
+unconditionally sets `status: "error"` on the query object regardless of whether `state.data` is
+already populated — there is no branch that preserves `status: "success"` on a background failure.
+`queryObserver.js`'s `createResult` derives `isError = status === "error"` straight from that state,
+and separately exposes `isRefetchError = isError && hasData` for exactly this scenario. Confirmed
+live with a `QueryObserver` script against the real package (seed a successful fetch, then fail a
+refetch, including two overlapping `refetch()` calls to model a double-click): the final result was
+always `{ status: "error", isError: true, isRefetchError: true, data: <stale value kept> }`. The
+`revert`/`silent` `CancelledError` paths in `query.js` that *do* suppress the error dispatch only
+trigger on observer teardown (component unmount) or an explicit `cancelRefetch`-triggered
+supersede-by-a-newer-fetch, not on an ordinary failed refetch.
+
+**Verdict: the claim does not hold for this repo's `@tanstack/react-query` version.** `isError`
+(and `isRefetchError`) do fire on a background refetch failure with cached data present, so E-1..E-18
+are not undermined by this mechanism and do not need to be redone. Why the auditor's live browser
+test on production still showed no banner is unresolved — production runs a build older than
+`origin/main` (per this audit's own preamble), so the deployed bundle's exact
+`@tanstack/react-query` version and this exact `page.tsx` may not match what's in `main` right now;
+recorded as `docs/NIGHT_AUDIT_QUESTIONS.md` Q-9 rather than guessed at further tonight.
+
+Fixed the screen regardless, per the instruction to surface `isRefetchError`/`failureReason`/
+`isFetching`+`error` explicitly rather than relying on bare `isError`:
+`app/(admin)/admin/voice/usage/page.tsx` now destructures `isLoadingError` (first-load failure, no
+data yet — blocks the table, same UX as before) separately from `isRefetchError` (failure with a
+prior successful load — shown as its own banner *above* the still-visible stale table, saying the
+refresh failed and the numbers may be stale), includes the `ApiError` message in both banners, and
+disables the "Refresh" button with a "Refreshing…" label while `isFetching`.
