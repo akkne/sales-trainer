@@ -54,7 +54,15 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
     const submitReply = async () => {
         if (!replyBody.trim()) return;
         setReplyError(null);
-        const createdReply = await addReply.mutateAsync(replyBody.trim());
+        let createdReply: { id: string };
+        try {
+            createdReply = await addReply.mutateAsync(replyBody.trim());
+        } catch (submitError) {
+            setReplyError(
+                submitError instanceof Error ? submitError.message : "Не удалось опубликовать ответ"
+            );
+            return;
+        }
         const filesToUpload = replyFiles;
         setReplyBody("");
         setReplyFiles([]);

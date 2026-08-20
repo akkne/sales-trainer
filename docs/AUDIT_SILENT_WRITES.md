@@ -77,7 +77,7 @@
 - **Ущерб:** нет сообщения (частичная запись прогресса, урок не закрывается)
 - **Severity:** major
 
-### [ ] W-4 Обсуждения: провал публикации ответа в теме молчит
+### [x] W-4 Обсуждения: провал публикации ответа в теме молчит
 - **Где:** `src/frontend/app/(main)/discuss/[threadId]/page.tsx:54-68` (`submitReply`,
   `await addReply.mutateAsync(...)` на строке 57), кнопка «Ответить» в теме.
 - **Мутация:** `POST /discuss/threads/{id}/replies` через `useAddReply`
