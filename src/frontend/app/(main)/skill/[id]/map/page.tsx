@@ -5,6 +5,7 @@ import { use } from "react";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSkills } from "@/features/skills/hooks/use-skill-tree";
 import { Icon } from "@/shared/components/icon";
+import { ErrorState } from "@/shared/components/error-state";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
 
 interface SkillMapPageProps {
@@ -71,8 +72,13 @@ function Spinner() {
 
 export default function SkillMapPage({ params }: SkillMapPageProps) {
     const { id: skillSlug } = use(params);
-    const { data: lessonSummaries, isLoading: lessonsLoading } = useLessonsForSkill(skillSlug);
-    const { data: skills, isLoading: skillsLoading } = useSkills();
+    const {
+        data: lessonSummaries,
+        isLoading: lessonsLoading,
+        isError: lessonsError,
+        refetch: refetchLessons,
+    } = useLessonsForSkill(skillSlug);
+    const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
 
     const isLoading = lessonsLoading || skillsLoading;
 
@@ -80,6 +86,22 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <Spinner />
+            </div>
+        );
+    }
+
+    // E-7: a failed lessons or skills fetch used to render the same 0% ring and "0 из 0 уроков
+    // завершено" as a skill with no lessons at all — indistinguishable from progress resetting.
+    if (lessonsError || skillsError) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+                <ErrorState
+                    title="Не удалось загрузить навык"
+                    onRetry={() => {
+                        refetchLessons();
+                        refetchSkills();
+                    }}
+                />
             </div>
         );
     }

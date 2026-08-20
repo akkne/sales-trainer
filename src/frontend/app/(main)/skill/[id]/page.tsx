@@ -5,6 +5,7 @@ import { use } from "react";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSkills } from "@/features/skills/hooks/use-skill-tree";
 import { Icon } from "@/shared/components/icon";
+import { ErrorState } from "@/shared/components/error-state";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
 
 interface SkillPageProps {
@@ -71,8 +72,13 @@ function Spinner() {
 
 export default function SkillPage({ params }: SkillPageProps) {
     const { id: skillSlug } = use(params);
-    const { data: lessonSummaries, isLoading: lessonsLoading } = useLessonsForSkill(skillSlug);
-    const { data: skills, isLoading: skillsLoading } = useSkills();
+    const {
+        data: lessonSummaries,
+        isLoading: lessonsLoading,
+        isError: lessonsError,
+        refetch: refetchLessons,
+    } = useLessonsForSkill(skillSlug);
+    const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
 
     const isLoading = lessonsLoading || skillsLoading;
 
@@ -80,6 +86,23 @@ export default function SkillPage({ params }: SkillPageProps) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <Spinner />
+            </div>
+        );
+    }
+
+    // E-6: a failed lessons or skills fetch used to fall through to the same zeroed header
+    // and "no lessons" copy as a skill with no content — including the title falling back to
+    // the raw slug. Neither request failing is the same as the skill genuinely being empty.
+    if (lessonsError || skillsError) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+                <ErrorState
+                    title="Не удалось загрузить навык"
+                    onRetry={() => {
+                        refetchLessons();
+                        refetchSkills();
+                    }}
+                />
             </div>
         );
     }
