@@ -68,6 +68,7 @@ export function useInitAuth() {
                 displayName: string;
                 role: UserRole;
                 orgId?: string | null;
+                orgName?: string | null;
                 orgRole?: OrgRole | null;
                 isOnboardingCompleted: boolean;
             }>("/auth/me")

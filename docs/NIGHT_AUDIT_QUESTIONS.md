@@ -17,6 +17,26 @@
 **Нужно:** `git push origin main` + пересборка/редеплой прода. После этого имеет смысл
 повторный прогон аудита, чтобы отделить «починено» от «недодеплоено».
 
+### Q-2 — `orgName` из `GET /auth/me` не читается фронтом; сайдбар компании всегда «Ваша компания»
+Найдено при аудите null-safety (`docs/AUDIT_NULLSAFETY.md`, срез 1). Бэкенд отдаёт
+`orgName` (`AuthController.cs:64`, фаза 40.20 — «панель должна говорить, чья она»), но во
+фронте это поле не объявлено в `AuthenticatedUser` (`shared/stores/auth-store.ts:40-48`) и
+нигде не читается. `app/(org)/layout.tsx:130,143` берёт имя только из сессии
+impersonation-сессии и иначе подставляет `FALLBACK_ORGANIZATION_NAME = "Ваша компания"` — то есть
+настоящий админ настоящей компании видит заглушку, хотя данные уже на клиенте.
+Это не падение и не ложь в типах, а недоделанная фича, поэтому в findings не вынесено.
+**Нужно решение:** дочитывать `orgName` в `AuthenticatedUser` и показывать его в сайдбаре
+(и тогда `FALLBACK_ORGANIZATION_NAME` остаётся только для `orgName === null`), или считать
+текущее поведение намеренным и убрать `orgName` из ответа.
+
+**Решение, принятое ночным прогоном (2026-08-21, O-4 в `docs/AUDIT_PROD.md`):** взят
+вариант «дочитывать». `orgName?: string | null` добавлено в `AuthenticatedUser`
+(`shared/stores/auth-store.ts`) и в тип ответа `/auth/me` в `useInitAuth`
+(`features/auth/hooks/use-auth.ts`); `app/(org)/layout.tsx` теперь берёт название в порядке
+`impersonatedOrganizationName ?? authenticatedUser.orgName ?? FALLBACK_ORGANIZATION_NAME` —
+impersonation-сессия по-прежнему выигрывает, `FALLBACK_ORGANIZATION_NAME` остался только для
+`orgName == null`. Решение может быть отменено владельцем утром — блок оставлен, не удалён.
+
 ---
 
 ## Ответы владельца (заполнить утром)

@@ -44,6 +44,7 @@ interface AuthenticatedUser {
     isOnboardingCompleted: boolean;
     role: UserRole;
     orgId?: string | null;
+    orgName?: string | null;
     orgRole?: OrgRole | null;
 }
 

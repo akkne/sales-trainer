@@ -90,6 +90,12 @@ export default function OrganizationLayout({ children }: { children: React.React
 
     const hasOrganizationContext = !!authenticatedUser?.orgId;
 
+    // O-4 (docs/AUDIT_PROD.md): `GET /auth/me` has carried `orgName` since Phase 40.20, but the
+    // panel kept showing the fallback for every non-impersonated admin. Impersonation still wins
+    // when present — that session's name is the platform staff member's own point of truth.
+    const organizationName =
+        impersonatedOrganizationName ?? authenticatedUser?.orgName ?? FALLBACK_ORGANIZATION_NAME;
+
     const badges = useOrganizationNavigationBadges(isAdmittedToPanel && hasOrganizationContext);
 
     if (!isMounted) return null;
@@ -127,7 +133,7 @@ export default function OrganizationLayout({ children }: { children: React.React
                     <Icon name="grid" size="md" />
                 </button>
                 <span className="font-bold text-ink text-sm truncate">
-                    {impersonatedOrganizationName ?? FALLBACK_ORGANIZATION_NAME}
+                    {organizationName}
                 </span>
             </div>
 
@@ -140,7 +146,7 @@ export default function OrganizationLayout({ children }: { children: React.React
             )}
 
             <OrgSidebar
-                organizationName={impersonatedOrganizationName ?? FALLBACK_ORGANIZATION_NAME}
+                organizationName={organizationName}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 badges={badges}
