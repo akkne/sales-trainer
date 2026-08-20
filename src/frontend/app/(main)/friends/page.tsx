@@ -3,6 +3,7 @@
 import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
+import { ErrorState } from "@/shared/components/error-state";
 import { useFriends, useFriendRequests } from "@/features/friends/hooks/use-friends";
 import { useCreateConversation, useConversations } from "@/features/friends/hooks/use-chat";
 import { FriendCard } from "@/features/friends/components/friend-card";
@@ -29,8 +30,13 @@ function FriendsPageContent() {
     // Rail chat: derive open conversation from URL param so back/forward works automatically
     const railConvId = searchParams.get("conv") ?? null;
 
-    const { data: friends, isLoading: friendsLoading } = useFriends();
-    const { data: requests } = useFriendRequests();
+    const {
+        data: friends,
+        isLoading: friendsLoading,
+        isError: friendsError,
+        refetch: refetchFriends,
+    } = useFriends();
+    const { data: requests, isError: requestsError, refetch: refetchRequests } = useFriendRequests();
     const { data: conversations } = useConversations();
     const createConversationMutation = useCreateConversation();
 
@@ -82,6 +88,22 @@ function FriendsPageContent() {
             <div className="frd-body">
                 {/* ── Main scroll column ── */}
                 <div className="frd-main">
+                    {/* E-10: a failed /friends/requests used to leave `requests` undefined, which
+                        reads identically to "no requests" and hides this whole section — an
+                        incoming request becomes invisible with no explanation. */}
+                    {requestsError && (
+                        <p className="text-sm text-bad" style={{ margin: "0 0 12px" }} role="alert">
+                            Не удалось загрузить заявки в друзья.{" "}
+                            <button
+                                type="button"
+                                onClick={() => refetchRequests()}
+                                style={{ background: "none", border: "none", color: "inherit", fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                            >
+                                Повторить
+                            </button>
+                        </p>
+                    )}
+
                     {/* Requests section */}
                     {(incomingRequests.length > 0 || outgoingRequests.length > 0) && (
                         <div>
@@ -130,6 +152,10 @@ function FriendsPageContent() {
                                 <div key={i} className="frd-skeleton" style={{ height: 100, borderRadius: 14 }} />
                             ))}
                         </div>
+                    ) : friendsError ? (
+                        // E-10: a failed /friends used to fall through to "Найди своего первого
+                        // напарника!" — the exact same screen as genuinely having no friends yet.
+                        <ErrorState title="Не удалось загрузить друзей" onRetry={() => refetchFriends()} />
                     ) : friends && friends.length > 0 ? (
                         <div className="frd-grid">
                             {friends.map((friend) => (

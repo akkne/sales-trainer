@@ -6,6 +6,8 @@ import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { usePublicProfile } from "@/features/friends/hooks/use-friends";
 import { useCreateConversation } from "@/features/friends/hooks/use-chat";
 import { FriendshipButton } from "@/features/friends/components/friendship-button";
+import { ApiError } from "@/shared/api/api-client";
+import { ErrorState } from "@/shared/components/error-state";
 
 const PERSONA_LABELS: Record<string, string> = {
     sdr: "SDR",
@@ -18,7 +20,7 @@ const PERSONA_LABELS: Record<string, string> = {
 export default function PublicProfilePage() {
     const params = useParams<{ userId: string }>();
     const router = useRouter();
-    const { data: profile, isLoading } = usePublicProfile(params.userId);
+    const { data: profile, isLoading, error, refetch } = usePublicProfile(params.userId);
     const createConversationMutation = useCreateConversation();
 
     function handleChatClick() {
@@ -48,13 +50,30 @@ export default function PublicProfilePage() {
     }
 
     if (!profile) {
+        // E-10: any failure of GET /friends/profile/{id} used to render "Пользователь не
+        // найден" — a claim about the person, not about the request. Only a genuine 404 means
+        // that; anything else gets the shared error state with a retry.
+        const isNotFound = error instanceof ApiError && error.status === 404;
+        if (isNotFound) {
+            return (
+                <div className="frd-profile">
+                    <div className="frd-empty" style={{ paddingTop: 80 }}>
+                        <div className="frd-empty-icon">
+                            <Icon name="user" size={20} />
+                        </div>
+                        <p className="frd-empty-title">Пользователь не найден</p>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="frd-profile">
-                <div className="frd-empty" style={{ paddingTop: 80 }}>
-                    <div className="frd-empty-icon">
-                        <Icon name="user" size={20} />
-                    </div>
-                    <p className="frd-empty-title">Пользователь не найден</p>
+                <div style={{ paddingTop: 80 }}>
+                    <ErrorState
+                        title="Не удалось загрузить профиль"
+                        onRetry={() => refetch()}
+                    />
                 </div>
             </div>
         );
