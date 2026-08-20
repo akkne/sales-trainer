@@ -25,6 +25,42 @@ same URL the working link already used. No `NIGHT_AUDIT_QUESTIONS.md` entry was 
 
 ---
 
+## 2026-08-20 — Night contract-audit fix: C-2 (docs/AUDIT_CONTRACTS.md)
+
+Fixing a major finding from the same static contract audit as C-1 above: the reference page now
+receives a material id, not a skill id, and resolves the skill itself.
+
+`GET /skills/{skillId:guid}/reference` needs a skill id. The only real caller,
+`active-assignment-card.tsx`'s "Теория" link, only ever had a reference-**material** id
+(`ActiveAssignmentItemDto.Reference` for `reference_material`, per its own doc comment) — there is no
+`GET /reference/{materialId}` route and no second caller passing anything else.
+
+**Chosen:** keep `/reference/[id]` a client-only fix. The page now treats its route param as a
+material id, calls the existing unfiltered `GET /reference` (`useHandbook()`) to find which skill
+owns that material (the DTO already carries `skillId`), then calls `useReferenceMaterials(skillId)`
+and opens the originally-requested material by default (`expandedMaterialId` seeded from the route
+param instead of `null`).
+
+**Rejected alternative:** add a `GET /reference/{materialId}` backend route, or add a resolved
+`SkillId`/`SkillSlug` to `ActiveAssignmentItemDto` the way `LessonId` is already resolved for
+`lesson_version` items. Either would also work and might be the better long-term shape, but both are
+backend contract changes on a night run where the constraint is the smallest viable fix with no new
+tests — the existing `GET /reference` endpoint already returns everything needed to resolve the
+skill, so no backend change was necessary. Left unrecorded as a TODO rather than a
+`NIGHT_AUDIT_QUESTIONS.md` question, since it is an optimization, not a decision only the owner can
+make.
+
+`ReferenceMaterial.skillId` was added to the frontend type to carry the real field the backend
+already sends (`ReferenceMaterialDto.SkillId`); the pre-existing `skillSlug` field (which the backend
+never sends and nothing reads — audit's "не вошло" list) was left alone as out of scope for this
+fix. `useReferenceMaterials` gained `enabled: !!skillId` so it stops firing
+`GET /skills//reference` before the lookup resolves.
+
+`docs/API_CONTRACTS.md`'s `ReferenceMaterialDto` shape entry was stale (missing `category`, `tags`,
+`skillId`, which the backend has always returned) — corrected in the same commit.
+
+---
+
 ## 2026-08-18 — Phase 40.31: closing the loop from metric to content
 
 Roadmap block 40.31, the fourth of stage F (40.30 is deferred to the owner — the consent question).

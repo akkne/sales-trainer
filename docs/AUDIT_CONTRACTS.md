@@ -24,7 +24,7 @@
 - **Следствие:** 404, `topics` остаётся `[]`, `topic` = undefined → страница вечно висит на `Loading topic...` (page.tsx:117). Форма темы и весь список уроков не рендерятся никогда.
 - **Severity:** blocker
 
-### [ ] C-2 GET /skills/{id}/reference получает id справочного материала вместо id навыка
+### [x] C-2 GET /skills/{id}/reference получает id справочного материала вместо id навыка
 - **Фронт вызывает:** GET `/skills/${skillSlug}/reference` — src/frontend/features/skills/hooks/use-reference.ts:18, аргумент из src/frontend/app/(main)/reference/[id]/page.tsx:15.
 - **Бэкенд:** `[HttpGet("skills/{skillId:guid}/reference")]` — src/backend/learning-service/Learning/Features/Reference/ReferenceController.cs:12; фильтр `material.SkillId == skillId` — .../Reference/Services/Implementation/ReferenceService.cs:18. Шлюз: `/skills/{**catch-all}` → learning, корректно.
 - Единственный вход на маршрут — src/frontend/features/assignments/components/active-assignment-card.tsx:128 (`/reference/${item.reference}`), а `item.reference` для `reference_material` — это id материала: src/backend/learning-service/Learning/Features/Assignments/Models/ActiveAssignmentDto.cs:49 («a lesson-version id, a reference-material id, or a dialog mode key»).

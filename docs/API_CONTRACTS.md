@@ -413,7 +413,7 @@ nothing here to switch to" and none should resolve into a move nobody asked for.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /skills/:slug/lessons | — | `LessonSummaryDto[]` |
+| GET | /skills/:slug/lessons | — | `LessonSummaryDto[]` (200 `[]` for a real skill with no lessons yet; 404 only when `:slug` names no skill at all) |
 | GET | /lessons | — | `LessonSummaryDto[]` (all skills) |
 | GET | /topics/:topicId/lessons | — | `LessonSummaryDto[]` (one topic, with the caller's per-lesson status) |
 | GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` |
@@ -430,6 +430,11 @@ The **user speaks first** — an empty `message` returns an empty turn (no AI gr
 
 **AI Dialog Voice Endpoint:**
 `POST /exercises/:exerciseId/voice/stream` — voice mode for `ai_dialog` exercises. Streams the same length-prefixed `[flags u32][textLen u32][text][audioLen u32][audioMp3]` frames as the live-call voice stream (`flags` bit0 = isFinal, bit1 = isStopSignal/endCall). Shares chat history with `/chat`, so text and voice turns interleave. Uses the same TTS pipeline as calls.
+
+**`GET /skills/:slug/lessons` 404 vs. empty array:** 404 means `:slug` matches no `Skill` row at all. A
+skill that exists but has no topics, or has topics but no lessons, is a normal state (a skill just
+added to the tree, or mid-authoring) and returns 200 with `[]`, not 404 — the client's "no lessons yet"
+empty state, not its error state, is what should render for it.
 
 **Lesson unlock behavior:**
 - First call to `GET /skills/:slug/lessons` lazy-seeds `UserLessonProgress` rows: lesson 1 → `available`, rest → `locked`.
@@ -473,7 +478,7 @@ The **user speaks first** — an empty `message` returns an empty turn (no AI gr
 | GET | /reference?category=&search= | `ReferenceMaterialDto[]` — the whole library, both filters optional and independent |
 | GET | /reference/categories | `string[]` — the distinct non-empty categories, for the filter control |
 
-`ReferenceMaterialDto`: `{materialId, title, markdownContent, sortOrder}`
+`ReferenceMaterialDto`: `{materialId, title, markdownContent, sortOrder, category, tags: string[], skillId}` — `skillId` is what a caller must resolve first (e.g. via `/reference`) if all it has is a `materialId`, since there is no `GET /reference/:materialId` route.
 
 ---
 
@@ -1102,6 +1107,14 @@ counted; team readiness is a statement about now, not about somebody's whole his
 `TeamSkillMapSkillDto`: `{skillId, title, stageKey, orderInTree, attemptCount, accuracyPercent}`
 `TeamSkillMapMemberDto`: `{userId, displayName, isActiveMember, attemptCount, accuracyPercent, weakestStageKey, weakestSkillId, dialogCount, dialogAverageScore, stages: TeamSkillMapCellDto[], skills: TeamSkillMapCellDto[]}`
 `TeamSkillMapCellDto`: `{key, attemptCount, accuracyPercent}`
+
+**`displayName` and `isActiveMember` on `TeamSkillMapMemberDto` are both nullable, same reason as the
+assignment dashboard row above** — read from `UserReplicas`/the roster read, either of which can be
+missing for one person without the whole response failing. `displayName` is `null`, never an invented
+placeholder, for anyone without a replica row yet; the client types this field `string | null` and
+resolves the fallback label itself (`useTeamMemberNames` in `use-team-directory.ts`) rather than
+sorting or rendering the raw value — a client that treats it as always-a-string will crash the first
+time replication lags behind a fresh signup.
 
 **One endpoint, not two, because "per manager: where they sag, by funnel stage" and "per team: a
 skill heat map" are the same matrix read along its two axes.** Splitting them would run the

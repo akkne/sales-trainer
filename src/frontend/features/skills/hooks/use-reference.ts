@@ -9,13 +9,15 @@ export interface ReferenceMaterial {
     category: string | null;
     tags: string[];
     skillSlug: string;
+    skillId: string;
 }
 
-export function useReferenceMaterials(skillSlug: string) {
+export function useReferenceMaterials(skillId: string) {
     return useQuery({
-        queryKey: ["reference", skillSlug],
+        queryKey: ["reference", skillId],
         queryFn: () =>
-            apiClient.get<ReferenceMaterial[]>(`/skills/${skillSlug}/reference`),
+            apiClient.get<ReferenceMaterial[]>(`/skills/${skillId}/reference`),
+        enabled: !!skillId,
     });
 }
 
