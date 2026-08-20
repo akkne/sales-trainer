@@ -72,8 +72,8 @@ public sealed class SkillsController(ISkillTreeService skillTreeService, IExerci
 
         var lessons = await exerciseService.GetLessonsForSkillAsync(userId, skillSlug, cancellationToken);
 
-        if (lessons.Count == 0)
-            return NotFound(new { message = $"Skill '{skillSlug}' not found or has no lessons." });
+        if (lessons is null)
+            return NotFound(new { message = $"Skill '{skillSlug}' not found." });
 
         return Ok(lessons);
     }

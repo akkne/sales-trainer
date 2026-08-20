@@ -64,9 +64,10 @@ public sealed class LessonOrderingTests
 
         var lessons = await service.GetLessonsForSkillAsync(Guid.NewGuid(), "cold-calling");
 
-        lessons.Select(lesson => lesson.Title).Should()
+        lessons.Should().NotBeNull();
+        lessons!.Select(lesson => lesson.Title).Should()
             .ContainInOrder("T1-L1", "T1-L2", "T2-L1", "T2-L2");
-        lessons.Select(lesson => lesson.TopicOrder).Should()
+        lessons!.Select(lesson => lesson.TopicOrder).Should()
             .ContainInOrder(1, 1, 2, 2);
     }
 }

@@ -181,7 +181,8 @@ internal sealed class ExerciseService(
     /// <summary>
     /// The skill's lessons in the order a learner walks them: topics by their position in the skill,
     /// then each lesson by its position in its topic, so topics stay grouped instead of interleaving.
-    /// An unknown slug, or a skill with no topics, yields an empty list rather than an error.
+    /// An unknown slug yields null; a real skill with no topics yields an empty list — the two are
+    /// not the same fact and the controller reports them as a 404 and a 200 respectively.
     ///
     /// <para>
     /// <b>The first lesson is offered even with no progress row; the rest start locked.</b> That is
@@ -190,7 +191,7 @@ internal sealed class ExerciseService(
     /// here.
     /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
+    public async Task<IReadOnlyList<LessonSummaryDto>?> GetLessonsForSkillAsync(
         Guid userId,
         string skillSlug,
         CancellationToken cancellationToken = default)
@@ -201,7 +202,7 @@ internal sealed class ExerciseService(
             .FirstOrDefaultAsync(candidate => candidate.IconicName == skillSlug, cancellationToken);
 
         if (skill is null)
-            return [];
+            return null;
 
         var topics = await databaseContext.Topics
             .Where(topic => topic.SkillId == skill.Id)
