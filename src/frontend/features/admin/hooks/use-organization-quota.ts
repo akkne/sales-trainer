@@ -7,13 +7,17 @@ import { TimingConstants } from "@/shared/constants/timing-constants";
 
 /**
  * The platform panel's quota screen (docs/TENANCY/ADMIN_UI_DESIGN.md §3.2), against
- * `GET`/`PUT /admin/ai-quota` and the read-only `GET /admin/ai-usage` beside them.
+ * `GET`/`PUT /admin/ai-quota`, `GET /admin/ai-quota/{organizationId}` and the read-only
+ * `GET /admin/ai-usage` beside them.
  *
- * Neither quota route carries an organization anywhere a caller can set: ai-service resolves the
+ * `PUT /admin/ai-quota` carries no organization anywhere a caller can set: ai-service resolves the
  * tenant from `X-Organization-Id`, which the gateway writes from the validated token and from
  * nowhere else (`IdentityForwarding.Apply`). The `[organizationId]` in this screen's URL therefore
  * names *which organization the operator believes they are looking at*, and the screen has to check
- * that belief against the session rather than send it — see `resolveQuotaEditability`.
+ * that belief against the session before allowing a save — see `resolveQuotaEditability`. Reading
+ * is different: `GET /admin/ai-quota/{organizationId}` names the organization explicitly and reads
+ * its real row regardless of the session (AD-5, 2026-08-21 admin audit) — see
+ * `usePlatformOrganizationQuotaSettings`.
  */
 
 /** `AiQuotaSettingsDto`. A null field means "no organization-specific value, the platform default applies". */
@@ -95,11 +99,37 @@ const organizationSpendQueryKey = ["admin", "ai-usage"];
  * `GET /admin/ai-quota` — `RequirePlatformAdministrator`. Answers for the session's own
  * organization, and for a session carrying none it answers the platform defaults with
  * `isOrganizationSpecific: false` rather than 404.
+ *
+ * Not what the quota screen reads to display a number any more — see
+ * `usePlatformOrganizationQuotaSettings` — because the session's own organization is not
+ * necessarily the one in the screen's URL (AD-5, 2026-08-21 admin audit). Kept for whatever still
+ * wants "my own organization's quota" rather than a named one.
  */
 export function useOrganizationQuotaSettings() {
     return useQuery({
         queryKey: organizationQuotaQueryKey,
         queryFn: () => apiClient.get<OrganizationQuotaSettings>("/admin/ai-quota"),
+    });
+}
+
+/**
+ * `GET /admin/ai-quota/{organizationId}` — `RequirePlatformAdministrator`. Reads the *named*
+ * organization's own row directly, instead of whichever organization the caller's own session
+ * happens to carry. Reads already widen to every organization for platform staff on the backend
+ * (`OrganizationQuota`'s EF query filter), so this is honest for any organization id — unlike
+ * `PUT`, which stays bound to the caller's own session and is why the quota screen still has to
+ * check `resolveQuotaEditability` before enabling "Save quota".
+ *
+ * Before this existed, the quota screen read `useOrganizationQuotaSettings()` (no id, session-only)
+ * regardless of which organization the URL named, so opening two different organizations' quota
+ * pages under the same admin session showed the exact same numbers under both organizations' names
+ * (AD-5, 2026-08-21 admin audit).
+ */
+export function usePlatformOrganizationQuotaSettings(organizationId: string) {
+    return useQuery({
+        queryKey: [...organizationQuotaQueryKey, organizationId],
+        queryFn: () => apiClient.get<OrganizationQuotaSettings>(`/admin/ai-quota/${organizationId}`),
+        enabled: organizationId.length > 0,
     });
 }
 

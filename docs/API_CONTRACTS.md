@@ -2851,11 +2851,31 @@ it is, and telling them a month later through a support ticket is the situation 
 
 **Platform staff only, and that is a commercial boundary rather than a technical one.** A quota is
 what the customer bought; an organization administrator raising their own is not an administrative
-action, it is a purchase. The organization edited is the caller's `X-Organization-Id` — for platform
-staff, the one they impersonated into (40.9) — so there is no organization id in the route and none
-in the body (`scripts/tenancy-boundary-lint.py`).
+action, it is a purchase. `PUT` always writes the caller's own `X-Organization-Id` — documented as
+"the one they impersonated into (40.9)", though as of 2026-08-21 (AD-5) no impersonation token can
+actually reach this controller (`RequirePlatformAdmin` requires `role: Admin`/`SuperAdmin`;
+impersonation mints `role: User` on purpose) — so there is no organization id in the route or body
+for the write (`scripts/tenancy-boundary-lint.py`), and today there is no way for platform staff to
+write a quota for any organization but their own. Tracked as Q-10 in `docs/NIGHT_AUDIT_QUESTIONS.md`.
 
 `batchReservePercent` is clamped to 0–90; a negative limit is read as null.
+
+### `GET /admin/ai-quota/{organizationId}` — `RequirePlatformAdmin`
+
+Read-only counterpart added for AD-5 (2026-08-21 admin audit): reads the **named** organization's
+quota directly, bypassing the caller's own `X-Organization-Id`. Same response shape as `GET
+/admin/ai-quota` above. Safe as a read because every caller here is already platform-wide
+(`RequirePlatformAdmin` ⇒ `role: Admin`/`SuperAdmin` ⇒ `TenantContext.IsPlatformWide`), and
+`OrganizationQuota`'s own EF query filter already lets a platform-wide caller read every
+organization's row — this endpoint only narrows that already-cross-tenant-readable query to one
+organization instead of leaving it defaulted to the caller's own. Allow-listed by exact path in
+`scripts/tenancy-boundary-lint.py`. `PUT /admin/ai-quota` has no matching `{organizationId}` form and
+must not gain one — see the write-path caveat above.
+
+The platform panel's `/admin/organizations/{id}/quota` screen reads through this endpoint
+(`usePlatformOrganizationQuotaSettings`) so the numbers shown always belong to the organization named
+in the URL, not to the session's own. `useOrganizationQuotaSettings()` (no id) still exists for "my
+own organization's quota" but the quota screen no longer uses it for display.
 
 ### A quota refusal, on any metered route
 

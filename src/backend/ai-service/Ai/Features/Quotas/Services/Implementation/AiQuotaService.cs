@@ -58,6 +58,25 @@ internal sealed class AiQuotaService : IAiQuotaService
         return ToSettings(row, Resolve(row));
     }
 
+    /// <summary>
+    /// Reads <paramref name="organizationId"/>'s row directly, bypassing <see cref="_tenantContext"/>
+    /// entirely — unlike every other method here, deliberately. The one caller of this method
+    /// (<c>AdminAiQuotaController.GetQuotaForOrganization</c>) is already <c>RequirePlatformAdmin</c>,
+    /// which means the request is already in platform-wide mode by the time it reaches here, so
+    /// <c>OrganizationQuota</c>'s query filter (<c>IsPlatformWide || OrganizationId == current</c>) is
+    /// wide open and the explicit predicate below is what actually narrows the read to one
+    /// organization — the same shape <see cref="LoadRowAsync"/> uses for the caller's own
+    /// organization, just against an id named by the route instead of the token.
+    /// </summary>
+    public async Task<AiQuotaSettingsDto> GetSettingsForOrganizationAsync(
+        Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        var row = await _databaseContext.OrganizationQuotas
+            .AsNoTracking()
+            .FirstOrDefaultAsync(quota => quota.OrganizationId == organizationId, cancellationToken);
+        return ToSettings(row, Resolve(row));
+    }
+
     public async Task<AiQuotaSettingsDto> SaveSettingsAsync(
         AiQuotaWriteModel model,
         CancellationToken cancellationToken = default)

@@ -24,6 +24,14 @@
 текущего `origin/main` — то есть отставание прода это не только «не запушено», а ещё и
 «не пересобрано». Это стоит проверить отдельно: чем именно и когда собирался работающий прод.
 
+**ВАЖНО — сделать ДО пуша и деплоя (иначе прод сломается):** ночной фикс T-2 (`1a7606c`)
+пинит `ASPNETCORE_ENVIRONMENT=Production` во всех сервисах прод-оверлея, а внутренний
+service-to-service фильтр теперь **fail-closed**. Это значит: если в реальном прод-`.env`
+переменная `INTERNAL_SERVICE_SECRET` не задана, межсервисные вызовы после деплоя начнут
+честно отдавать 403 вместо того, чтобы молча пропускать всё (как сейчас в Development-режиме).
+Поэтому порядок такой: **сначала** убедиться, что `INTERNAL_SERVICE_SECRET` выставлен на сервере,
+**потом** пушить и деплоить. Подробности — `docs/DONT_FORGET.md` и Q-7.
+
 ### Q-2 — `orgName` из `GET /auth/me` не читается фронтом; сайдбар компании всегда «Ваша компания»
 Найдено при аудите null-safety (`docs/AUDIT_NULLSAFETY.md`, срез 1). Бэкенд отдаёт
 `orgName` (`AuthController.cs:64`, фаза 40.20 — «панель должна говорить, чья она»), но во
@@ -226,6 +234,92 @@ plumbing. Given this now checks out at the library level, a full re-verification
 17 `isError`-gated fixes against actual refetch failures (not just initial-load failures) is
 probably not necessary — but a couple of spot checks on `main` (not prod) would close out any
 remaining doubt cheaply if someone wants extra confidence.
+
+### Q-10 — AD-5: platform staff can now *read* another organization's real AI quota, but there is still no way to *write* one — needs an owner decision on the write path
+
+`docs/AUDIT_PROD.md` AD-5: `/admin/organizations/<id>/quota` showed the session's own organization's
+quota and spend under whichever organization's name was in the URL — the auditor saw identical
+numbers for "Acme Sales" and "Sellevate · default". Root cause confirmed by reading the stack
+end to end:
+
+- `GET`/`PUT /admin/ai-quota` (`AdminAiQuotaController`, ai-service) both resolved the organization
+  from `ITenantContext.OrganizationId`, which comes only from the caller's own `X-Organization-Id`
+  header (`org_id` claim on the caller's own token) — never from the URL. For a platform `Admin`/
+  `SuperAdmin` with a membership in Sellevate's own default organization (as `admin@sellevate.site`
+  has), that header is always their own organization, regardless of which organization's quota page
+  they opened.
+- The controller's own doc comment said the intended cross-org path was impersonation ("the one
+  [organization] they [platform staff] impersonated into, 40.9"), but `PlatformAdminService`
+  deliberately mints impersonation tokens with `role: User` (so an impersonation session can never
+  start another, or reach any `RequireSuperAdmin` route) — and `AdminAiQuotaController` requires
+  `RequirePlatformAdministrator` (`role: Admin`/`SuperAdmin`), which `role: User` never satisfies.
+  So the documented mechanism was never actually reachable; this is why the auditor could find no
+  working path at all, not even via impersonation.
+- This is a real design contradiction, not just an implementation gap, and it is visible in the
+  design doc itself: `docs/TENANCY/ADMIN_UI_DESIGN.md` §3.2 says the quota screen "is reachable
+  only from within impersonation" and that the org registry's "Quota" link should first enter
+  impersonation and then open the screen — but the same document's access table further down lists
+  `/admin/ai-quota` under "platform only (RequirePlatformAdmin / RequireSuperAdmin)", which an
+  impersonation token can never satisfy. The implementation followed the access table, not the
+  impersonate-first note: the "Quota" link in `app/(admin)/admin/organizations/page.tsx` (~line
+  273) is a plain `<Link href=".../quota">`, a few lines above the `impersonate()` handler the
+  "Impersonate" button already calls — "Quota" never calls it, so opening "Quota" never enters the
+  target organization at all, even though the design doc describes it as if it did.
+
+**Fixed tonight (read only):** added `GET /admin/ai-quota/{organizationId}`
+(`AdminAiQuotaController.GetQuotaForOrganization` → `AiQuotaService.GetSettingsForOrganizationAsync`),
+which reads the named organization's row directly. This is safe as a platform-staff-only *read*: every
+caller here is already in platform-wide mode (`RequirePlatformAdministrator` ⇒ `role: Admin`/
+`SuperAdmin` ⇒ `TenantContextMiddleware.EnterPlatformMode()`), and `OrganizationQuota`'s own EF query
+filter already widens to every organization for platform-wide callers — the new route segment only
+narrows an already-cross-tenant-readable query to the organization the screen is showing, instead of
+defaulting it to the caller's own. Allow-listed in `scripts/tenancy-boundary-lint.py` accordingly. The
+frontend quota screen (`/admin/organizations/[organizationId]/quota`) now reads through this endpoint,
+so the numbers shown always belong to the organization named in the URL. `PUT /admin/ai-quota` is
+untouched — a save is still only enabled when the session's own organization matches the URL
+(`resolveQuotaEditability`), exactly as before, so this fix closes the "silently shows the wrong
+organization's numbers as if they were in effect" danger without opening any new write path.
+
+**What is still not possible, and needs a product decision:** a platform admin still cannot *save* a
+quota for an organization that is not their own session's. Two different real fixes exist, with
+different security trade-offs, and picking one is not a debugging call:
+
+1. **Make impersonation actually reach this endpoint.** Add an ai-service-local authorization policy
+   (not the six-service-shared `RequirePlatformAdministrator`) that also accepts a validated
+   impersonation token (the `imp: true` claim, which only identity-service's `RequireSuperAdmin`-gated
+   impersonation endpoint can mint, and which is fully audited via `ImpersonationAuditEntry`). Every
+   downstream layer already does the right thing for an impersonation token with zero further
+   changes: its `org_id` claim is the *target* organization, `TenantContextMiddleware` resolves
+   `TenantContext.OrganizationId` to it, `TenantSaveChangesInterceptor` and the RLS `WITH CHECK`
+   clause both already enforce that a write's `OrganizationId` matches it, and `role: User` keeps the
+   session from also becoming platform-wide. The only genuinely open question is a second, unrelated
+   blocker: the `(admin)` route layout (`app/(admin)/layout.tsx`) redirects any `role: User` session
+   away from every `/admin/**` route, including this one — impersonating currently makes the whole
+   admin panel unreachable, so the layout gate would also need a narrow, explicit exception for this
+   one screen while impersonating (and *only* this one — the rest of `/admin/**` is platform content
+   administration, not per-organization). That is a real, if small, frontend security-relevant change
+   and deserves its own sign-off, not a debugger's unilateral call at 2 AM.
+2. **Give platform staff a direct write with an explicit organization id**, mirroring the
+   `BootstrapOrganizationAdminRequestDto`/`CreateImpersonationRequestDto` carve-out already
+   allow-listed in `tenancy-boundary-lint.py` for `RequireSuperAdmin` routes. This would need a new,
+   narrowly-scoped write path that does not reuse the ambient per-request `ITenantContext` (which is
+   write-once and already resolved to the caller's own organization by the time the controller runs —
+   reassigning it mid-request throws by design, `TenantContext.SetOrganization`), so it would have to
+   either mint a fresh scoped `DbContext`+`TenantContext` pair for the one write or bypass
+   `TenantSaveChangesInterceptor`/RLS deliberately for this one call. Bigger surface than option 1,
+   and it stops being "impersonate, then act as that organization" and becomes "platform staff writes
+   directly into a customer's tenant without ever assuming its identity" — a different, and arguably
+   weaker, security posture than the one every other write in this codebase holds to ("writes widen
+   nowhere").
+3. **Do nothing further**, and treat quota changes for a customer organization as an operation done
+   outside the admin UI (support ticket → a one-off script/migration, logged in `docs/DONT_FORGET.md`
+   the way other night-run data fixes are) until the owner decides this screen is worth the extra
+   plumbing. The screen already refuses to save silently into the wrong organization, so nothing is
+   unsafe about leaving it at read-only for other organizations.
+
+Nothing was changed tonight on the write side beyond documenting this in the controller's own XML
+doc comment (`AdminAiQuotaController`) so the next person reading the code sees the gap immediately
+rather than rediscovering it.
 
 ### Q-11 — AD-2: should the `general` stage exist at all, or should the skill be reassigned?
 

@@ -18,17 +18,21 @@ Three checks:
 Scope is passed as command-line paths (defaults to the whole backend). Files
 under obj/, bin/, and Migrations/ are skipped.
 
-Two narrow security exceptions are allow-listed by exact path — see
+Three narrow security exceptions are allow-listed by exact path — see
 ALLOWED_REQUEST_DTO_PATHS and ALLOWED_ROUTE_TEMPLATE_PATHS. Section 1.3 states the
 rule and its carve-outs in the same breath: a superadmin acting across tenants does
 so through an explicit impersonation endpoint that mints a new token (those bodies
-have to name an organization; that IS the endpoint), and a machine-to-machine
+have to name an organization; that IS the endpoint), a machine-to-machine
 internal/* route may address an organization by its route segment instead, because
 its caller is another service with no membership in that organization to carry an
-X-Organization-Id header for — PlatformAdminController and
-InternalOrganizationBootstrapController rely on this pair of carve-outs
-respectively. Naming the files here keeps each exception visible and reviewable
-instead of being hidden behind a file or route shape chosen to slip past the regex.
+X-Organization-Id header for, and a platform-admin-only *read* may name an
+organization in its route when the data it returns already widens to every
+organization for platform staff (the query filter, not the route, is what would
+have made the read cross-tenant either way) — PlatformAdminController,
+InternalOrganizationBootstrapController and AdminAiQuotaController rely on this
+trio of carve-outs respectively. Naming the files here keeps each exception visible
+and reviewable instead of being hidden behind a file or route shape chosen to slip
+past the regex.
 
 A third, non-security allow-list — ALLOWED_OUTBOUND_ONLY_FILENAME_FALSE_POSITIVES — exists
 for the filename heuristic in check 1 itself: "ends in Request.cs or Dto.cs" assumes that
@@ -75,14 +79,22 @@ ALLOWED_REQUEST_DTO_PATHS = frozenset({
 })
 
 # Route declarations allowed to carry an {organizationId} (or {organizationId:guid}) segment, by
-# exact repo-relative path. Every entry must be a machine-to-machine internal/* route guarded by
-# InternalServiceAuthFilter rather than [TenantScoped] — the documented TENANCY.md section 1.3
-# exception PlatformAdminController already relies on for its request body, applied here to a route
-# segment instead because the caller is another service with no membership to carry an
-# X-Organization-Id header for. Adding a path here is a security decision, not a formality.
+# exact repo-relative path. Adding a path here is a security decision, not a formality. Two
+# different justifications are allow-listed:
+#   - InternalOrganizationBootstrapController.cs: a machine-to-machine internal/* route guarded by
+#     InternalServiceAuthFilter rather than [TenantScoped], applied here to a route segment because
+#     the caller is another service with no membership to carry an X-Organization-Id header for.
+#   - AdminAiQuotaController.cs: a RequirePlatformAdmin-only GET (2026-08-21 admin audit, AD-5).
+#     Every caller here is already platform staff, for whom OrganizationQuota's own EF query filter
+#     (`IsPlatformWide || OrganizationId == current`) already reads across every organization — the
+#     route segment only narrows an already cross-tenant-readable query to the one organization the
+#     platform panel's quota screen is showing, instead of leaving it defaulted to the caller's own.
+#     The PUT on the same controller carries no such segment and still writes only the caller's own
+#     organization; this exception covers the GET action only.
 ALLOWED_ROUTE_TEMPLATE_PATHS = frozenset({
     "src/backend/identity-service/Identity/Features/Organizations/Endpoints/"
     "InternalOrganizationBootstrapController.cs",
+    "src/backend/ai-service/Ai/Features/Quotas/AdminAiQuotaController.cs",
 })
 
 # Files whose name coincidentally ends in "Request.cs" or "Dto.cs" for a domain reason having

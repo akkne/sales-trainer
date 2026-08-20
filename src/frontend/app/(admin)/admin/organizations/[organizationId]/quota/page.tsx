@@ -5,9 +5,9 @@ import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import {
-    useOrganizationQuotaSettings,
     useOrganizationSpendReport,
     usePlatformOrganizationDetail,
+    usePlatformOrganizationQuotaSettings,
     useSaveOrganizationQuota,
     type OrganizationSpendReport,
     type OrganizationQuotaSettings,
@@ -431,7 +431,7 @@ export default function AdminOrganizationQuotaPage({
     const { authenticatedUser } = useAuthStore();
 
     const organizationDetail = usePlatformOrganizationDetail(organizationId);
-    const quotaSettings = useOrganizationQuotaSettings();
+    const quotaSettings = usePlatformOrganizationQuotaSettings(organizationId);
     const spendReport = useOrganizationSpendReport();
 
     const settings = quotaSettings.data;
@@ -471,10 +471,13 @@ export default function AdminOrganizationQuotaPage({
                     <p className="font-medium">This screen cannot write to that organization.</p>
                     <p className="mt-1">{editabilityMessage}</p>
                     <p className="mt-2 text-xs">
-                        <code>GET</code>/<code>PUT /admin/ai-quota</code> resolve the organization from
-                        the session token, never from this URL, and impersonation mints a token with{" "}
-                        <code>role: User</code>, which cannot satisfy <code>RequirePlatformAdmin</code>.
-                        Reading still works; the numbers below are whatever your own session resolves to.
+                        <code>PUT /admin/ai-quota</code> resolves the organization from the session
+                        token, never from this URL, so saving here would edit your own session&apos;s
+                        organization instead of this one — that is why &quot;Save quota&quot; is
+                        disabled below. Reading is not affected: the numbers below come from{" "}
+                        <code>GET /admin/ai-quota/&#123;organizationId&#125;</code>, which reads this
+                        organization&apos;s own row directly, so they are this organization&apos;s
+                        real numbers even though saving them here is not available.
                     </p>
                 </div>
             )}

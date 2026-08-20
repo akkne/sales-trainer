@@ -1594,7 +1594,19 @@ baseFeedbackSystemPrompt}`; `POST …/accept-base`; `POST …/keep-override`. И
 `RequirePlatformAdmin` + `[TenantScoped]`, то есть организация берётся из
 `X-Organization-Id`, а не из маршрута. Значит экран доступен **только внутри impersonation**, и
 на строке организации в реестре появляется ссылка «Квоты» рядом с «Impersonate», которая сначала
-входит в организацию, а потом открывает экран. Поля: `voiceDailyLimitMinutes`,
+входит в организацию, а потом открывает экран.
+
+> **Расхождение, найденное аудитом 2026-08-21 (AD-5, `docs/NIGHT_AUDIT_QUESTIONS.md` Q-10):** этот
+> абзац противоречит таблице доступа в §4, которая держит `/admin/ai-quota` под
+> «RequirePlatformAdmin / RequireSuperAdmin» — а impersonation-токен (40.9) минтится с `role: User`
+> именно затем, чтобы никогда не проходить `RequirePlatformAdmin`. Реализация пошла за таблицей
+> доступа: ссылка «Quota» в `app/(admin)/admin/organizations/page.tsx` — обычный `<Link>`, она не
+> вызывает `impersonate()` перед переходом, так что экран никогда фактически не входил в
+> организацию. Экран `GET` починен в этом прогоне без impersonation (платформенный `RequirePlatformAdmin`-
+> ридер уже видит любую организацию по `IsPlatformWide`); `PUT` остаётся ничьим — решение за
+> владельцем, см. Q-10.
+
+Поля: `voiceDailyLimitMinutes`,
 `voiceMonthlyLimitMinutes`, `llmMonthlyTokenLimit`, `batchReservePercent` (0–90), `note`. Под
 каждым — `effective*` значение серым: «сейчас действует 6000 (платформенное значение по
 умолчанию)». **Обязательная подпись над формой:** «Пустое поле сбрасывает лимит к платформенному
