@@ -337,6 +337,18 @@ If `OpenAI:ApiKey` is not configured:
 - `/dialog/sessions/*` returns 503 Service Unavailable
 - Admin CRUD still works (catalog management)
 
+## Skill label on a bundle (C-3 audit fix)
+
+A `DialogBundle` carries only `SkillId` — skills are authored and owned by learning-service, not
+ai-service. `DialogBundleDto.skillSlug`/`skillTitle` are resolved per request by
+`SkillLookupClient` calling learning-service's `GET /internal/skills/lookup`
+(`LearningService:BaseUrl`, `X-Internal-Service-Secret`, no organization header — the catalog is
+global). Every endpoint that returns a `DialogBundleDto` (`GET /dialog/bundles`,
+`GET|POST|PUT /admin/dialog/bundles[/:id]`) fetches the lookup once and passes it into
+`DialogBundleDto.FromEntity`. A skill missing from the map — a stale id, or learning-service
+unreachable — renders as an empty slug/title rather than failing the bundle list; see
+docs/DECISIONS.md, "C-3" for the full reasoning.
+
 ## Assignment practice: an injected persona (Phase 40.23)
 
 When a dialog session starts, ai-service asks learning-service whether this conversation is a piece

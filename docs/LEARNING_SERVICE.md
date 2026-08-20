@@ -805,6 +805,13 @@ when a dialog session starts. Unlike the two above it **degrades to "no assignme
 practising is the product and an assignment's persona is an improvement to it, so learning-service
 being down must not stop a practice screen from opening.
 
+`AI → Learning` (C-3 audit fix, docs/AUDIT_CONTRACTS.md): `GET /internal/skills/lookup` returns
+`{id, iconicName, title}` for every skill, so ai-service can label a `DialogBundle` with the skill
+it belongs to. No `[TenantScoped]`, no organization header: skills are global content today
+(`Skill.OrganizationId` is always null), and the call is made both by the platform-staff dialog
+admin screen (no organization at all) and the learner-facing bundle list. Degrades to an empty map
+on any failure, same as the practice-context client above.
+
 ## Routes flipped at the gateway
 
 `/skills/*`, `/skills`, `/skill-tree`, `/program`, `/program/*` (40.17), `/lessons/*`,

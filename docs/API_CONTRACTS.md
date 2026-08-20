@@ -474,7 +474,7 @@ empty state, not its error state, is what should render for it.
 
 | Method | Path | Response |
 |---|---|---|
-| GET | /skills/:skillId/reference | `ReferenceMaterialDto[]` — the materials of one skill. The segment is the skill's **id**, constrained `{skillId:guid}` in the route; a slug there is a 404 from routing, not a lookup miss |
+| GET | /skills/:skillIdentifier/reference | `ReferenceMaterialDto[]` — the materials of one skill. The segment is resolved as **either the skill's GUID or its slug** (`IconicName`), matching the sibling `GET /skills/:skillSlug/lessons`'s dual acceptance (docs/AUDIT_PROD.md finding A-4). An identifier that resolves to no skill returns `200 []`, not a 404 — the endpoint has always returned an empty list for an unmatched GUID, and unmatched slugs now follow the same rule instead of routing-404ing (the old `{skillId:guid}` constraint rejected any slug before the handler ran) |
 | GET | /reference?category=&search= | `ReferenceMaterialDto[]` — the whole library, both filters optional and independent |
 | GET | /reference/categories | `string[]` — the distinct non-empty categories, for the filter control |
 
@@ -505,7 +505,9 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 `TechniqueCaseDto`: `{title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`). At most one case per technique.
 `TechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges: [{label, kind?, targetSlug?}]}`
 
-`TechniqueMetaDto`: `{skills: [{iconicName, title, techniqueCount}], totalCount, userCounts: {mastered, master, unseen}}`. Only skills that have at least one technique appear in `skills`.
+`TechniqueMetaDto`: `{skills: [{iconicName, title, techniqueCount}], totalCount, userCounts: {mastered, master, unseen}}`. A technique's skill(s) are `PrimarySkillId` *and* `AdditionalSkills` combined (same union `GET /techniques/:slug` already uses for `skillIconicNames`) — `skills` and the `?skill=` filter on `GET /techniques` both resolve a skill facet against either field, so a technique tagged only via `AdditionalSkills` (the common case in practice) still shows up under its skill's chip and its count. Only skills that have at least one technique (by that union) appear in `skills`.
+
+`userCounts` fields are **nested, not a partition** — `mastered` (level ≥ Practitioner) is a superset of `master` (level ≥ Master), by design (docs comment on `TechniqueLevels`), so they are never meant to be added together. `unseen` is `totalCount` minus every technique the user has *any* progress row for, including ones seen but still below `mastered`'s threshold. That is why `mastered + master + unseen` can come in under `totalCount`: the techniques a learner has looked at but not yet reached Practitioner on are counted in neither exposed bucket. This is intentional under the current three-field contract, not a miscount; a caller that needs an exhaustive breakdown needs a fourth "seen, unmastered" bucket, which does not exist yet (no consumer currently needs it — the guidebook only reads `totalCount` and `userCounts.mastered`).
 
 ---
 
@@ -1579,8 +1581,11 @@ involvement.
 > Kafka event (the gamification-service grants the progress points) instead of writing `UserXpRecords` directly.
 > Internal-only (not via the gateway): `POST /ai/evaluate` `{exerciseType, systemPrompt?,
 > exerciseContent, userAnswer}` → `{isCorrect, score, explanation?, aiFeedback?}`, called
-> by Learning to grade AI exercise types. `DialogBundleDto.skillTitle` is now empty
-> (`Skills` are owned by Learning; only `skillId` is kept).
+> by Learning to grade AI exercise types. `Skills` are owned by Learning, so
+> `DialogBundleDto.skillSlug`/`skillTitle` are resolved by calling learning-service's
+> `GET /internal/skills/lookup` (shares `InternalServiceAuthFilter` with the other internal
+> endpoints; degrades to an empty slug/title per bundle, never fails the bundle list, if that
+> call is unreachable — docs/AUDIT_CONTRACTS.md finding C-3).
 > Internal-only (Phase 39.12): `POST /ai/companies/briefing`
 > `{companyDescription, goal?, recentCalls: [{contactName?, subject, outcome, occurredAt}],
 > feedbackSummaries: string[]}` → `{content, generatedAt}` (`content` is markdown), called by
@@ -1621,6 +1626,13 @@ involvement.
 > isn't configured, the provider call fails, or the response is unparseable/missing
 > `score`/`recommendation` (`strengths`/`gaps` default to `[]` if omitted). Shares
 > `InternalServiceAuthFilter` with the other internal endpoints.
+
+Service-to-service (no JWT; `X-Internal-Service-Secret`, **not routed through the gateway**,
+no `[TenantScoped]` — skills are global content):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /internal/skills/lookup *(learning-service)* | — | `SkillLookupDto[]` — `{id, iconicName, title}` for every skill; called by ai-service to resolve `DialogBundleDto.skillSlug`/`skillTitle` (docs/AUDIT_CONTRACTS.md finding C-3) |
 
 ### Public endpoints
 

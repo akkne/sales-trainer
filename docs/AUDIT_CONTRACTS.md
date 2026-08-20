@@ -32,7 +32,16 @@
 - **Следствие:** GUID материала проходит ограничение `:guid`, ответ 200 с пустым массивом. Пункт «Теория» в карточке активного задания всегда открывает страницу «Материалы пока не добавлены». Ошибки нет — восстановиться из UI нельзя.
 - **Severity:** major
 
-### [ ] C-3 DialogBundleDto не содержит skillSlug, а skillTitle всегда пустая строка
+### [x] C-3 DialogBundleDto не содержит skillSlug, а skillTitle всегда пустая строка
+
+**Исправлено:** `GET internal/skills/lookup` в learning-service (новый `InternalSkillsController`,
+защищён `InternalServiceAuthFilter`, без `[TenantScoped]` — навыки сейчас всегда глобальны) отдаёт
+`{id, iconicName, title}` по всем навыкам. В ai-service новый `SkillLookupClient` читает этот список
+один раз на запрос и `DialogBundleDto.FromEntity` заполняет `SkillSlug`/`SkillTitle` по словарю
+(деградирует к `""` при недоступности learning-service или отсутствии id — список бандлов не падает).
+Использовано во всех точках, отдающих `DialogBundleDto`: `GET /dialog/bundles`,
+`GET|POST|PUT /admin/dialog/bundles[/:id]`. Документация (`docs/API_CONTRACTS.md`) обновлена и
+больше не утверждает, что `skillTitle` намеренно пустой.
 - **Фронт вызывает:** GET `/dialog/bundles` — src/frontend/features/dialog/hooks/use-dialog.ts:70; GET `/admin/dialog/bundles` — src/frontend/features/dialog/hooks/use-admin-dialog.ts:81. Типы объявляют `skillSlug` и `skillTitle`: use-dialog.ts:7-8, use-admin-dialog.ts:7-8.
 - **Бэкенд:** `DialogBundleDto` — src/backend/ai-service/Ai/Features/Dialog/Models/DialogBundleDto.cs:3-13: поля `SkillSlug` нет вовсе, а `FromEntity` жёстко пишет `SkillTitle = ""` (там же, :19). Других присваиваний `SkillTitle` в ai-service нет. Тот же маппер используется и админским контроллером — .../Dialog/AdminDialogController.cs:70,85,106,138. Шлюз: `/dialog/{**catch-all}` и `/admin/dialog/{**catch-all}` → ai, корректно.
 - Оба поля рендерятся: src/frontend/app/(admin)/admin/dialog/page.tsx:350-351 и src/frontend/app/(admin)/admin/dialog/[bundleId]/page.tsx:144.
@@ -53,7 +62,16 @@
 - **Следствие:** навык, у которого пока нет уроков, показывает «не удалось загрузить» вместо пустого списка — на src/frontend/app/(main)/tree/page.tsx и app/(main)/skill/[id]/page.tsx.
 - **Severity:** minor
 
-### [ ] C-6 ProvisionDemoRequestResult.inviteExpiresAt объявлен обязательным, бэкенд возвращает null на повторном провижининге
+### [x] C-6 ProvisionDemoRequestResult.inviteExpiresAt объявлен обязательным, бэкенд возвращает null на повторном провижининге
+
+**Исправлено:** бэкенд и docs/API_CONTRACTS.md были правы уже до фикса (`InviteExpiresAt`
+документирован как `null` на ветке `alreadyProvisioned` — это намеренное поведение, не баг). Баг был
+только в типах фронта: `ProvisionDemoRequestResult.inviteExpiresAt` и
+`ProvisionedDetails.inviteExpiresAt` (features/admin/hooks/use-demo-requests.ts,
+app/(admin)/admin/demo-requests/page.tsx) стали `string | null`, а условие рендера в page.tsx
+проверяет теперь `cachedDetails?.inviteExpiresAt` (а не просто `cachedDetails`), так что `null`
+показывает предусмотренный текст «unknown (not provisioned this session)» вместо
+`new Date(null)` → 01.01.1970.
 - **Фронт вызывает:** POST `/admin/demo-requests/${id}/provision` — src/frontend/features/admin/hooks/use-demo-requests.ts:123; тип `inviteExpiresAt: string` — там же, :65. Рендер: `new Date(cachedDetails.inviteExpiresAt).toLocaleString()` — src/frontend/app/(admin)/admin/demo-requests/page.tsx:357.
 - **Бэкенд:** `DateTime? InviteExpiresAt` — src/backend/organization-service/Organization/Features/DemoRequests/Models/DemoRequestProvisioningResultDto.cs:25; на ветке «уже провижинили» отдаётся `InviteExpiresAt: null, AlreadyProvisioned: true` — .../Services/Implementation/DemoRequestProvisioningService.cs:276. Шлюз: `/admin/demo-requests/{**catch-all}` → organization, корректно.
 - **Следствие:** повторное нажатие «Provision» (двойной клик, ретрай) печатает дату из эпохи (01.01.1970) вместо предусмотренного кодом текста «unknown (not provisioned this session)».

@@ -385,12 +385,14 @@ gateway.
 | learning → ai | `AiChatClient`, `AiTtsClient` | exercise dialog and TTS, moved here by block 40.33 |
 | learning → identity | `IdentityOrganizationMemberDirectory` | `GET /internal/memberships/active` — who is in the org |
 | ai → learning | `AssignmentPracticeContextClient` | `GET /internal/assignments/practice-context` |
+| ai → learning | `SkillLookupClient` | `GET /internal/skills/lookup` — slug/title for `DialogBundleDto` (C-3 audit fix) |
 | company → ai | `BriefingAiClient`, `ParseLogAiClient`, `PersonaAiClient`, `ReadinessAiClient` | the four company AI surfaces |
 | organization → identity | `IdentityOrganizationBootstrapClient` | `POST /internal/organizations/{organizationId}/bootstrap-admin` — demo-request provisioning's bootstrap admin invite |
 
-The ai → learning hop is deliberately **fail-open**: `AssignmentPracticeContextClient` returns
-`null` on any non-success, timeout or exception rather than throwing, so a learning-service outage
-degrades the dialog's assignment context instead of taking dialog down with it. The learning → ai
+The ai → learning hops are deliberately **fail-open**: `AssignmentPracticeContextClient` returns
+`null`, and `SkillLookupClient` returns an empty map, on any non-success, timeout or exception
+rather than throwing, so a learning-service outage degrades the dialog's assignment context or
+skill label instead of taking dialog down with it. The learning → ai
 hops are not fail-open — an evaluation that cannot reach ai-service is an error, because silently
 grading nothing would be worse than failing loudly. The organization → identity hop is not fail-open
 either, and is the one exception to this table's usual shape: it is issued on a low-frequency

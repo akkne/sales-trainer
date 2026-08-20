@@ -4,6 +4,82 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-20 — Night contract-audit fix: C-3 — populate `DialogBundleDto.skillSlug`/`skillTitle` via a new ai→learning internal call, rather than dropping the fields
+
+Fixing docs/AUDIT_CONTRACTS.md C-3 (major) unattended (owner asleep). The finding gave explicit
+discretion to pick either side: make the frontend/doc stop promising fields the backend can't fill,
+or make the backend actually fill them. Recording the alternatives considered, since this is the
+kind of decision the run rules ask to write down rather than silently pick.
+
+### Why populate, not delete
+
+Both `skillSlug` and `skillTitle` are display-only (verified: no navigation, no lookup key derives
+from them anywhere in the frontend — only rendered next to a bundle's title in three places). That
+made "just stop declaring them" a real option. Rejected it because the audit's own read of intent is
+right: the UI was clearly built to show which skill a dialog bundle belongs to, and an admin content
+screen with a permanently blank skill column is a worse outcome than the modest cost of a real fix,
+given a directly-analogous fix already exists in this codebase to copy.
+
+### Why an HTTP call, not an event-driven replica
+
+ai-service owns `DialogBundle.SkillId` but has zero data about the skill itself — no `SkillReplica`
+table, no Kafka events for skills at all (checked: `UserReplica`/`OrganizationProfileReplica` exist
+for other cross-service data, skills have no equivalent). Building a replica (producer in
+learning-service, consumer + entity + migration in ai-service) would be the "textbook" fix but is a
+new piece of cross-service infrastructure with its own design questions (event ordering, backfill,
+what happens to bundles referencing a skill deleted before the consumer catches up) — the wrong
+thing to originate unreviewed at 3am for a cosmetic display bug. Chose the same shape ai-service
+already uses for exactly this kind of "small, read-only, degrade-on-failure" cross-service need:
+`AssignmentPracticeContextClient` (Phase 40.23, `Ai/Infrastructure/Learning/`). Added
+`SkillLookupClient` next to it, same shared-secret handshake, same clamped timeout, same "never
+throws, empty result on any failure" contract.
+
+### Why no tenant scoping on the new endpoint
+
+`GET /internal/skills/lookup` (new `InternalSkillsController` in learning-service) is deliberately
+**not** `[TenantScoped]` and sends no `X-Organization-Id`, unlike `practice-context`. Traced why that
+call always requires an organization (a learner always belongs to one) and confirmed `Skill` rows are
+currently always global (`OrganizationId` is null for every row — Phase 40.10's comment: "Nothing
+writes a non-null value yet"). `LearningDbContext`'s query filter for `Skill` is
+`IsPlatformWide || OrganizationId == null || OrganizationId == _tenantContext.OrganizationId`, which
+already admits every row when the tenant context is unset (both sides of the `null` comparison are
+null) — the same reasoning `TenantTransactionScope`'s own doc comment gives for why the superadmin
+content controllers under `Features/Admin` skip the scope entirely. `AdminDialogController` (platform
+staff, no organization) and `DialogController` (a specific learner's organization) both need to call
+the same lookup; requiring an organization header would have broken the platform-staff path for no
+tenancy benefit, since there is no organization-scoped skill data to protect yet. Revisit this the day
+`Skill.OrganizationId` starts being written (Phase 40.18 per the model's own comment) — the endpoint
+will need to become genuinely tenant-aware then, not just theoretically safe under an all-global
+catalog.
+
+### What this does not do
+
+No caching of the skill catalog — every `GET /dialog/bundles` / `GET /admin/dialog/bundles*` call
+fetches it fresh, same as `AssignmentPracticeContextClient` does for practice context. The catalog is
+small (a hand-authored skill tree, not a large table) and this mirrors the existing degrade-on-failure
+client rather than inventing a caching layer for a single call site.
+
+---
+
+## 2026-08-20 — Night contract-audit fix: C-6 — `inviteExpiresAt` becomes `string | null` on the frontend, not on the backend
+
+Fixing docs/AUDIT_CONTRACTS.md C-6 (minor) unattended. Backend and `docs/API_CONTRACTS.md` were
+already right: `DemoRequestProvisioningResultDto.InviteExpiresAt` is documented and coded as
+intentionally `null` on the `alreadyProvisioned` fast path (that timestamp lives only on
+identity-service's `Invite` row, and re-asking it on a call defined to have no side effects would
+defeat the point of the fast path). The bug was purely that the frontend declared the field
+non-null (`ProvisionDemoRequestResult.inviteExpiresAt: string`,
+`features/admin/hooks/use-demo-requests.ts`) and `page.tsx`'s render check
+(`cachedDetails ? new Date(cachedDetails.inviteExpiresAt).toLocaleString() : "unknown…"`) tested the
+wrong thing — presence of a cache entry, not presence of the timestamp inside it — so a null
+timestamp still reached `new Date(null)` and printed the epoch. Fixed by widening both
+`ProvisionDemoRequestResult.inviteExpiresAt` and the page's own `ProvisionedDetails.inviteExpiresAt`
+to `string | null`, and changing the render guard to `cachedDetails?.inviteExpiresAt`, so a
+already-provisioned retry falls through to the fallback text the code already had for exactly this
+case. No backend change; no doc change to API_CONTRACTS.md (it already told the truth).
+
+---
+
 ## 2026-08-20 — Night contract-audit fix: C-1 (docs/AUDIT_CONTRACTS.md)
 
 Fixing a blocker finding from the static contract audit, unattended (owner asleep): "the wrong
