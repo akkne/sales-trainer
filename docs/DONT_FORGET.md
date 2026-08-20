@@ -4340,3 +4340,68 @@ response. Root-caused both; neither needed a code change.
       (line ~2125), which reads like a distinct documented route if grepped in isolation — that is
       almost certainly what the production audit tooling matched on. Fixed the wording and added an
       explicit disambiguation note in `docs/API_CONTRACTS.md`. No endpoint was added.
+
+---
+
+## Block — A-1: `POST /tracking/events` 503s on every hard load, 204 on soft nav (2026-08-21)
+
+Root-caused as far as static code can take it. **This needs a server-side/live-cluster action,
+not a code change** — no fix was applied, per the debugging brief for this finding.
+
+**Ruled out with evidence (not speculation):**
+- **Not a frontend token-timing bug.** `shared/analytics/track.ts`'s `hasAccessToken()` and
+  `shared/api/api-client.ts`'s `fetchWithAuthToken` both read `localStorage.getItem("accessToken")`
+  directly and synchronously — neither goes through an async-hydrating store. So the JWT is already
+  attached on the very first tick of a hard load, before any other effect runs. This matches what the
+  audit actually saw (a well-formed body, a real round trip, not a 401 or a silently-skipped call) and
+  rules out "sent before the token is available."
+- **Not `TrackingController`/`UsageEventRecorder`.** `TrackEvent` (`src/backend/analytics-service/Analytics/Features/Tracking/TrackingController.cs:44-58`)
+  does a null-check, a whitelist check (`TrackedEvents.IsKnownEvent/IsKnownPage`), and a synchronous
+  Prometheus counter increment (`UsageEventRecorder.TryRecord`, no I/O, no Redis, no Kafka). There is
+  no code path in this action that can produce a 503 — the worst it can do on its own is 400.
+- **Not a gateway-side circuit breaker/rate limiter/custom error mapping.** `src/backend/gateway/Gateway/Program.cs`
+  has no rate limiter, no custom exception handler; the only bespoke middleware is
+  `GatewayErrorCorsMiddleware`, whose own doc comment enumerates the gateway's failure vocabulary as
+  "504 upstream timeout, 502 unreachable, 404 unknown route" — 503 is not in that list. The `analytics`
+  YARP cluster (`src/backend/gateway/Gateway/appsettings.json`, `ReverseProxy:Clusters:analytics`) has a
+  single static destination and **no `ActiveHealthCheck`/`PassiveHealthCheck` policy at all**, so YARP's
+  own `NoAvailableDestinations → 503` path is inert here; a real connect failure to that destination
+  would surface via YARP as 502, not 503 (Yarp.ReverseProxy 2.2.0, per `Sellevate.Gateway.csproj`).
+- **Not a platform-wide Kafka/Redis outage.** `identity-service` and `learning-service` gate their own
+  `/readyz` on the exact same Redis+Kafka checks as `analytics-service` (`AddSellevateHealthChecks().AddRedis().AddKafka()`
+  in each `Program.cs`), yet the same audit run shows `GET /auth/me`, `GET /skills`,
+  `GET /skills/{slug}/lessons` etc. answering 200 on the very same hard loads that get a 503 from
+  `/tracking/events`. If the shared broker were actually down/flapping, those sibling services would
+  fail too — they don't, so this isn't a shared-dependency blip.
+
+**What's left, and can't be verified from this repo:** the 503 has to be originating between the
+gateway and the `analytics` pod, or from the K8s/network layer in front of it — outside anything this
+codebase's own config or code controls. `analytics-service` is deployed with `replicaCount: 1`
+(`infrastructure/helm/values/analytics.yaml` doesn't override the chart default) and its own `/readyz`
+depends on Redis **and** Kafka (`src/backend/analytics-service/Analytics/Program.cs:49-51`); the Helm
+chart's README states outright that "readiness gates traffic until Postgres/Redis/Kafka/Mongo are
+reachable." With a single replica and no redundancy, any gap in that one pod's readiness — including a
+transient Kafka admin-metadata check blip (`KafkaHealthCheck.CheckHealthAsync` does a blocking
+`AdminClientBuilder().GetMetadata()` call) — removes 100% of `analytics-service`'s serving capacity for
+a window, and whatever sits between the gateway and the pod (kube-proxy's "service with zero ready
+endpoints" behavior, or an ingress/LB health check) is a very plausible place for that window to
+surface to the browser as exactly this 503. This is consistent with, and does not contradict, the "no
+code path in this repo can emit 503" findings above.
+
+**Server-side action needed (cannot be done from here — no server/cluster access in this run):**
+1. Check `analytics-service`'s pod restart count and readiness-probe failure history around the
+   timestamps of the reproduced 503s (`kubectl get pods -l app=analytics -o wide`,
+   `kubectl describe pod <analytics-pod>` → Events, or the equivalent Grafana/Loki panel for the
+   `sellevate-analytics` service label).
+2. If readiness is flapping on the Kafka check specifically, consider giving `analytics-service` a
+   second replica (it has none today — `replicaCount: 1`) so one flapping pod can't take 100% of
+   `/tracking/events` down, and/or reconsider whether `TrackEvent` (a pure Prometheus counter, no Kafka
+   or Redis I/O in its actual code path) needs to be gated by Kafka readiness at all — `/tracking/events`
+   itself never touches Kafka, only the shared `/readyz` probe does.
+3. If it isn't readiness flapping, pull the gateway's own request logs (`UseSerilogRequestLogging()`
+   in `src/backend/gateway/Gateway/Program.cs`) for a captured 503 to see which layer actually set that
+   status code — that will settle whether it's YARP, an ingress/LB in front of the gateway, or the pod
+   itself.
+
+The existing client-side mitigation (`a83ef12`, a 5s timeout on the tracking POST) already prevents this
+from blocking the UI; that mitigation is not touched by this note.
