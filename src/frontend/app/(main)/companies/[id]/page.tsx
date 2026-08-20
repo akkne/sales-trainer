@@ -69,15 +69,19 @@ export default function CompanyPage() {
     const { data: readiness, isLoading: isReadinessLoading, error: readinessError } =
         useCompanyReadiness(companyId);
 
-    const { data: logs } = useCompanyLogs(companyId);
+    const { data: logs, error: logsError, refetch: refetchLogs } = useCompanyLogs(companyId);
     const addCallLog = useAddCallLog(companyId);
     const updateCallLog = useUpdateCallLog(companyId);
     const deleteCallLog = useDeleteCallLog(companyId);
 
-    const { data: practiceCalls } = useCompanyPracticeCalls(companyId);
+    const {
+        data: practiceCalls,
+        error: practiceCallsError,
+        refetch: refetchPracticeCalls,
+    } = useCompanyPracticeCalls(companyId);
     const { data: recentGoals } = useRecentGoals(companyId);
 
-    const { data: contacts } = useCompanyContacts(companyId);
+    const { data: contacts, error: contactsError, refetch: refetchContacts } = useCompanyContacts(companyId);
     const addContact = useAddCompanyContact(companyId);
     const updateContact = useUpdateCompanyContact(companyId);
     const deleteContact = useDeleteCompanyContact(companyId);
@@ -300,6 +304,8 @@ export default function CompanyPage() {
 
             <CompanyContactsCard
                 contacts={contacts ?? []}
+                errorMessage={contactsError ? contactsError.message : null}
+                onRetry={() => refetchContacts()}
                 addingContact={isAddingContact}
                 addContactSubmitting={addContact.isPending}
                 editingContact={editingContact}
@@ -318,6 +324,17 @@ export default function CompanyPage() {
                 practiceCalls={practiceCalls ?? []}
                 logs={logs ?? []}
                 contacts={contacts ?? []}
+                errorMessage={
+                    logsError
+                        ? logsError.message
+                        : practiceCallsError
+                          ? practiceCallsError.message
+                          : null
+                }
+                onRetry={() => {
+                    refetchLogs();
+                    refetchPracticeCalls();
+                }}
                 addingLog={isAddingLog}
                 addLogSubmitting={addCallLog.isPending}
                 onStartAddLog={() => setAddingLog(true)}

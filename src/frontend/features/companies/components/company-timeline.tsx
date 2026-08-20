@@ -8,12 +8,16 @@ import { mergeTimeline, filterTimeline, type TimelineFilter } from "@/features/c
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import { TimelinePracticeItem } from "@/features/companies/components/timeline-practice-item";
 import { TimelineReallogItem } from "@/features/companies/components/timeline-reallog-item";
+import { ErrorState } from "@/shared/components/error-state";
 
 interface CompanyTimelineProps {
     companyId: string;
     practiceCalls: PracticeCall[];
     logs: CallLogEntry[];
     contacts?: CompanyContact[];
+    /** Set when the calls-log or practice-calls fetch failed — must not read as "no history". */
+    errorMessage?: string | null;
+    onRetry?: () => void;
     addingLog: boolean;
     addLogSubmitting?: boolean;
     onStartAddLog: () => void;
@@ -34,6 +38,8 @@ export function CompanyTimeline({
     practiceCalls,
     logs,
     contacts = [],
+    errorMessage = null,
+    onRetry,
     addingLog,
     addLogSubmitting = false,
     onStartAddLog,
@@ -91,7 +97,12 @@ export function CompanyTimeline({
                 )
             )}
 
-            {entries.length > 0 ? (
+            {errorMessage ? (
+                // E-9: logs/practice-calls used to fall back to `?? []` with no isError check —
+                // a failed fetch read as "you never recorded anything", which invites the user
+                // to re-add real CRM records that were never actually lost.
+                <ErrorState compact title="Не удалось загрузить историю" message={errorMessage} onRetry={onRetry} />
+            ) : entries.length > 0 ? (
                 <div>
                     {entries.map((entry) =>
                         entry.kind === "practice" ? (

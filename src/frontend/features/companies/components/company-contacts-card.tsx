@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { Icon } from "@/shared/components/icon";
 import { ContactForm } from "@/features/companies/components/contact-form";
+import { ErrorState } from "@/shared/components/error-state";
 import type { CompanyContact, CompanyContactPayload } from "@/features/companies/hooks/use-company-contacts";
 
 interface CompanyContactsCardProps {
     contacts: CompanyContact[];
+    /** Set when the contacts fetch failed — must not read as "no contacts added". */
+    errorMessage?: string | null;
+    onRetry?: () => void;
     addingContact: boolean;
     addContactSubmitting?: boolean;
     editingContact: CompanyContact | null;
@@ -22,6 +26,8 @@ interface CompanyContactsCardProps {
 
 export function CompanyContactsCard({
     contacts,
+    errorMessage = null,
+    onRetry,
     addingContact,
     addContactSubmitting = false,
     editingContact,
@@ -53,7 +59,12 @@ export function CompanyContactsCard({
                 />
             )}
 
-            {contacts.length > 0 ? (
+            {errorMessage ? (
+                // E-9: a failed contacts fetch used to read as "no contacts added" — real,
+                // manually-entered CRM data that invites re-adding (and duplicating) contacts
+                // that were never actually deleted.
+                <ErrorState compact title="Не удалось загрузить контакты" message={errorMessage} onRetry={onRetry} />
+            ) : contacts.length > 0 ? (
                 <div className="co-contact-list">
                     {contacts.map((contact) =>
                         editingContact?.id === contact.id ? (
