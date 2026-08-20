@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Common.Extensions;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.Lessons.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -31,8 +32,19 @@ namespace Sellevate.Learning.Features.Admin;
 /// The organization is never read from the body, the query string or the route — it comes from
 /// <c>ITenantContext</c>, filled by the gateway-validated header (docs/TENANCY/TENANCY.md §1.3).
 /// </para>
+///
+/// <para>
+/// T-4 (docs/AUDIT_TENANCY.md, tenancy audit): this was the only content admin controller under
+/// <c>Features/Admin</c> without <see cref="TenantTransactionAttribute"/>, so
+/// <see cref="RefuseIfNotAllowedToAuthorAsync"/> read <c>database.Lessons</c> without
+/// <c>SET LOCAL app.organization_id</c> set and treated an empty result as "allowed". No exploit
+/// was found (the empty-result path only ever reaches the global-lesson branch, which is
+/// independent of the GUC either way), but the pattern is fragile the same way the sibling admin
+/// controllers already guard against.
+/// </para>
 /// </summary>
 [ApiController]
+[TenantTransaction]
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminLessonVersionsController(
     LearningDbContext database,

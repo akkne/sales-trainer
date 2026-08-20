@@ -150,7 +150,20 @@ notification, gamification, social, learning, company, organization, gateway). �
   `docs/DECISIONS.md:2985-3000` («что это оставляет открытым, сказано прямо») + `docs/DONT_FORGET.md`.
 - **Severity:** minor
 
-### [ ] T-4 Гейт «кто может править версию урока» читает БД вне транзакции и трактует «0 строк» как «можно»
+### [x] T-4 Гейт «кто может править версию урока» читает БД вне транзакции и трактует «0 строк» как «можно»
+
+**Исправлено (2026-08-21, ночной прогон).** `AdminLessonVersionsController.cs` получил
+`[TenantTransaction]` на классе (та же строчка, что у `AdminLessonsController`/
+`AdminExercisesController`/`AdminReferenceController`/`AdminTechniquesController`) плюс
+`using Sellevate.Learning.Features.Content;` для атрибута. Теперь
+`RefuseIfNotAllowedToAuthorAsync` читает `database.Lessons` внутри открытой
+`TenantTransactionScope`, то есть с выставленным `SET LOCAL app.organization_id`, как и весь
+остальной контроллер. Сборка (`dotnet build Learning/Sellevate.Learning.csproj`) — 0 ошибок;
+юнит-тесты (`dotnet test Learning.Tests`) — 90 passed, 0 failed, 14 skipped (интеграционные,
+требуют живой Postgres); `scripts/tenancy-boundary-lint.sh` и `scripts/tenancy-pool-lint.sh` —
+чисто. Поведение не поменялось (это и есть суть defence-in-depth фикса): пустая выборка
+по-прежнему трактуется как «глобального урока с этим id нет» → сервис вернёт 404 ниже, ничего не
+разрешается по факту пустого результата.
 - **Эндпоинт:** `POST /admin/lessons/{lessonId}/versions/draft` и `POST /admin/lessons/{lessonId}/versions/publish`,
   `learning-service/Learning/Features/Admin/AdminLessonVersionsController.cs:109-125` (гейт),
   вызовы на строках 66 и 87.
