@@ -8,11 +8,12 @@ import {
     useUpdateExerciseTypeReward,
 } from "@/features/admin/hooks/use-admin";
 import { AI_EXERCISE_TYPES, TYPE_LABELS } from "@/features/admin/components/exercise-editors";
+import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminPromptsPage() {
-    const { data: prompts = [], isLoading } = useExerciseTypePrompts();
+    const { data: prompts = [], isLoading, isError, refetch } = useExerciseTypePrompts();
     const updatePrompt = useUpdateExerciseTypePrompt();
-    const { data: rewards = [] } = useExerciseTypeRewards();
+    const { data: rewards = [], isError: isRewardsError, refetch: refetchRewards } = useExerciseTypeRewards();
     const updateReward = useUpdateExerciseTypeReward();
 
     // Local edits for base XP: map of exerciseType -> current input value
@@ -63,13 +64,16 @@ export default function AdminPromptsPage() {
                 </p>
             </div>
 
-            {rewards.length > 0 && (
+            {(rewards.length > 0 || isRewardsError) && (
                 <div className="bg-surface border border-line rounded-2xl p-5 mb-8">
                     <h2 className="text-sm font-semibold text-ink mb-1">Base XP per exercise type</h2>
                     <p className="text-xs text-ink-3 mb-4">
                         XP awarded when a user answers an exercise of this type correctly. Stored in the
                         database — no hardcoded values.
                     </p>
+                    {isRewardsError ? (
+                        <ErrorState compact onRetry={() => refetchRewards()} />
+                    ) : (
                     <div className="space-y-2">
                         {rewards.map((reward) => {
                             const isSaving = updateReward.isPending && updateReward.variables?.exerciseType === reward.exerciseType;
@@ -101,11 +105,21 @@ export default function AdminPromptsPage() {
                             );
                         })}
                     </div>
+                    )}
                 </div>
             )}
 
             {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
 
+            {isError && (
+                <ErrorState
+                    title="Couldn't load saved prompts"
+                    message="Saving now would overwrite the stored prompts with blank text. Retry the load first."
+                    onRetry={() => refetch()}
+                />
+            )}
+
+            {!isLoading && !isError && (
             <div className="space-y-6">
                 {AI_EXERCISE_TYPES.map((type) => {
                     const isSaving = updatePrompt.isPending && updatePrompt.variables?.exerciseType === type;
@@ -149,6 +163,7 @@ export default function AdminPromptsPage() {
                     );
                 })}
             </div>
+            )}
         </div>
     );
 }

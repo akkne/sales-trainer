@@ -173,7 +173,7 @@
   вместо полосы, домашний экран это не ломает.
 - **Severity:** major
 
-### [ ] E-13 `/admin/users`: при ошибке — пустая таблица без единого слова
+### [x] E-13 `/admin/users`: при ошибке — пустая таблица без единого слова
 - **Экран:** `/admin/users` — `app/(admin)/admin/users/page.tsx:17`, `41-44`, `68`
 - **Запрос:** `useAdminUsers()` → `GET /admin/users` (`features/admin/hooks/use-admin.ts:856-861`).
   `const { data: users = [], isLoading } = useAdminUsers();` — дефолт `[]` прямо в
@@ -184,7 +184,7 @@
   пользователей» для платформенного админа абсурден, но экран не даёт ничего другого.
 - **Severity:** major
 
-### [ ] E-14 Вся контентная админка: `data = []` в деструктуризации превращает 500 в «No … found»
+### [x] E-14 Вся контентная админка: `data = []` в деструктуризации превращает 500 в «No … found»
 - **Экран:** системный шаблон, `isError` не проверяется ни на одном из этих экранов:
   - `/admin/skills` — `app/(admin)/admin/skills/page.tsx:28`, `168-171` → «No skills yet.»
   - `/admin/topics` — `app/(admin)/admin/topics/page.tsx:20-21`, `255-258` → «No topics found.»

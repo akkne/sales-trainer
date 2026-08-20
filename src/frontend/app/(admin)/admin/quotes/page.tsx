@@ -8,6 +8,7 @@ import {
     useDeleteDailyQuote,
     type AdminDailyQuote,
 } from "@/features/admin/hooks/use-admin";
+import { ErrorState } from "@/shared/components/error-state";
 
 const MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
@@ -62,7 +63,7 @@ export default function AdminQuotesPage() {
     const rangeFrom = cells[0].isoDate;
     const rangeTo = cells[cells.length - 1].isoDate;
 
-    const { data: quotes = [], isLoading } = useAdminDailyQuotes({ from: rangeFrom, to: rangeTo });
+    const { data: quotes = [], isLoading, isError, refetch } = useAdminDailyQuotes({ from: rangeFrom, to: rangeTo });
     const createQuote = useCreateDailyQuote();
     const updateQuote = useUpdateDailyQuote();
     const deleteQuote = useDeleteDailyQuote();
@@ -145,6 +146,14 @@ export default function AdminQuotesPage() {
             <div className="flex flex-col xl:flex-row gap-6 items-start">
                 {/* Calendar */}
                 <div className="bg-surface rounded-2xl border border-line p-5 flex-1 min-w-0 w-full">
+                    {isError && (
+                        <ErrorState
+                            compact
+                            title="Couldn't load this month's quotes"
+                            message="The calendar below may be missing quotes that already exist. Retry before adding a day that looks empty."
+                            onRetry={() => refetch()}
+                        />
+                    )}
                     <div className="grid grid-cols-7 gap-1 mb-1">
                         {WEEKDAY_NAMES.map((weekday) => (
                             <div key={weekday} className="text-center text-xs text-ink-3 py-1">

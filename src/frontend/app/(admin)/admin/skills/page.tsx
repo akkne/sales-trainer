@@ -15,6 +15,7 @@ import { useSkillStages } from "@/features/skills/hooks/use-skill-tree";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { SKILLS_TEMPLATE } from "@/features/admin/lib/import-templates";
 import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
+import { ErrorState } from "@/shared/components/error-state";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",
@@ -25,7 +26,7 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
 });
 
 export default function AdminSkillsPage() {
-    const { data: skills = [], isLoading } = useAdminSkills();
+    const { data: skills = [], isLoading, isError, refetch } = useAdminSkills();
     const { stages } = useSkillStages();
     const createSkill = useCreateSkill();
     const deleteSkill = useDeleteSkill();
@@ -167,6 +168,8 @@ export default function AdminSkillsPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : skills.length === 0 ? (
                 <p className="text-sm text-ink-3">No skills yet.</p>
             ) : (

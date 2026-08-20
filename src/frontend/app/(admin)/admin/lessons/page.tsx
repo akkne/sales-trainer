@@ -15,12 +15,13 @@ import {
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { LESSONS_TEMPLATE } from "@/features/admin/lib/import-templates";
 import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
+import { ErrorState } from "@/shared/components/error-state";
 
 type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";
 
 export default function LessonsPage() {
-    const { data: lessons = [], isLoading } = useAdminAllLessons();
+    const { data: lessons = [], isLoading, isError, refetch } = useAdminAllLessons();
     const { data: topics = [] } = useAdminAllTopics();
     const { data: skills = [] } = useAdminSkills();
     const importLessons = useImportLessons();
@@ -220,6 +221,8 @@ export default function LessonsPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3 py-8 text-center">Loading…</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : filtered.length === 0 ? (
                 <p className="text-sm text-ink-3 py-8 text-center">No lessons found.</p>
             ) : (

@@ -11,6 +11,7 @@ import {
     type AdminReferenceMaterial,
     type CreateReferenceMaterialBody,
 } from "@/features/admin/hooks/use-admin";
+import { ErrorState } from "@/shared/components/error-state";
 
 const EMPTY_FORM: CreateReferenceMaterialBody = {
     title: "",
@@ -35,7 +36,7 @@ export default function AdminReferenceAllPage() {
 
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-    const { data: materials = [], isLoading } = useAdminReferenceAll({
+    const { data: materials = [], isLoading, isError, refetch } = useAdminReferenceAll({
         skillId: selectedSkillId || undefined,
         category: selectedCategory || undefined,
         search: search || undefined,
@@ -143,6 +144,8 @@ export default function AdminReferenceAllPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : materials.length === 0 ? (
                 <p className="text-sm text-ink-3">No reference materials found.</p>
             ) : (

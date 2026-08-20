@@ -5,6 +5,7 @@ import { useAdminUsers } from "@/features/admin/hooks/use-admin";
 import { UserDetailModal } from "@/features/admin/components/user-detail-modal";
 import { UserAvatar } from "@/shared/components/user-avatar";
 import { canManagePlatformUsers, isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
+import { ErrorState } from "@/shared/components/error-state";
 
 const roleBadgeClass: Record<string, string> = {
     User: "bg-bg-2 text-ink-3",
@@ -14,7 +15,7 @@ const roleBadgeClass: Record<string, string> = {
 
 export default function AdminUsersPage() {
     const { authenticatedUser } = useAuthStore();
-    const { data: users = [], isLoading } = useAdminUsers();
+    const { data: users = [], isLoading, isError, refetch } = useAdminUsers();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     // Reading the roster is ordinary platform administration (RequirePlatformAdmin), so both
@@ -40,6 +41,8 @@ export default function AdminUsersPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                 <table className="w-full text-sm border-collapse min-w-[640px]">

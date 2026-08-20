@@ -15,10 +15,11 @@ import {
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { TOPICS_TEMPLATE } from "@/features/admin/lib/import-templates";
 import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
+import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminTopicsPage() {
     const { data: skills = [] } = useAdminSkills();
-    const { data: topics = [], isLoading } = useAdminAllTopics();
+    const { data: topics = [], isLoading, isError, refetch } = useAdminAllTopics();
     const importTopics = useImportTopics();
 
     const [filterSkillId, setFilterSkillId] = useState<string>("");
@@ -254,6 +255,8 @@ export default function AdminTopicsPage() {
             {/* Topics List */}
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : filteredTopics.length === 0 ? (
                 <p className="text-sm text-ink-3">No topics found.</p>
             ) : (

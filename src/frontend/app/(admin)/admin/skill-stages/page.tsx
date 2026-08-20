@@ -10,6 +10,7 @@ import {
     type AdminSkillStage,
 } from "@/features/admin/hooks/use-admin";
 import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
+import { ErrorState } from "@/shared/components/error-state";
 
 interface StageDraft {
     label: string;
@@ -20,7 +21,7 @@ interface StageDraft {
 const emptyNewStage = { key: "", label: "", accent: "#7C3AED", order: 1 };
 
 export default function AdminSkillStagesPage() {
-    const { data: stages = [], isLoading } = useAdminSkillStages();
+    const { data: stages = [], isLoading, isError, refetch } = useAdminSkillStages();
     const createStage = useCreateSkillStage();
     const updateStage = useUpdateSkillStage();
     const deleteStage = useDeleteSkillStage();
@@ -121,6 +122,8 @@ export default function AdminSkillStagesPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : (
                 <div className="overflow-x-auto -mx-4 px-4">
                 <table className="w-full text-sm border-collapse min-w-[560px]">

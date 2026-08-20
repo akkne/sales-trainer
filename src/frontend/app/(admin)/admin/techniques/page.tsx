@@ -15,6 +15,7 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { TECHNIQUES_TEMPLATE } from "@/features/admin/lib/import-templates";
 import { downloadJson } from "@/features/admin/lib/download-json";
+import { ErrorState } from "@/shared/components/error-state";
 
 const DIFFICULTY_OPTIONS = [
     { value: 1, label: "1 · Novice" },
@@ -55,7 +56,7 @@ export default function AdminTechniquesPage() {
     const [isExporting, setIsExporting] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
 
-    const { data: techniques = [], isLoading } = useAdminTechniques({
+    const { data: techniques = [], isLoading, isError, refetch } = useAdminTechniques({
         skill: selectedSkill || undefined,
         search: search || undefined,
     });
@@ -234,6 +235,8 @@ export default function AdminTechniquesPage() {
 
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
+            ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
             ) : techniques.length === 0 ? (
                 <p className="text-sm text-ink-3">No techniques found.</p>
             ) : (
