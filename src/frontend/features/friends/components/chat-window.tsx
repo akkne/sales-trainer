@@ -34,8 +34,13 @@ export function RailChatView({ conversationId, onBack }: RailChatViewProps) {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages?.length]);
 
-    function handleSend(content: string) {
-        sendMutation.mutate({ conversationId, content });
+    async function handleSend(content: string): Promise<boolean> {
+        try {
+            await sendMutation.mutateAsync({ conversationId, content });
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     return (
@@ -147,8 +152,13 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages?.length]);
 
-    function handleSendMessage(content: string) {
-        sendMessageMutation.mutate({ conversationId, content });
+    async function handleSendMessage(content: string): Promise<boolean> {
+        try {
+            await sendMessageMutation.mutateAsync({ conversationId, content });
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     return (

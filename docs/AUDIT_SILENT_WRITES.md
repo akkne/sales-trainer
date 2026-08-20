@@ -33,7 +33,7 @@
 
 ---
 
-### [ ] W-1 Чат с другом: текст стирается из поля до ответа сервера
+### [x] W-1 Чат с другом: текст стирается из поля до ответа сервера
 - **Где:** `src/frontend/features/friends/components/chat-input.tsx:16-20` (`handleSend` →
   `onSend(trimmed); setValue("")`), оба потребителя — `features/friends/components/chat-window.tsx:38`
   (правый рельс) и `:151` (полноэкранный чат). Мутация — `useSendChatMessage`

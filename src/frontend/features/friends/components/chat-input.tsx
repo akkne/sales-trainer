@@ -4,7 +4,10 @@ import { useState, type KeyboardEvent } from "react";
 import { Icon } from "@/shared/components/icon";
 
 interface ChatInputProps {
-    onSend: (content: string) => void;
+    // Returns whether the send actually succeeded. The composer only clears the draft on
+    // `true` — on `false` the typed text stays put so a rejected message is never presented
+    // as sent (docs/AUDIT_SILENT_WRITES.md W-1).
+    onSend: (content: string) => Promise<boolean>;
     disabled?: boolean;
 }
 
@@ -12,11 +15,11 @@ interface ChatInputProps {
 export function RailChatInput({ onSend, disabled }: ChatInputProps) {
     const [value, setValue] = useState("");
 
-    function handleSend() {
+    async function handleSend() {
         const trimmed = value.trim();
         if (!trimmed) return;
-        onSend(trimmed);
-        setValue("");
+        const succeeded = await onSend(trimmed);
+        if (succeeded) setValue("");
     }
 
     function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
