@@ -5986,3 +5986,29 @@ attempted here. Going forward, from the moment this fix ships, no *new* mode-key
 possible in practice (every current producer sends a mode key) — the fix mainly forecloses the same
 collateral-drop shape recurring for some future schema-versioning gap, and stops the heat map from
 silently disagreeing with `/admin/dialog-sessions` on data going forward.
+
+### O-6: past-deadline rejection added to `CreateAsync` only, not `UpdateAsync`
+
+The audit tested `/org/assignments/new` and found two accepted date combinations: a deadline in the
+past, and an "open" date after the deadline. Reading `AssignmentService`, the second case was already
+rejected server-side — `RequireConsistentSchedule` throws whenever `deadline <= opensAt`, and both
+`CreateAsync` and `UpdateAsync` already call it. The real gap was the first case: a deadline in the
+past with `opensAt` left null (the common case — "Открыть" defaults to empty, meaning "immediately"),
+which `RequireConsistentSchedule` never looks at because it only compares the two dates to each other.
+
+Added `RequireDeadlineNotInPast`, called only from `CreateAsync`. Assumption made without asking:
+`UpdateAsync` must not gain the same check, because it re-validates whatever the client currently
+holds even when a field is unchanged, and an assignment that is still `active` with a deadline that
+has simply elapsed while running (an ordinary state — nobody is required to close an assignment the
+moment its deadline passes) would then reject an unrelated edit (e.g. adding a new hire to the
+audience) with an error about a field the РОП never touched. A new draft has no such history, so
+`CreateAsync` can safely refuse it up front. Mirrored on the client in
+`schedule-input.ts` (`isDeadlineInPast`, `isOpensAtAfterDeadline`), wired into `/org/assignments/new`
+only — `AssignmentSettingsPanel` (the edit surface) was left untouched for the same reason.
+
+### O-7 / O-8: fixed at face value, no alternatives worth recording
+
+O-7 (`material-run-dialog.tsx`'s unmarked required title) and O-8 (`shared/components/chip.tsx`
+rendering filter chips as `<span onClick>`) each had one clear fix matching an existing sibling
+pattern already in the codebase (`start-generation-modal.tsx`'s `required` + `error` title field;
+`shared/components/common.tsx`'s button-based `Chip`) — no owner call or recorded alternative needed.
