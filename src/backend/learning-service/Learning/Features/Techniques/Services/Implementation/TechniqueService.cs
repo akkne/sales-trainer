@@ -59,8 +59,12 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
             if (matchingSkillId is null)
                 return Array.Empty<TechniqueCardDto>();
 
+            // A technique's skill is not just PrimarySkillId — GetTechniqueBySlugAsync already unions
+            // it with AdditionalSkills for the detail page's skill chips. This filter must agree, or a
+            // skill facet that GetTechniqueMetaAsync advertises (see below) can return zero cards.
             techniquesQuery = techniquesQuery.Where(technique =>
-                technique.PrimarySkillId == matchingSkillId);
+                technique.PrimarySkillId == matchingSkillId
+                || technique.AdditionalSkills.Any(link => link.SkillId == matchingSkillId));
         }
 
         if (tags is { Count: > 0 })
@@ -176,26 +180,38 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
-            .Where(technique => technique.PrimarySkillId != null)
-            .GroupBy(technique => technique.PrimarySkillId!.Value)
-            .Select(group => new { SkillId = group.Key, Count = group.Count() })
+        // A technique's skills are PrimarySkillId plus AdditionalSkills, not PrimarySkillId alone —
+        // GetTechniqueBySlugAsync already unions both for the detail page. Most authored techniques
+        // in practice only carry AdditionalSkills, so counting PrimarySkillId alone found nothing and
+        // the guidebook's skill filter rendered no chips at all.
+        var techniqueSkillRows = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
+            .Select(technique => new
+            {
+                technique.PrimarySkillId,
+                AdditionalSkillIds = technique.AdditionalSkills.Select(link => link.SkillId).ToArray(),
+            })
             .ToListAsync(cancellationToken);
 
-        var skillIdsWithTechniques = techniqueCountsBySkill
-            .Select(row => row.SkillId)
-            .ToArray();
+        var techniqueCountsBySkill = techniqueSkillRows
+            .SelectMany(row => (row.PrimarySkillId.HasValue
+                    ? new[] { row.PrimarySkillId.Value }
+                    : Array.Empty<Guid>())
+                .Concat(row.AdditionalSkillIds)
+                .Distinct())
+            .GroupBy(skillId => skillId)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        var skillIdsWithTechniques = techniqueCountsBySkill.Keys.ToArray();
 
         var skills = await databaseContext.Skills.AsNoTracking()
             .Where(skill => skillIdsWithTechniques.Contains(skill.Id))
             .OrderBy(skill => skill.OrderInTree)
             .ToListAsync(cancellationToken);
 
-        var countById = techniqueCountsBySkill.ToDictionary(row => row.SkillId, row => row.Count);
         var skillFacets = skills.Select(skill => new TechniqueSkillFacetDto(
                 skill.IconicName,
                 skill.Title,
-                countById.GetValueOrDefault(skill.Id)))
+                techniqueCountsBySkill.GetValueOrDefault(skill.Id)))
             .ToArray();
 
         var totalCount = await databaseContext.Techniques.ResolveOverrides(databaseContext).CountAsync(cancellationToken);
