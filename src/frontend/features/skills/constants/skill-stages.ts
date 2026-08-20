@@ -29,12 +29,14 @@ const FALLBACK_STAGE: SkillStageMeta = {
 /**
  * Resolve display metadata for a stage key against the given stage list
  * (defaults to the built-in {@link SKILL_STAGES}). Unknown keys fall back to a
- * generic "Other" bucket that preserves the original key.
+ * generic "Other" bucket that preserves the original key (in `key`, not in the
+ * displayed `label` — a raw slug like "general" printed as if it were a
+ * translated stage name is confusing, not informative).
  */
 export function getStageMeta(
     stageKey: string | undefined | null,
     stages: readonly SkillStageMeta[] = SKILL_STAGES
 ): SkillStageMeta {
     if (!stageKey) return FALLBACK_STAGE;
-    return stages.find((s) => s.key === stageKey) ?? { ...FALLBACK_STAGE, key: stageKey, label: stageKey };
+    return stages.find((s) => s.key === stageKey) ?? { ...FALLBACK_STAGE, key: stageKey };
 }

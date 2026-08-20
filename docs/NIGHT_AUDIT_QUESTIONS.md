@@ -226,3 +226,24 @@ plumbing. Given this now checks out at the library level, a full re-verification
 17 `isError`-gated fixes against actual refetch failures (not just initial-load failures) is
 probably not necessary — but a couple of spot checks on `main` (not prod) would close out any
 remaining doubt cheaply if someone wants extra confidence.
+
+### Q-11 — AD-2: should the `general` stage exist at all, or should the skill be reassigned?
+
+`docs/AUDIT_PROD.md` AD-2: the skill `pipeline-management` ("Управление воронкой",
+`131a011b-efc5-4f7d-b8c5-ecede2dab7cf`) has `stage: "general"` in the database, which is not one of
+the 5 stages `GET /skills/stages` returns (`preparation, discovery, engagement, closing, retention`).
+Fixed the *display/edit* bug tonight (unknown stages now show as "Другое" instead of leaking the raw
+key, and the Edit form's Stage select now has an explicit "— не назначена (general) —" option instead
+of silently pre-selecting "Подготовка" while the real value stays `general`) — full derivation in
+`docs/AUDIT_PROD.md`'s AD-2 entry.
+
+What was **not** decided, because it's a content/data call, not a code bug: whether `general` should
+(a) become a real 6th row in `/admin/skill-stages` (if "general funnel skills that don't map to one
+sales stage" is a real category worth keeping), or (b) be corrected to one of the 5 existing stages
+for this one skill (which stage "Управление воронкой" / pipeline management actually belongs to is a
+product/content judgment call, not something derivable from the code), or (c) some other skill later
+gets the same treatment and it's worth deciding the general policy once rather than per-skill.
+
+**Нужно решение:** pick (a), (b), or (c) above for `pipeline-management`, and whether any other future
+skill is allowed to ship without a stage assignment at all (in which case an explicit "unassigned"
+stage might belong in the stage registry itself, not just in the frontend's fallback rendering).

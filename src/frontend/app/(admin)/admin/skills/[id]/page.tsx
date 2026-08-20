@@ -150,6 +150,9 @@ export default function AdminSkillDetailPage({
                                     value={form.stage}
                                     onChange={(e) => setForm({ ...form, stage: e.target.value })}
                                 >
+                                    {!stages.some((s) => s.key === form.stage) && (
+                                        <option value={form.stage}>{`— не назначена (${form.stage}) —`}</option>
+                                    )}
                                     {stages.map((s) => (
                                         <option key={s.key} value={s.key}>
                                             {s.label}
