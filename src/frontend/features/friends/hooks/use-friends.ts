@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface Friend {
     userId: string;
@@ -98,6 +99,9 @@ export function useSendFriendRequest() {
             queryClient.invalidateQueries({ queryKey: ["userSearch"] });
             queryClient.invalidateQueries({ queryKey: ["publicProfile"] });
         },
+        onError: (error) => {
+            toast.error(`Не удалось отправить заявку в друзья: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -111,6 +115,9 @@ export function useAcceptFriendRequest() {
             queryClient.invalidateQueries({ queryKey: ["friends"] });
             queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
         },
+        onError: (error) => {
+            toast.error(`Не удалось принять заявку в друзья: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -122,6 +129,9 @@ export function useDeclineFriendRequest() {
             apiClient.put(`/friends/requests/${friendshipId}/decline`, {}),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось отклонить заявку в друзья: ${(error as Error).message}`);
         },
     });
 }
@@ -137,6 +147,9 @@ export function useCancelFriendRequest() {
             queryClient.invalidateQueries({ queryKey: ["userSearch"] });
             queryClient.invalidateQueries({ queryKey: ["publicProfile"] });
         },
+        onError: (error) => {
+            toast.error(`Не удалось отменить заявку в друзья: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -149,6 +162,9 @@ export function useRemoveFriend() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["friends"] });
             queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось удалить из друзей: ${(error as Error).message}`);
         },
     });
 }

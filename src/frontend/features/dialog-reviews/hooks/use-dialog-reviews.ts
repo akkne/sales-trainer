@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { toast } from "@/features/notifications/store/toast-store";
 
 /** Phase 40.25. Mirrors learning-service's `DialogReviewKinds`. */
 export type DialogReviewKind = "coaching_note" | "score_dispute";
@@ -85,6 +86,9 @@ export function useAcknowledgeCoachingNote() {
             apiClient.post<DialogReviewNote>(`/dialog-reviews/${noteId}/acknowledge`, {}),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: REVIEWS_QUERY_KEY });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось отметить как прочитанное: ${(error as Error).message}`);
         },
     });
 }

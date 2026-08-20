@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface TechniqueCard {
     id: string;
@@ -125,6 +126,9 @@ export function useMarkTechniqueSeen() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["techniques"] });
             queryClient.invalidateQueries({ queryKey: ["techniques-meta"] });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось отметить технику прочитанной: ${(error as Error).message}`);
         },
     });
 }

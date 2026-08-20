@@ -235,7 +235,7 @@
 - **Ущерб:** потеря данных (выбор навыков) + ложный вывод «выбор сохранён»
 - **Severity:** major
 
-### [ ] W-14 Группа «клик без последствий»: мутации без `onError` в социальных и второстепенных экранах
+### [x] W-14 Группа «клик без последствий»: мутации без `onError` в социальных и второстепенных экранах
 - **Где:** мутации, у которых нет ни `onError`, ни отображения `isError`, а состояние кнопки целиком
   берётся с сервера, — так что отказ выглядит как «кнопка не нажалась»:
   - `features/friends/hooks/use-friends.ts` — 6 мутаций, ни одного `onError`; вызовы:
@@ -266,6 +266,14 @@
   действие выполненным и не повторяет его.
 - **Ущерб:** нет сообщения
 - **Severity:** minor
+- **Итог:** добавлен `onError` с `toast.error` в `use-friends.ts` (5 мутаций), `use-discuss.ts`
+  (`useThreadVote`, `useReplyVote`, `useSetAcceptedReply`, `useDeleteDiscussPhoto`),
+  `use-dialog-reviews.ts` (`useAcknowledgeCoachingNote`), `use-techniques.ts`
+  (`useMarkTechniqueSeen`), `use-notifications.ts` (обе мутации, `clientLogger.warn` оставлен) и
+  `use-demo-requests.ts` (`useUpdateDemoRequestStatus`). Пункт «фото / имя / роль пользователя»
+  (`user-detail-modal.tsx`) не трогал: он читает мутации из `features/admin/hooks/use-admin.ts`,
+  которое уже получило `toast.error` во всех 48 `onError` в рамках W-6 (`b393059`) — отдельного
+  изменения не требовалось.
 
 ### [ ] W-15 Админка лиг: четыре мутации без единого сообщения об ошибке (устаревший раздел, но раздел живой)
 - **Где:** `src/frontend/app/(admin)/admin/leagues/[id]/page.tsx:46` (`adjustXp`), `:60`

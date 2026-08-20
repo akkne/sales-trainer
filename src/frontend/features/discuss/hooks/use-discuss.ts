@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface TagRef {
     slug: string;
@@ -233,6 +234,9 @@ export function useDeleteDiscussPhoto(threadId: string) {
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads"] });
         },
+        onError: (error) => {
+            toast.error(`Не удалось удалить фото: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -247,6 +251,9 @@ export function useThreadVote(threadId: string) {
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads"] });
         },
+        onError: (error) => {
+            toast.error(`Не удалось проголосовать: ${(error as Error).message}`);
+        },
     });
 }
 
@@ -259,6 +266,9 @@ export function useReplyVote(threadId: string) {
                 : apiClient.delete<VoteResult>(`/discuss/replies/${replyId}/upvote`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось проголосовать: ${(error as Error).message}`);
         },
     });
 }
@@ -273,6 +283,9 @@ export function useSetAcceptedReply(threadId: string) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads"] });
+        },
+        onError: (error) => {
+            toast.error(`Не удалось отметить принятый ответ: ${(error as Error).message}`);
         },
     });
 }

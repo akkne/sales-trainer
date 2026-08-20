@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export type NotificationTypeKey =
     | "FriendRequestReceived"
@@ -75,6 +76,7 @@ export function useMarkNotificationAsRead() {
                 notificationId,
                 error: (error as Error).message,
             });
+            toast.error(`Не удалось отметить уведомление прочитанным: ${(error as Error).message}`);
         },
     });
 }
@@ -92,6 +94,7 @@ export function useMarkAllNotificationsAsRead() {
             clientLogger.warn("Failed to mark all notifications as read", {
                 error: (error as Error).message,
             });
+            toast.error(`Не удалось отметить все уведомления прочитанными: ${(error as Error).message}`);
         },
     });
 }

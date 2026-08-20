@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, ApiError } from "@/shared/api/api-client";
 import { clientLogger } from "@/shared/utils/client-logger";
+import { toast } from "@/features/notifications/store/toast-store";
 import type { SalesTeamSize } from "@/features/demo/types";
 import type { DemoRequestStatus } from "@/features/admin/lib/demo-request-format";
 import type { OrganizationAdminRole } from "@/features/admin/hooks/use-organizations";
@@ -107,6 +108,7 @@ export function useUpdateDemoRequestStatus() {
                 status: variables.status,
                 error: (error as Error).message,
             });
+            toast.error(`Failed to change demo request status: ${(error as Error).message}`);
         },
     });
 }
