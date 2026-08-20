@@ -505,6 +505,16 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 `TechniqueCaseDto`: `{title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`). At most one case per technique.
 `TechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges: [{label, kind?, targetSlug?}]}`
 
+**`TechniqueDialogTurnDto.Annotations` is declared non-nullable but comes from author-supplied
+`Technique.DialogJson`, not a DB column** — `System.Text.Json` does not enforce nullable
+annotations, so a turn missing the `annotations` key (or holding `"annotations": null`) would
+otherwise deserialize with `Annotations == null` despite the declared type. `TechniqueService`
+normalizes this once, server-side, in `DeserializeDialogTurns`: a `null` `annotations` array
+becomes `[]`, and a `null` array element (a literal `null` turn) is dropped. Clients may treat
+`annotations` as always an array, never `null` — but the frontend guards `turn.annotations` at
+the render site anyway (`app/(main)/guidebook/page.tsx`), since this DTO's non-nullability is a
+service-level guarantee, not something the JSON contract itself enforces.
+
 `TechniqueMetaDto`: `{skills: [{iconicName, title, techniqueCount}], totalCount, userCounts: {mastered, master, unseen}}`. A technique's skill(s) are `PrimarySkillId` *and* `AdditionalSkills` combined (same union `GET /techniques/:slug` already uses for `skillIconicNames`) — `skills` and the `?skill=` filter on `GET /techniques` both resolve a skill facet against either field, so a technique tagged only via `AdditionalSkills` (the common case in practice) still shows up under its skill's chip and its count. Only skills that have at least one technique (by that union) appear in `skills`.
 
 `userCounts` fields are **nested, not a partition** — `mastered` (level ≥ Practitioner) is a superset of `master` (level ≥ Master), by design (docs comment on `TechniqueLevels`), so they are never meant to be added together. `unseen` is `totalCount` minus every technique the user has *any* progress row for, including ones seen but still below `mastered`'s threshold. That is why `mastered + master + unseen` can come in under `totalCount`: the techniques a learner has looked at but not yet reached Practitioner on are counted in neither exposed bucket. This is intentional under the current three-field contract, not a miscount; a caller that needs an exhaustive breakdown needs a fourth "seen, unmastered" bucket, which does not exist yet (no consumer currently needs it — the guidebook only reads `totalCount` and `userCounts.mastered`).

@@ -92,7 +92,7 @@
 `[JsonRequired]` нигде не стоит), поэтому отсутствующий ключ даёт `null` в non-nullable
 свойстве, и оно уезжает на фронт как `null`.
 
-### [ ] N-2 `TechniqueDialogTurnDto.Annotations` — `.map` по null валит справочник техник
+### [x] N-2 `TechniqueDialogTurnDto.Annotations` — `.map` по null валит справочник техник
 
 - **Бэкенд:** `TechniqueDialogTurnDto.Annotations`, объявлен non-nullable
   `TechniqueDialogAnnotationDto[]`,

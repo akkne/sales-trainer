@@ -481,7 +481,10 @@ function DetailPanel({
                                     {detail.dialogTurns.map((turn) => {
                                         const isOut = turn.side === "me";
                                         const speaker = isOut ? "Ты" : "Клиент";
-                                        const anno = turn.annotations.map((a) => a.label).join(" · ");
+                                        const anno = (turn.annotations ?? [])
+                                            .map((a) => a?.label)
+                                            .filter(Boolean)
+                                            .join(" · ");
                                         return (
                                             <div
                                                 key={turn.orderIndex}

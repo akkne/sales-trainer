@@ -335,6 +335,13 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
             IsNew: isNew);
     }
 
+    /// <summary>
+    /// <c>System.Text.Json</c> does not enforce the non-nullable annotations on
+    /// <see cref="TechniqueDialogTurnDto"/> — an author-supplied turn missing the
+    /// <c>annotations</c> key (or with <c>"annotations": null</c>) deserializes with
+    /// <c>Annotations == null</c> despite the declared type. Normalizing here, once, keeps every
+    /// consumer of this DTO free to treat <c>Annotations</c> as always an array, never null.
+    /// </summary>
     private static TechniqueDialogTurnDto[] DeserializeDialogTurns(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -343,7 +350,13 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         try
         {
             var turns = JsonSerializer.Deserialize<TechniqueDialogTurnDto[]>(json, DefaultJsonOptions);
-            return turns ?? Array.Empty<TechniqueDialogTurnDto>();
+            if (turns is null)
+                return Array.Empty<TechniqueDialogTurnDto>();
+
+            return turns
+                .Where(turn => turn is not null)
+                .Select(turn => turn! with { Annotations = turn.Annotations ?? Array.Empty<TechniqueDialogAnnotationDto>() })
+                .ToArray();
         }
         catch (JsonException)
         {
