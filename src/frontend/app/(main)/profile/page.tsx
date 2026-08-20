@@ -12,6 +12,7 @@ import { resolveAvatarUrl } from "@/shared/utils/resolve-avatar-url";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 import { ManageSkillsModal } from "@/features/skills/components/manage-skills-modal";
 import { EditProfileModal } from "@/features/profile/components/edit-profile-modal";
+import { ErrorState } from "@/shared/components/error-state";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
@@ -31,11 +32,15 @@ function initials(name: string): string {
 }
 
 export default function ProfilePage() {
-    const { data: profileStats, isLoading: profileLoading } = useProfile();
-    const { data: allSkills, isLoading: skillsLoading } = useSkills();
+    const { data: profileStats, isLoading: profileLoading, refetch: refetchProfile } = useProfile();
+    const { data: allSkills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
     // Accuracy and mastered-skill counts come from learning-service; the same-named fields on
     // identity-service's /profile are hard-coded zeros left over from the microservices split.
-    const { data: progressSummary } = useProgressSummary();
+    const {
+        data: progressSummary,
+        isError: progressSummaryError,
+        refetch: refetchProgressSummary,
+    } = useProgressSummary();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
     const { data: voiceUsage } = useVoiceUsage();
     const { authenticatedUser } = useAuthStore();
@@ -63,7 +68,24 @@ export default function ProfilePage() {
         );
     }
 
-    if (!profileStats) return null;
+    // E-3: a failed /profile used to render `return null` — a blank page with no message, no
+    // retry, indistinguishable from a broken build. profileError is the expected reason
+    // profileStats stays undefined once loading has finished.
+    if (!profileStats) {
+        return (
+            <div className="pv2-scroll">
+                <div className="pv2-cover" />
+                <div className="pv2-inner">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "50vh" }}>
+                        <ErrorState
+                            title="Не удалось загрузить профиль"
+                            onRetry={() => refetchProfile()}
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const enrolledSlugs = new Set(
         (allSkills ?? [])
@@ -207,10 +229,18 @@ export default function ProfilePage() {
                         <div>
                             <div className="pv2-stat-label">Навыки</div>
                             <div className="pv2-stat-value">
-                                {progressSummary?.completedSkillCount ?? 0}
                                 {progressSummary ? (
-                                    <small>/{progressSummary.totalSkillCount}</small>
-                                ) : null}
+                                    <>
+                                        {progressSummary.completedSkillCount}
+                                        <small>/{progressSummary.totalSkillCount}</small>
+                                    </>
+                                ) : (
+                                    // E-2: a failed /skills/progress-summary must not read as "0
+                                    // skills mastered" — that's the same digit a genuinely fresh
+                                    // account would show, just without any denominator to tell
+                                    // them apart.
+                                    "—"
+                                )}
                             </div>
                         </div>
                     </div>
@@ -225,10 +255,23 @@ export default function ProfilePage() {
                         </div>
                         <div>
                             <div className="pv2-stat-label">Уроки</div>
-                            <div className="pv2-stat-value">{totalLessonsDone}</div>
+                            <div className="pv2-stat-value">{skillsError ? "—" : totalLessonsDone}</div>
                         </div>
                     </div>
                 </div>
+
+                {progressSummaryError && (
+                    <p className="text-sm text-bad" style={{ margin: "-4px 0 16px" }} role="alert">
+                        Не удалось загрузить точность и навыки.{" "}
+                        <button
+                            type="button"
+                            onClick={() => refetchProgressSummary()}
+                            style={{ background: "none", border: "none", color: "inherit", fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                        >
+                            Повторить
+                        </button>
+                    </p>
+                )}
 
                 {/* Two-column body */}
                 <div className="pv2-body">
@@ -254,6 +297,12 @@ export default function ProfilePage() {
                                     <div key={i} className="pv2-skeleton" style={{ height: 52, borderRadius: 8 }} />
                                 ))}
                             </div>
+                        ) : skillsError ? (
+                            <ErrorState
+                                compact
+                                title="Не удалось загрузить навыки"
+                                onRetry={() => refetchSkills()}
+                            />
                         ) : !allSkills || allSkills.length === 0 ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
                                 Пока нет навыков. Обратись к администратору.
