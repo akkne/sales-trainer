@@ -1,4 +1,5 @@
 import { apiClient } from "@/shared/api/api-client";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 /**
  * Lightweight usage tracking. Posts events to the backend (`POST /tracking/events`),
@@ -9,6 +10,14 @@ import { apiClient } from "@/shared/api/api-client";
  * Tracking is best-effort: every call swallows errors and never throws, so analytics
  * can never break the UX. Events are only sent for authenticated users (the endpoint
  * requires auth) — anonymous calls are skipped silently.
+ *
+ * Bounded by a short client-side timeout (docs/AUDIT_PROD.md A-1): production has shown
+ * this endpoint answering 503 specifically on a hard page load, when a burst of other
+ * page-data requests fires at the same time — most likely an upstream-connectivity blip
+ * between the gateway and analytics-service, not a bug in this code (see docs/DONT_FORGET.md).
+ * Without a timeout a stalled call would sit open for the browser's default request
+ * lifetime; capping it means a slow/cold upstream can never hold a connection during the
+ * page's real data fetches, on top of the try/catch below already making failure silent.
  */
 
 export type TrackedPage =
@@ -48,7 +57,11 @@ function hasAccessToken(): boolean {
 async function send(event: string, page: TrackedPage): Promise<void> {
     if (!hasAccessToken()) return;
     try {
-        await apiClient.post("/tracking/events", { event, page });
+        await apiClient.post(
+            "/tracking/events",
+            { event, page },
+            { timeoutMs: TimingConstants.fiveSecondsMs }
+        );
     } catch {
         // best-effort: analytics must never surface errors to the user
     }
