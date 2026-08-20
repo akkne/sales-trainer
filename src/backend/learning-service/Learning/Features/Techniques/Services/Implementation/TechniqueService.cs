@@ -355,13 +355,30 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
 
             return turns
                 .Where(turn => turn is not null)
-                .Select(turn => turn! with { Annotations = turn.Annotations ?? Array.Empty<TechniqueDialogAnnotationDto>() })
+                .Select(turn => turn! with { Annotations = NormalizeAnnotations(turn.Annotations) })
                 .ToArray();
         }
         catch (JsonException)
         {
             return Array.Empty<TechniqueDialogTurnDto>();
         }
+    }
+
+    /// <summary>
+    /// Same author-JSON unreliability as <see cref="DeserializeDialogTurns"/>, one level deeper: a
+    /// literal <c>null</c> element in the <c>annotations</c> array (e.g. <c>[null]</c>) deserializes
+    /// to a null <see cref="TechniqueDialogAnnotationDto"/>, and an annotation missing <c>label</c>
+    /// deserializes with <c>Label == null</c> despite its non-nullable declared type.
+    /// </summary>
+    private static TechniqueDialogAnnotationDto[] NormalizeAnnotations(TechniqueDialogAnnotationDto[]? annotations)
+    {
+        if (annotations is null)
+            return Array.Empty<TechniqueDialogAnnotationDto>();
+
+        return annotations
+            .Where(annotation => annotation is not null)
+            .Select(annotation => annotation! with { Label = annotation.Label ?? string.Empty })
+            .ToArray();
     }
 
     private static TechniqueCaseDto? DeserializeCase(string? json)
@@ -379,6 +396,12 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         }
     }
 
+    /// <summary>
+    /// Same author-JSON unreliability as <see cref="DeserializeDialogTurns"/>: a literal
+    /// <c>null</c> element in the challenges array deserializes to a null
+    /// <see cref="TechniqueCoachChallengeDto"/>, and a challenge missing <c>label</c> deserializes
+    /// with <c>Label == null</c> despite its non-nullable declared type.
+    /// </summary>
     private static TechniqueCoachChallengeDto[] DeserializeChallenges(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -386,8 +409,14 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
 
         try
         {
-            return JsonSerializer.Deserialize<TechniqueCoachChallengeDto[]>(json, DefaultJsonOptions)
-                   ?? Array.Empty<TechniqueCoachChallengeDto>();
+            var challenges = JsonSerializer.Deserialize<TechniqueCoachChallengeDto[]>(json, DefaultJsonOptions);
+            if (challenges is null)
+                return Array.Empty<TechniqueCoachChallengeDto>();
+
+            return challenges
+                .Where(challenge => challenge is not null)
+                .Select(challenge => challenge! with { Label = challenge.Label ?? string.Empty })
+                .ToArray();
         }
         catch (JsonException)
         {

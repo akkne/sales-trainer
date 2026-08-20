@@ -118,7 +118,7 @@
   пишет `annotations: []`, поэтому на seed-данных не воспроизводится)
 - **Severity:** major
 
-### [ ] N-3 `TechniqueCoachChallengeDto.Label` / `TechniqueDialogAnnotationDto.Label` — тот же путь, но без падения
+### [x] N-3 `TechniqueCoachChallengeDto.Label` / `TechniqueDialogAnnotationDto.Label` — тот же путь, но без падения
 
 - **Бэкенд:** `TechniqueCoachChallengeDto.Label` (`string`, non-nullable,
   `Features/Techniques/Models/TechniqueCoachChallengeDto.cs:4`) и

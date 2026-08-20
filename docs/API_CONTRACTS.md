@@ -505,15 +505,19 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 `TechniqueCaseDto`: `{title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`). At most one case per technique.
 `TechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges: [{label, kind?, targetSlug?}]}`
 
-**`TechniqueDialogTurnDto.Annotations` is declared non-nullable but comes from author-supplied
-`Technique.DialogJson`, not a DB column** — `System.Text.Json` does not enforce nullable
-annotations, so a turn missing the `annotations` key (or holding `"annotations": null`) would
-otherwise deserialize with `Annotations == null` despite the declared type. `TechniqueService`
-normalizes this once, server-side, in `DeserializeDialogTurns`: a `null` `annotations` array
-becomes `[]`, and a `null` array element (a literal `null` turn) is dropped. Clients may treat
-`annotations` as always an array, never `null` — but the frontend guards `turn.annotations` at
-the render site anyway (`app/(main)/guidebook/page.tsx`), since this DTO's non-nullability is a
-service-level guarantee, not something the JSON contract itself enforces.
+**`TechniqueDialogTurnDto.Annotations`, `TechniqueDialogAnnotationDto.Label` and
+`TechniqueCoachChallengeDto.Label` are all declared non-nullable but come from author-supplied
+`Technique.DialogJson`/`Coach.ChallengesJson`, not a DB column** — `System.Text.Json` does not
+enforce nullable annotations, so a turn missing the `annotations` key (or holding
+`"annotations": null`), a literal `null` element inside `annotations`/`challenges`, or an
+annotation/challenge missing `label` would otherwise deserialize with the field `null` despite
+the declared type. `TechniqueService` normalizes all of this once, server-side, in
+`DeserializeDialogTurns`/`NormalizeAnnotations`/`DeserializeChallenges`: a `null` `annotations`
+array becomes `[]`, a `null` array element (turn, annotation, or challenge) is dropped, and a
+`null` `label` becomes `""`. Clients may treat every one of these fields as always present and
+never `null` — but the frontend guards `turn.annotations` at the render site anyway
+(`app/(main)/guidebook/page.tsx`), since this DTO's non-nullability is a service-level guarantee,
+not something the JSON contract itself enforces.
 
 `TechniqueMetaDto`: `{skills: [{iconicName, title, techniqueCount}], totalCount, userCounts: {mastered, master, unseen}}`. A technique's skill(s) are `PrimarySkillId` *and* `AdditionalSkills` combined (same union `GET /techniques/:slug` already uses for `skillIconicNames`) — `skills` and the `?skill=` filter on `GET /techniques` both resolve a skill facet against either field, so a technique tagged only via `AdditionalSkills` (the common case in practice) still shows up under its skill's chip and its count. Only skills that have at least one technique (by that union) appear in `skills`.
 
