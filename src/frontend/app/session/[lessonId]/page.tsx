@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, use, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
     useExercisesForLesson,
     useSubmitExercise,
@@ -40,6 +40,15 @@ type SessionPhase = "first" | "review";
 
 interface SessionFlowProps {
     lessonId: string;
+    exitHref: string;
+}
+
+// The exit action must always land on the lesson's skill/lesson list, never on whatever
+// screen happened to be in browser history before this one (A-6). Callers that link into
+// a session pass `?exit=<path>` pointing at where they consider "back" to be; unrecognised
+// or missing values fall back to the skill tree.
+function resolveExitHref(exitParam: string | null): string {
+    return exitParam && exitParam.startsWith("/") ? exitParam : "/tree";
 }
 
 interface QueuedExercise {
@@ -54,7 +63,7 @@ function formatSessionDuration(totalSeconds: number): string {
     return `${minutes} мин ${seconds} сек`;
 }
 
-function SessionFlow({ lessonId }: SessionFlowProps) {
+function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
     const router = useRouter();
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
     const submitExerciseMutation = useSubmitExercise();
@@ -169,7 +178,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
             <CompletionScreen
                 accuracyPercent={accuracyPercent}
                 durationSeconds={sessionDurationSeconds}
-                onBack={() => router.back()}
+                onBack={() => router.push(exitHref)}
             />
         );
     }
@@ -199,7 +208,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
             <div className="session-top">
                 <button
                     className="icon-btn"
-                    onClick={() => router.back()}
+                    onClick={() => router.push(exitHref)}
                     aria-label="Выйти"
                     style={{ flex: "none" }}
                 >
@@ -513,7 +522,7 @@ function SessionLoader() {
  * card (each records a correct attempt) so the backend's all-exercises-passed gate
  * marks the lesson complete — then shows the completion screen.
  */
-function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
+function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; exitHref: string }) {
     const router = useRouter();
     const submitExerciseMutation = useSubmitExercise();
     const startTimeRef = useRef<number>(0);
@@ -544,7 +553,7 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
         return (
             <CompletionScreen
                 durationSeconds={durationSeconds}
-                onBack={() => router.back()}
+                onBack={() => router.push(exitHref)}
                 eyebrow="Теория пройдена"
                 heading="Теперь ты знаешь больше!"
             />
@@ -556,25 +565,31 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
             cards={cards}
             onComplete={handleComplete}
             isCompleting={submitExerciseMutation.isPending}
-            onExit={() => router.back()}
+            onExit={() => router.push(exitHref)}
         />
     );
 }
 
 function SessionRouter({ lessonId }: { lessonId: string }) {
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
+    const searchParams = useSearchParams();
+    const exitHref = resolveExitHref(searchParams.get("exit"));
 
     if (isLoading || !exercises) return <SessionLoader />;
 
     const isTheoryLesson =
         exercises.length > 0 && exercises.every((ex) => ex.type === ExerciseTypes.TheoryCard);
 
-    if (isTheoryLesson) return <TheoryLessonFlow exercises={exercises} />;
+    if (isTheoryLesson) return <TheoryLessonFlow exercises={exercises} exitHref={exitHref} />;
 
-    return <SessionFlow lessonId={lessonId} />;
+    return <SessionFlow lessonId={lessonId} exitHref={exitHref} />;
 }
 
 export default function SessionPage({ params }: SessionPageProps) {
     const { lessonId } = use(params);
-    return <SessionRouter lessonId={lessonId} />;
+    return (
+        <Suspense fallback={<SessionLoader />}>
+            <SessionRouter lessonId={lessonId} />
+        </Suspense>
+    );
 }

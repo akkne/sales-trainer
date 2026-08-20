@@ -218,7 +218,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                             </span>
                                             {isActive && (
                                                 <span className="path-tl-action">
-                                                    <Link href={`/session/${lesson.lessonId}`}>
+                                                    <Link href={`/session/${lesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}/map`)}`}>
                                                         <button
                                                             className="btn btn-accent"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
@@ -230,7 +230,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                             )}
                                             {lesson.status === "completed" && (
                                                 <span className="path-tl-action">
-                                                    <Link href={`/session/${lesson.lessonId}`}>
+                                                    <Link href={`/session/${lesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}/map`)}`}>
                                                         <button
                                                             className="btn btn-secondary"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
@@ -264,7 +264,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                         <span className="path-fab-eyebrow">Начать следующий урок</span>
                         <span className="path-fab-lesson">{fabLesson.title}</span>
                     </div>
-                    <Link href={`/session/${fabLesson.lessonId}`}>
+                    <Link href={`/session/${fabLesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}/map`)}`}>
                         <button className="path-fab-btn">Начать →</button>
                     </Link>
                 </div>

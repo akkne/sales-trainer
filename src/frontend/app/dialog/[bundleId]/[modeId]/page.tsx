@@ -103,25 +103,20 @@ export default function ChatPage() {
         (session) => session.bundleId === bundleId && session.modeId === modeId
     ) ?? [];
 
-    const initializeNewSession = async () => {
-        try {
-            setIsLoading(true);
-            setError(null);
-            setFeedback(null);
-            setIsEnded(false);
-            const session = await startDialogSession(bundleId, modeId);
-            setSessionId(session.id);
-            setMessages(session.messages);
-            refetchSessions();
-
-            if (session.messages.some((message) => message.isStopSignal)) {
-                autoCompleteSession(session.id);
-            }
-        } catch (sessionError) {
-            setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
-        } finally {
-            setIsLoading(false);
-        }
+    // Deliberately does not call POST /dialog/sessions. A session used to be created here the
+    // moment the composer opened, which persisted a 0-message row forever whenever the user
+    // looked at the screen and left without typing anything (docs/AUDIT_PROD.md A-11). The
+    // backend never seeds a session with messages, so there was nothing for this to load —
+    // `handleSendMessage` already lazily starts the session on the first real message, and
+    // voice mode does the same in `useVoice`'s `startVoice`. This just resets local UI state
+    // to the empty-composer view and lets one of those two create the session for real.
+    const initializeNewSession = () => {
+        setError(null);
+        setFeedback(null);
+        setIsEnded(false);
+        setSessionId(null);
+        setMessages([]);
+        setIsLoading(false);
     };
 
     useEffect(() => {

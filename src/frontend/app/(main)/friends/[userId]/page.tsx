@@ -134,7 +134,7 @@ export default function PublicProfilePage() {
                             aria-label="Сообщение"
                         >
                             <Icon name="message" size={16} />
-                            {createConversationMutation.isPending ? "…" : "Message"}
+                            {createConversationMutation.isPending ? "…" : "Написать"}
                         </button>
                     )}
                 </div>

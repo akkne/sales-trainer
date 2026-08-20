@@ -155,11 +155,20 @@ export default function DialogPage() {
         <div className="page">
             <div className="container">
                 {/* ── Page header ── */}
-                <div className="practice-header">
-                    <h1 className="practice-title">Практика</h1>
-                    <p className="practice-subtitle">
-                        Интерактивные сценарии отработки техник продаж с ИИ-клиентом
-                    </p>
+                <div className="practice-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <div>
+                        <h1 className="practice-title">Практика</h1>
+                        <p className="practice-subtitle">
+                            Интерактивные сценарии отработки техник продаж с ИИ-клиентом
+                        </p>
+                    </div>
+                    {/* A-10: /dialog-reviews had no in-app entry point — only reachable by direct URL. */}
+                    <Link
+                        href="/dialog-reviews"
+                        style={{ fontSize: 12, fontWeight: 700, color: "var(--primary-ink)", textDecoration: "none", whiteSpace: "nowrap", paddingTop: 4 }}
+                    >
+                        Разбор разговоров →
+                    </Link>
                 </div>
 
                 {/* ── Custom scenario ── */}

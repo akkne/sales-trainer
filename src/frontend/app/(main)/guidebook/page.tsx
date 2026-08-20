@@ -118,6 +118,10 @@ function CoachInitials(name: string): string {
 
 /* ── Main page ── */
 
+// Mirrors TechniqueLevels.MasteredThresholdLevel (backend): a technique counts as
+// "mastered" once the learner reaches the Practitioner level.
+const MASTERED_THRESHOLD_LEVEL = 2;
+
 export default function GuidebookPage() {
     const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
@@ -161,6 +165,16 @@ export default function GuidebookPage() {
 
     const selectedCard = cards.find((c) => c.slug === selectedSlug) ?? null;
 
+    // A-8: the subtitle must track the active search/tag/skill filters instead of always
+    // showing the whole library's totals. Outside any filter it still shows the stable
+    // library-wide numbers from /techniques/meta rather than flashing 0 while the first
+    // /techniques fetch is in flight.
+    const isFiltered = selectedSkill !== null || deferredSearch.trim() !== "" || activeTags.length > 0;
+    const displayedTotalCount = isFiltered ? cards.length : meta?.totalCount ?? 0;
+    const displayedMasteredCount = isFiltered
+        ? cards.filter((c) => c.masteryLevel >= MASTERED_THRESHOLD_LEVEL).length
+        : meta?.userCounts.mastered ?? 0;
+
     return (
         <div className={"page ref-page" + (selectedSlug ? " has-panel" : "")} style={{ display: "flex", overflow: "hidden" }}>
             {/* Left column: header + cards grid */}
@@ -169,7 +183,7 @@ export default function GuidebookPage() {
             <div className="ref-header">
                 <h1 className="ref-title">Справочник техник</h1>
                 <p className="ref-subtitle">
-                    {meta?.totalCount ?? 0} техник · освоено {meta?.userCounts.mastered ?? 0}
+                    {displayedTotalCount} техник · освоено {displayedMasteredCount}
                 </p>
 
                 <div className="ref-tools">

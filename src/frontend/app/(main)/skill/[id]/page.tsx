@@ -88,9 +88,17 @@ export default function SkillPage({ params }: SkillPageProps) {
     const lessons = (lessonSummaries ?? [])
         .slice()
         .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic);
-    const completedCount = lessons.filter((l) => l.status === "completed").length;
+    const completedLessons = lessons.filter((l) => l.status === "completed");
+    const completedCount = completedLessons.length;
     const totalCount = lessons.length;
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const remainingCount = totalCount - completedCount;
+
+    // Same definition /tree uses: average bestScore over completed lessons, dash until
+    // something is completed. Keeping this in sync is why the two screens must agree.
+    const avgAccuracy = completedCount > 0
+        ? Math.round(completedLessons.reduce((sum, l) => sum + l.bestScore, 0) / completedCount)
+        : null;
 
     const skillTitle = skill?.title ?? skillSlug;
 
@@ -170,11 +178,13 @@ export default function SkillPage({ params }: SkillPageProps) {
                         </div>
                         <div className="path-stat-cell" role="listitem">
                             <div className="path-stat-label">Точность</div>
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                            <div className="path-stat-val" aria-label={avgAccuracy === null ? "Нет данных" : undefined}>
+                                {avgAccuracy === null ? "—" : `${avgAccuracy}%`}
+                            </div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Время</div>
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                            <div className="path-stat-label">Осталось</div>
+                            <div className="path-stat-val">{remainingCount}</div>
                         </div>
                     </div>
                 </div>
@@ -219,7 +229,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                                             </span>
                                             {isActive && (
                                                 <span className="path-tl-action">
-                                                    <Link href={`/session/${lesson.lessonId}`}>
+                                                    <Link href={`/session/${lesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}`)}`}>
                                                         <button
                                                             className="btn btn-accent"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
@@ -231,7 +241,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                                             )}
                                             {lesson.status === "completed" && (
                                                 <span className="path-tl-action">
-                                                    <Link href={`/session/${lesson.lessonId}`}>
+                                                    <Link href={`/session/${lesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}`)}`}>
                                                         <button
                                                             className="btn btn-secondary"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
@@ -265,7 +275,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                         <span className="path-fab-eyebrow">Начать следующий урок</span>
                         <span className="path-fab-lesson">{fabLesson.title}</span>
                     </div>
-                    <Link href={`/session/${fabLesson.lessonId}`}>
+                    <Link href={`/session/${fabLesson.lessonId}?exit=${encodeURIComponent(`/skill/${skillSlug}`)}`}>
                         <button className="path-fab-btn">Начать →</button>
                     </Link>
                 </div>
