@@ -551,7 +551,8 @@ internal sealed class ExerciseService(
             evaluationResult.Explanation,
             evaluationResult.AiFeedback,
             XpEarned: 0,
-            NewlyUnlockedAchievementKeys: Array.Empty<string>());
+            NewlyUnlockedAchievementKeys: Array.Empty<string>(),
+            CorrectAnswer: evaluationResult.CorrectAnswer);
     }
 
     /// <summary>

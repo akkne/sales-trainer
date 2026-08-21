@@ -423,6 +423,26 @@ nothing here to switch to" and none should resolve into a move nobody asked for.
 
 `LessonSummaryDto`: `{lessonId, title, orderInTopic, topicOrder, status, bestScore, kind}` where `kind` is `"theory"` (every exercise is a `theory_card`) or `"practice"`. Theory lessons are played as swipeable cards; the client submits the last card once to complete them. Across a skill, lessons are ordered by `topicOrder` (the topic's `OrderInSkill`) first, then by `orderInTopic` — so topics stay grouped instead of interleaving; the client sorts by `(topicOrder, orderInTopic)`.
 
+**`ExerciseSubmissionResultDto`'s `correctAnswer` field (docs/AUDIT_PROD.md X-3/X-6/X-8):** the
+pre-submission `GET /lessons/:lessonId/exercises` deliberately strips every answer-key field
+(`is_correct`, `correct_position`, `is_mistake`, `ai_prompt` — `ExerciseService.StripAnswerKeyFields`)
+so the client never has the answer before the learner submits one. Three exercise types' feedback UI
+was reading one of those stripped fields anyway and so always found it absent: `reorder`'s per-row
+correct/wrong marking (`correct_position`), `choose_option`/`fill_blank`'s "which option was right"
+highlight after a wrong answer (`is_correct`), and `spot_mistake`'s "which line was the real mistake"
+highlight (`is_mistake`). The fix is one contract addition rather than three: `POST
+/exercises/:exerciseId/submit`'s response gained `correctAnswer: ExerciseCorrectAnswerDto | null`,
+populated by the same evaluation strategy that already needed the answer to grade the submission —
+so nothing is revealed before the learner has answered, only in the result of having done so.
+`ExerciseCorrectAnswerDto`: `{correctOptionIndex: number | null, order: number[] | null,
+correctLineIndex: number | null}` — each exercise type sets only the field it needs and leaves the
+rest `null`: `choose_option`/`fill_blank` set `correctOptionIndex` (index into `options`); `reorder`
+sets `order` (the `items` indices in correct order, same shape as the `{order: number[]}` the learner
+submits, so the client diffs its own submission against it); `spot_mistake` sets `correctLineIndex`
+(index into `dialogue`). Free-form/AI-graded types with nothing to reveal in this shape
+(`free_text`, `rewrite`, `ai_dialogue`, `evaluate_call`) and a skipped submission leave the whole
+object `null`.
+
 **`POST /exercises/:exerciseId/submit`'s `skipped` field (docs/AUDIT_PROD.md X-4):** the client's "Skip"
 button sends `{answer: {}, skipped: true}` instead of calling nothing. A skipped submission records a
 real `UserExerciseAttempt` (always `isCorrect: false`, `score: 0`, no AI call and no grading strategy

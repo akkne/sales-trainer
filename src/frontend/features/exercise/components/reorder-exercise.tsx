@@ -36,26 +36,47 @@ export function ReorderExercise({
     submittedResult,
     submitError,
 }: ReorderExerciseProps) {
+    // Best guess at the "solved" order before an answer exists: the learner content strips
+    // `correct_position` (docs/AUDIT_PROD.md X-3), so this is only ever the authored array order —
+    // used solely to guard the initial shuffle (X-2) against dealing that same order back out.
+    const preSubmitCorrectOrderGuess = useMemo(() => {
+        return content.items
+            .map((item, idx) => ({ idx, pos: item.correct_position }))
+            .sort((a, b) => a.pos - b.pos)
+            .map(x => x.idx);
+    }, [content.items]);
+
+    // X-2: a plain Fisher–Yates shuffle can deal the items back out already in the correct order,
+    // so "Проверить" would score 100% with no work done. Guarantee the starting arrangement differs
+    // from the (best guess at the) solved one, falling back to a rotation — which always differs
+    // from the original for 2+ distinct indices — if the shuffle happened to land on it anyway.
     const shuffledIndices = useMemo(() => {
         const indices = content.items.map((_, i) => i);
+        if (indices.length <= 1) return indices; // degenerate: nothing to reorder
+
         for (let i = indices.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
+
+        const isAlreadySolved = indices.every(
+            (value, position) => value === preSubmitCorrectOrderGuess[position]
+        );
+        if (isAlreadySolved) {
+            return [...indices.slice(1), indices[0]];
+        }
+
         return indices;
-    }, [content.items]);
+    }, [content.items, preSubmitCorrectOrderGuess]);
 
     const [orderedIndices, setOrderedIndices] = useState<number[]>(shuffledIndices);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
-    const correctOrder = useMemo(() => {
-        return content.items
-            .map((item, idx) => ({ idx, pos: item.correct_position }))
-            .sort((a, b) => a.pos - b.pos)
-            .map(x => x.idx);
-    }, [content.items]);
+    // X-3: the learner content strips `correct_position`, so row marking after answering must use
+    // the correct order the server hands back in the submission result, not this pre-submit guess.
+    const correctOrder = submittedResult?.correctAnswer?.order ?? preSubmitCorrectOrderGuess;
 
     function handleDragStart(index: number) {
         if (isAnswered) return;

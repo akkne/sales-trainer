@@ -82,6 +82,11 @@ internal sealed class AiExerciseEvaluationStrategy : IExerciseEvaluationStrategy
             result.IsCorrect,
             result.Score,
             result.Explanation,
-            result.AiFeedback);
+            result.AiFeedback,
+            // docs/AUDIT_PROD.md X-8: pass ai-service's revealed mistake line through to the DTO shared
+            // by every exercise type's submission result.
+            CorrectAnswer: result.CorrectLineIndex is int correctLineIndex
+                ? new ExerciseCorrectAnswerDto(CorrectLineIndex: correctLineIndex)
+                : null);
     }
 }

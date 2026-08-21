@@ -50,6 +50,13 @@ internal abstract class SingleCorrectOptionEvaluationStrategy : IExerciseEvaluat
             isCorrect = options[selectedIndex].GetProperty(ExerciseContentFields.IsCorrect).GetBoolean();
         }
 
+        // docs/AUDIT_PROD.md X-6: the learner content strips `is_correct`, so the client cannot show
+        // which option was right on a wrong answer — hand back the correct index now that grading has
+        // already needed it.
+        var correctOptionIndex = options.FindIndex(option =>
+            option.TryGetProperty(ExerciseContentFields.IsCorrect, out var isCorrectElement)
+            && isCorrectElement.ValueKind == JsonValueKind.True);
+
         string? explanation = null;
         if (exerciseContent.TryGetProperty(ExerciseContentFields.Explanation, out var explanationElement))
             explanation = explanationElement.GetString();
@@ -58,6 +65,9 @@ internal abstract class SingleCorrectOptionEvaluationStrategy : IExerciseEvaluat
             IsCorrect: isCorrect,
             Score: isCorrect ? ExerciseScores.Maximum : ExerciseScores.Minimum,
             Explanation: explanation,
-            AiFeedback: null));
+            AiFeedback: null,
+            CorrectAnswer: correctOptionIndex >= 0
+                ? new ExerciseCorrectAnswerDto(CorrectOptionIndex: correctOptionIndex)
+                : null));
     }
 }

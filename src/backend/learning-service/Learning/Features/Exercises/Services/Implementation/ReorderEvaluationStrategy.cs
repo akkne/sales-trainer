@@ -70,6 +70,10 @@ internal sealed class ReorderEvaluationStrategy : IExerciseEvaluationStrategy
             IsCorrect: isCorrect,
             Score: isCorrect ? ExerciseScores.Maximum : ExerciseScores.Minimum,
             Explanation: explanation,
-            AiFeedback: null));
+            AiFeedback: null,
+            // docs/AUDIT_PROD.md X-3: the learner content strips `correct_position`, so the client
+            // cannot mark rows correctly on its own — hand back the correct order now that grading
+            // has already needed it.
+            CorrectAnswer: new ExerciseCorrectAnswerDto(Order: items)));
     }
 }

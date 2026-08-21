@@ -37,6 +37,10 @@ export function ChooseOptionExercise({
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
+    // X-6: the learner content strips `is_correct`, so which option was right can only come from
+    // the submission result (docs/AUDIT_PROD.md X-6, docs/API_CONTRACTS.md `correctAnswer`).
+    const correctOptionIndex = submittedResult?.correctAnswer?.correctOptionIndex ?? null;
+
     useKeyboardControls({
         optionCount: content.options.length,
         onSelectOption: (index) => {
@@ -79,7 +83,7 @@ export function ChooseOptionExercise({
             <div className="col gap-3">
                 {content.options.map((option, optionIndex) => {
                     const isSelected = selectedOptionIndex === optionIndex;
-                    const isCorrectOption = option.is_correct;
+                    const isCorrectOption = correctOptionIndex === optionIndex;
                     const showCorrect = isAnswered && !submittedResult?.isCorrect && isCorrectOption;
                     const showWrong = isAnswered && isSelected && !submittedResult?.isCorrect;
                     const showSuccess = isAnswered && isSelected && submittedResult?.isCorrect;
@@ -121,7 +125,7 @@ export function ChooseOptionExercise({
                     aiFeedback={submittedResult.aiFeedback ?? null}
                     onContinue={onContinue ?? (() => {})}
                     userAnswer={selectedOptionIndex !== null ? content.options[selectedOptionIndex]?.text ?? null : null}
-                    correctAnswer={content.options.find((o) => o.is_correct)?.text ?? null}
+                    correctAnswer={correctOptionIndex !== null ? content.options[correctOptionIndex]?.text ?? null : null}
                 />
             ) : (
                 <ExerciseActionFooter

@@ -40,7 +40,10 @@ export function SpotMistakeExercise({
     const [explanation, setExplanation] = useState("");
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const mistakeIndex = content.dialogue.findIndex(line => line.is_mistake);
+    // X-8: the learner content strips `is_mistake`, so the real mistake line can only come from the
+    // submission result (docs/AUDIT_PROD.md X-8, docs/API_CONTRACTS.md `correctAnswer`) — it is
+    // meaningless (and unused) before the learner has answered.
+    const mistakeIndex = submittedResult?.correctAnswer?.correctLineIndex ?? -1;
 
     function getLineStyle(lineIndex: number) {
         const isSelected = selectedLineIndex === lineIndex;

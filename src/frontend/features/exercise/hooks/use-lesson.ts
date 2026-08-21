@@ -20,6 +20,15 @@ export interface ExerciseData {
     content: unknown;
 }
 
+// The correct answer, revealed only after the learner has submitted one — never present on the
+// pre-submission exercise content, which strips every answer-key field (docs/AUDIT_PROD.md
+// X-3/X-6/X-8, docs/API_CONTRACTS.md). Each exercise type sets only the field it needs.
+export interface ExerciseCorrectAnswer {
+    correctOptionIndex: number | null;
+    order: number[] | null;
+    correctLineIndex: number | null;
+}
+
 export interface ExerciseSubmissionResult {
     isCorrect: boolean;
     score: number;
@@ -27,6 +36,7 @@ export interface ExerciseSubmissionResult {
     aiFeedback: string | null;
     xpEarned: number;
     newlyUnlockedAchievementKeys: string[];
+    correctAnswer: ExerciseCorrectAnswer | null;
 }
 
 export function useAllLessons() {

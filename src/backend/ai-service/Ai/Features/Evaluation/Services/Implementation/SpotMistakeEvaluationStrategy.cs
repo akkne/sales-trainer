@@ -85,6 +85,9 @@ internal sealed class SpotMistakeEvaluationStrategy(
             IsCorrect: isCorrect,
             Score: score,
             Explanation: explanation,
-            AiFeedback: feedback.Length > 0 ? feedback.ToString().Trim() : null);
+            AiFeedback: feedback.Length > 0 ? feedback.ToString().Trim() : null,
+            // docs/AUDIT_PROD.md X-8: the learner content strips `is_mistake`, so the client cannot
+            // paint the real mistake line — hand back its index now that grading has already needed it.
+            CorrectLineIndex: mistakeIndex >= 0 ? mistakeIndex : null);
     }
 }
