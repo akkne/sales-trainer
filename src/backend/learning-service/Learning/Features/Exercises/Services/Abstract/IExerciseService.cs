@@ -36,7 +36,12 @@ public interface IExerciseService
         string skillSlug,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
+    /// <summary>
+    /// Null means <paramref name="lessonId"/> names no lesson at all; an empty list means the lesson
+    /// exists but has no exercises yet. Callers must not conflate the two — the first is a 404, the
+    /// second is a 200 with an empty exercise list.
+    /// </summary>
+    Task<IReadOnlyList<ExerciseDto>?> GetExercisesForLessonAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default);
 

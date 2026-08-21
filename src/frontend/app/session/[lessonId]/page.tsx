@@ -178,10 +178,25 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
     // E-11: an empty (but successfully loaded) exercise list must not spin forever — the queue
     // only ever fills from a non-empty `exercises`, so `exerciseQueue.length === 0` would
     // otherwise never resolve.
+    // X-5: this state used to have no way out at all — no spinner, no text, not one button or
+    // link — so the same close ("✕" → exitHref) every other screen in this session has is
+    // repeated here too.
     if (!exercises || exercises.length === 0) {
         return (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ink-3)", background: "var(--bg)" }}>
-                Упражнения не найдены
+            <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
+                <div className="session-top">
+                    <button
+                        className="icon-btn"
+                        onClick={() => router.push(exitHref)}
+                        aria-label="Выйти"
+                        style={{ flex: "none" }}
+                    >
+                        <Icon name="close" size={20} />
+                    </button>
+                </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-3)" }}>
+                    Упражнения не найдены
+                </div>
             </div>
         );
     }
@@ -219,10 +234,23 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
         );
     }
 
+    // X-5: same dead-end shape as the empty-list guard above — give it the same exit.
     if (!currentExercise) {
         return (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ink-3)", background: "var(--bg)" }}>
-                Упражнения не найдены
+            <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
+                <div className="session-top">
+                    <button
+                        className="icon-btn"
+                        onClick={() => router.push(exitHref)}
+                        aria-label="Выйти"
+                        style={{ flex: "none" }}
+                    >
+                        <Icon name="close" size={20} />
+                    </button>
+                </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-3)" }}>
+                    Упражнения не найдены
+                </div>
             </div>
         );
     }

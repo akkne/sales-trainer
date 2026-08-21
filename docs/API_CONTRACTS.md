@@ -416,7 +416,7 @@ nothing here to switch to" and none should resolve into a move nobody asked for.
 | GET | /skills/:slug/lessons | — | `LessonSummaryDto[]` (200 `[]` for a real skill with no lessons yet; 404 only when `:slug` names no skill at all) |
 | GET | /lessons | — | `LessonSummaryDto[]` (all skills) |
 | GET | /topics/:topicId/lessons | — | `LessonSummaryDto[]` (one topic, with the caller's per-lesson status) |
-| GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` |
+| GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` (200 `[]` for a real lesson with no exercises yet; 404 only when `:lessonId` names no lesson at all — docs/AUDIT_PROD.md X-5) |
 | POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
 | POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |

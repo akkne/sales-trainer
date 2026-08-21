@@ -275,6 +275,15 @@ internal sealed class ExerciseService(
     /// removed.
     ///
     /// <para>
+    /// <b>Null means <paramref name="lessonId"/> names no lesson at all; an empty list means the lesson
+    /// exists but has no exercises yet (X-5).</b> The two are not the same fact: a made-up or stale
+    /// lesson id used to come back <c>200 []</c> indistinguishably from a real, empty-draft lesson, so
+    /// the client could never tell "you have nothing to do here" apart from "this session doesn't
+    /// exist" and rendered a blank screen with no exit either way. Callers must not conflate the two —
+    /// the first is a 404, the second a 200 with an empty exercise list.
+    /// </para>
+    ///
+    /// <para>
     /// <b>The order of the two transformations matters.</b> Placeholders are rendered first and the
     /// answer key stripped second, so a placeholder inside an option's text still resolves; stripping
     /// only removes fields and never rewrites them, so it cannot undo the rendering. Reversed, an
@@ -286,11 +295,17 @@ internal sealed class ExerciseService(
     /// change between two exercises of one request, and the provider memoizes in any case.
     /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
+    public async Task<IReadOnlyList<ExerciseDto>?> GetExercisesForLessonAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default)
     {
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var lessonExists = await databaseContext.Lessons
+            .AnyAsync(lesson => lesson.Id == lessonId, cancellationToken);
+
+        if (!lessonExists)
+            return null;
 
         var rawExercises = await databaseContext.Exercises
             .Where(exercise => exercise.LessonId == lessonId)

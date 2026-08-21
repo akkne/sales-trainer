@@ -74,6 +74,10 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         CancellationToken cancellationToken)
     {
         var exerciseDtos = await exerciseService.GetExercisesForLessonAsync(lessonId, cancellationToken);
+
+        if (exerciseDtos is null)
+            return NotFound(new { message = $"Lesson {lessonId} not found." });
+
         return Ok(exerciseDtos);
     }
 
