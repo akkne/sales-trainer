@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiClient, SessionExpiredError } from "@/shared/api/api-client";
@@ -151,6 +151,22 @@ export function useAcceptInvite(token: string) {
                 error: (error as Error).message,
             });
         },
+    });
+}
+
+/**
+ * X-10: whether an invite token is still acceptable, checked before the invitee is asked to fill
+ * in a name and password — a garbage, expired, revoked, or already-used token used to only surface
+ * after that trip through the form. Read-only (`GET /auth/invites/{token}/status`), so unlike
+ * `useAcceptInvite` this is safe to fire the moment the page mounts.
+ */
+export function useValidateInviteToken(token: string) {
+    return useQuery({
+        queryKey: ["invite-status", token],
+        queryFn: () => apiClient.get<void>(`/auth/invites/${encodeURIComponent(token)}/status`),
+        // A rejected token is a settled, permanent answer, not a transient blip — retrying the
+        // global default number of times would just delay telling the invitee.
+        retry: false,
     });
 }
 

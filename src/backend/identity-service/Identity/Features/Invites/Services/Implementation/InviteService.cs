@@ -364,6 +364,60 @@ internal sealed class InviteService(
         return await authenticationService.IssueTokensForUserAsync(user, cancellationToken);
     }
 
+    /// <summary>
+    /// Read-only mirror of the validity checks at the top of <see cref="AcceptAsync"/>, minus the
+    /// user/membership creation and minus <see cref="InviteRejectionReason.PasswordRequired"/> (that
+    /// reason is about the invitee, not the token). Added for docs/AUDIT_PROD.md X-10: the acceptance
+    /// page used to have no way to tell a garbage, expired, revoked, or already-used token apart from
+    /// a live one until after the invitee filled in a name and password and submitted the form.
+    /// </summary>
+    public async Task ValidateAsync(string rawToken, CancellationToken cancellationToken = default)
+    {
+        if (!inviteTokenFactory.TryReadOrganizationId(rawToken, out var tokenOrganizationId))
+        {
+            throw new InviteNotAcceptableException(InviteRejectionReason.NotFound, InviteConstants.NotFoundMessage);
+        }
+
+        if (tenantContext.OrganizationId is { } alreadyScopedOrganizationId)
+        {
+            if (alreadyScopedOrganizationId != tokenOrganizationId)
+            {
+                throw new InviteNotAcceptableException(InviteRejectionReason.NotFound, InviteConstants.NotFoundMessage);
+            }
+        }
+        else
+        {
+            tenantContext.SetOrganization(tokenOrganizationId);
+        }
+
+        var tokenHash = inviteTokenFactory.ComputeTokenHash(rawToken);
+        var now = DateTime.UtcNow;
+
+        await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var invite = await databaseContext.Invites
+            .FirstOrDefaultAsync(candidate => candidate.TokenHash == tokenHash, cancellationToken)
+            ?? throw new InviteNotAcceptableException(InviteRejectionReason.NotFound, InviteConstants.NotFoundMessage);
+
+        if (invite.AcceptedAt is not null)
+        {
+            throw new InviteNotAcceptableException(
+                InviteRejectionReason.AlreadyAccepted, InviteConstants.AlreadyAcceptedMessage);
+        }
+
+        if (invite.RevokedAt is not null)
+        {
+            throw new InviteNotAcceptableException(InviteRejectionReason.Revoked, InviteConstants.RevokedMessage);
+        }
+
+        if (invite.ExpiresAt <= now)
+        {
+            throw new InviteNotAcceptableException(InviteRejectionReason.Expired, InviteConstants.ExpiredMessage);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     private Guid RequireOrganizationId()
         => tenantContext.OrganizationId
            ?? throw new InvalidOperationException(ErrorMessages.OrganizationContextNotSet);

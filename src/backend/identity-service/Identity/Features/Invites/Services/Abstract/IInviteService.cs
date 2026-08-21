@@ -31,4 +31,14 @@ public interface IInviteService
         string rawToken,
         AcceptInviteRequestDto request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Read-only check for whether a token could still be accepted, without accepting it — the
+    /// acceptance page uses this before it asks the invitee to fill in a name and password
+    /// (docs/AUDIT_PROD.md X-10). Throws the same <see cref="Exceptions.InviteNotAcceptableException"/>
+    /// as <see cref="AcceptAsync"/>, except <see cref="Exceptions.InviteRejectionReason.PasswordRequired"/>,
+    /// which depends on whether the invitee already has an account and has no bearing on whether the
+    /// token itself is still live.
+    /// </summary>
+    Task ValidateAsync(string rawToken, CancellationToken cancellationToken = default);
 }

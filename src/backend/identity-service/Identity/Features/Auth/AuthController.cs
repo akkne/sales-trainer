@@ -181,6 +181,33 @@ public sealed class AuthController(
         }
     }
 
+    /// <summary>
+    /// Read-only pre-check for the acceptance page (docs/AUDIT_PROD.md X-10): lets the frontend tell
+    /// a garbage, expired, revoked, or already-used token apart from a live one <em>before</em> it
+    /// asks the invitee to fill in a name and password, instead of only finding out after that trip
+    /// through the form. Anonymous and not <c>[TenantScoped]</c> for the same reason acceptance is
+    /// not — see <see cref="AcceptInvite"/>.
+    /// </summary>
+    [HttpGet("invites/{token}/status")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetInviteStatus(string token, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await inviteService.ValidateAsync(token, cancellationToken);
+            return NoContent();
+        }
+        catch (InviteNotAcceptableException exception)
+        {
+            return exception.Reason switch
+            {
+                InviteRejectionReason.NotFound => NotFound(new { message = exception.Message }),
+                InviteRejectionReason.AlreadyAccepted => Conflict(new { message = exception.Message }),
+                _ => StatusCode(StatusCodes.Status410Gone, new { message = exception.Message })
+            };
+        }
+    }
+
     [HttpPost("verify-email")]
     public async Task<ActionResult<AuthTokenResponseDto>> VerifyEmail(
         [FromBody] VerifyEmailRequestDto verifyEmailRequest,
