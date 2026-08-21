@@ -1,0 +1,569 @@
+# Независимое ревью ночного прогона (`origin/main..main`)
+
+**Ревью велось против HEAD `84c4449` → к концу прогона HEAD стал `7aa7800`.**
+Пока я читал, приземлилось ещё 5 коммитов: `846c020`, `8ef73b5`, `7d93a1f`, `cccc8b9`, `7aa7800`.
+`846c020` (T-6, раскатка `[TenantScoped]`) попал в мой разбор области 3, потому что я снимал дифф
+уже после него. Остальные четыре (`8ef73b5`, `7d93a1f`, `cccc8b9`, `7aa7800`) **не проверены**.
+Итого в диапазоне 70 коммитов.
+
+Роль: независимый ревьюер. Ничего не правил, не коммитил, серверы не трогал. Задача — найти
+регрессии, а не подтвердить работу; похвалы здесь нет намеренно.
+
+---
+
+## Находки
+
+### [ ] R-1 Провал `POST /auth/logout` оставляет живую refresh-cookie, и api-client молча выдаёт по ней новый access-token
+- **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:280-296`,
+  `src/frontend/shared/stores/auth-store.ts:70-73`, `src/frontend/shared/api/api-client.ts:78-86`,
+  `src/backend/identity-service/Identity/Features/Auth/AuthController.cs:327-338`
+- **Что не так:** refresh-token живёт **только** в httpOnly-cookie, и отзывает его исключительно
+  серверный `POST /auth/logout` (`RevokeRefreshTokenAsync` + `Response.Cookies.Delete`).
+  `clearAuthSession()` удаляет из браузера **только** `localStorage.accessToken` — cookie он
+  тронуть не может. Значит на новом пути (`onSettled` при провале запроса) браузер остаётся с
+  валидной refresh-cookie, а `fetchWithAuthToken` на любой 401 сам вызывает `attemptTokenRefresh()`
+  → `POST /auth/refresh` с этой cookie → успех → `localStorage.setItem("accessToken", ...)`
+  напрямую, минуя zustand. Сессия восстановлена на сетевом уровне, а `authenticatedUser` в стор
+  так и остался `null`. Текст тоста «Вы вышли на этом устройстве» при этом — неправда.
+- **Как проявится:** identity-service недоступен / гейтвей отдал 502 / нет сети. Пользователь
+  нажимает «Выйти» в `/settings` → тост «Не удалось завершить сессию на сервере… Вы вышли на этом
+  устройстве» → редирект на `/login`. Дальше пользователь набирает в адресной строке `/tree` (или
+  жмёт «назад»): запросы уходят без `Authorization` → 401 → refresh по живой cookie → новый
+  access-token в `localStorage` → данные грузятся под тем же аккаунтом, хотя UI считает, что
+  пользователь вышел. На чужом устройстве (сценарий, ради которого тост и советует сменить пароль)
+  сессия фактически не закрыта.
+- **Severity:** major
+- **Уверенность:** механизм — точно (прочитан весь путь: cookie отзывается только сервером;
+  `doRefresh` пишет в `localStorage` напрямую; `useInitAuth` не сработает, т.к. `store.accessToken`
+  остался `null`); конкретный автотриггер сразу после выхода — требует проверки (`track.ts`
+  защищён `hasAccessToken()`, `/auth/login/start` анонимен, так что на самом `/login` ничего
+  не «оживляет» сессию само)
+
+### [ ] R-2 На истёкшей сессии logout даёт двойную навигацию и пугающий тост про смену пароля
+- **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:283-296`,
+  `src/frontend/shared/api/api-client.ts:78-86`
+- **Что не так:** если `POST /auth/logout` вернул 401 и refresh не удался, api-client сам делает
+  `localStorage.removeItem` + `window.location.href = "/login"` и бросает `Error("Session expired")`.
+  Дальше `onError` показывает тост «…советуем сменить пароль, если устройство не ваше», а
+  `onSettled` делает `router.push("/login")` поверх уже идущего hard-navigation. Тост при полной
+  перезагрузке страницы гарантированно теряется, а сам текст для «сессия просто истекла» —
+  неуместно тревожный.
+- **Как проявится:** пользователь не заходил сутки, access-token истёк, refresh-token тоже.
+  Жмёт «Выйти» → мигает тост про смену пароля → жёсткая перезагрузка `/login` съедает его.
+- **Severity:** minor
+- **Уверенность:** точно
+
+### [ ] R-3 `useLogout` не чистит кеш React Query, в отличие от входа
+- **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:288-292` против
+  `use-auth.ts:36-37` (`useHandleSuccessfulAuth` делает `queryClient.clear()`)
+- **Что не так:** выход оставляет в кеше все данные вышедшего пользователя. Сейчас это прикрыто
+  тем, что `queryClient.clear()` вызывается на **входе**, но защита односторонняя: любой путь,
+  который окажется между выходом и следующим `handleSuccessfulAuth` (см. R-1 — восстановление
+  токена через refresh), увидит кеш прошлого пользователя.
+- **Как проявится:** совместно с R-1: токен восстановился, пользователь вернулся на `/tree`,
+  часть экранов рисуется из кеша прошлой сессии без запроса.
+- **Severity:** minor
+- **Уверенность:** точно (что `clear()` нет), требует проверки (что это где-то видно глазом)
+
+### [ ] R-4 `submitError` — общая мутация на весь урок, её никто не сбрасывает: ошибка едет на следующие упражнения
+- **Коммит/файл:** `16afd08`; `src/frontend/app/session/[lessonId]/page.tsx:70` (`useSubmitExercise()`
+  один инстанс на весь `SessionFlow`), `:146-152` (`handleSkip` / `handleContinueAfterResult` —
+  `submitExerciseMutation.reset()` не вызывается нигде), `:280..389` (`submitError={submitExerciseMutation.error}`
+  во все 10 типов), `src/frontend/features/exercise/components/exercise-action-footer.tsx:52-58`
+- **Что не так:** `submitExerciseMutation.error` в TanStack Query «липкий» — он живёт до
+  следующего `mutate` или явного `reset()`. Ни `handleSkip()`, ни `handleContinueAfterResult()`,
+  ни `handleStartMistakesReview()` не сбрасывают мутацию. Это ровно тот случай, о котором просили:
+  новая ветка ошибки рисуется **вместо/поверх** рабочего контента.
+- **Как проявится:** упражнение 3, `POST /exercises/{id}/submit` падает (500/таймаут) → в футере
+  красное «Произошла ошибка при проверке. Попробуй ещё раз.». Пользователь жмёт «Пропустить» →
+  открывается упражнение 4, к которому он не прикасался, **и там уже висит та же красная ошибка**.
+  И на 5-м, и на 6-м — до первой успешной отправки. Плюс то же самое переезжает в раунд «разбор
+  ошибок» (`handleStartMistakesReview` тоже не сбрасывает).
+- **Severity:** major
+- **Уверенность:** точно
+
+### [ ] R-5 E-11: `isError` в `SessionRouter` выбрасывает весь урок при провале фонового refetch
+- **Коммит/файл:** `e608179`; `src/frontend/app/session/[lessonId]/page.tsx:594-620`
+  (`if (isError || !exercises) return <ErrorState .../>`), хук —
+  `src/frontend/features/exercise/hooks/use-lesson.ts:47-52` (без `staleTime`/`refetchOnWindowFocus`),
+  глобальные дефолты — `src/frontend/app/providers.tsx:52` (`staleTime: 60_000, retry: 1`)
+- **Что не так:** до фикса `isError` не читался вообще, поэтому провалившийся **фоновый** refetch
+  был безвреден. Теперь `isError` — единственное условие, и он становится `true` на любом
+  завершившемся с ошибкой запросе, даже когда `data` уже есть. `SessionRouter` при этом
+  размонтирует `SessionFlow` целиком, а всё состояние прохождения (`exerciseQueue`,
+  `currentQueueIndex`, `correctAnswerCount`, `mistakeExercises`, таймер) — локальный state
+  внутри `SessionFlow`.
+- **Как проявится:** учащийся идёт по уроку дольше минуты (запрос стал stale), переключается в
+  другую вкладку и возвращается → `refetchOnWindowFocus` (дефолт `true`, здесь не отключён)
+  дёргает `/lessons/{id}/exercises` → сеть моргнула → после `retry: 1` `isError = true` →
+  **весь урок заменяется на «Не удалось загрузить уроки/урок» и весь прогресс прохождения
+  теряется**, даже кнопка «Повторить» начнёт урок с нуля.
+- **Severity:** major
+- **Уверенность:** механизм `isError` при наличии данных — точно; что `refetchOnWindowFocus`
+  реально стреляет в этом хуке — требует проверки в браузере
+
+### [ ] R-6 Тот же shape во всей серии E-фиксов: `isError` проверяется раньше «пусто» и вытесняет уже отрисованные данные
+- **Коммит/файл:** серия `c7e54d9`, `529c096`, `b75563d`, `6817709`, `84ecf34`, `248115d`,
+  `eb9d771`, `be193e4`; пример — `src/frontend/app/(main)/tree/page.tsx:201-208`
+  (`if (isError) return <ErrorState .../>` стоит **до** `if (enrolledSkills.length === 0)`) и
+  `:475-484` (`isError ? <ErrorState/> : <>…весь центр экрана…</>`)
+- **Что не так:** инверсии «пусто → ошибка» я **не нашёл** — во всех проверенных местах пустое
+  состояние сохранено и достижимо. Но выбранная форма (`isError` как первый гейт, без
+  `&& !data`) означает, что провал фонового обновления гасит уже показанный корректный контент.
+  Это системное решение серии, а не единичная опечатка, поэтому вынесено одним пунктом.
+- **Как проявится:** `/tree` открыт, навыки отрисованы; спустя минуту фоновый refetch `/skills`
+  падает → список навыков и весь центральный столбец заменяются на ErrorState, хотя данные в
+  кеше валидны.
+- **Severity:** minor (для `/tree` и остальных — косметика; для `/session` то же самое стоит
+  major, см. R-5, потому что там теряется работа)
+- **Уверенность:** точно (код), требует проверки (частота реального триггера)
+
+### [ ] R-7 `stripFeedbackHtml` склеивает слова на границах блочных тегов
+- **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;
+  потребитель — `src/frontend/features/org-dialogs/components/dialog-session-list.tsx:105`
+- **Что не так:** `sanitizeHtml(html, { allowedTags: [] })` вырезает теги, **не подставляя
+  пробел**. Затем `.replace(/\s+/g, " ")` уже нечего чинить.
+- **Как проявится:** проверено запуском на реальном пакете (`sanitize-html@2.17.7`):
+  - `"<h3>Итог</h3><p>Первое предложение.</p><p>Второе предложение.</p>"` →
+    `"ИтогПервое предложение.Второе предложение."`
+  - `"<ul><li>раз</li><li>два</li></ul>"` → `"раздва"`
+  - `"строка1<br>строка2"` → `"строка1строка2"`
+  РОП видит в списке `/org/dialogs` превью фидбэка со склеенными словами в каждой второй строке.
+- **Severity:** major
+- **Уверенность:** точно (выполнено, вывод выше)
+
+### [ ] R-8 `stripFeedbackHtml` возвращает HTML-escaped сущности, а рендерится как текст
+- **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;
+  `src/frontend/features/org-dialogs/components/dialog-session-list.tsx:105`
+  (`{stripFeedbackHtml(session.feedbackSummary)}` — текстовый child React, не `innerHTML`)
+- **Что не так:** `sanitize-html` — генератор **HTML**, он экранирует `&`, `<`, `>` в текстовых
+  узлах. Результат кладётся в React как обычный текст, поэтому сущности видны буквально.
+- **Как проявится:** проверено запуском:
+  - `"Оценка < 70 & \"низко\""` → `"Оценка &lt; 70 &amp; \"низко\""`
+  - `"Клиент сказал: 5 > 3"` → `"Клиент сказал: 5 &gt; 3"`
+  Любой фидбэк, где модель написала «ниже 70 & мало» или «5 > 3», в превью отрисуется как
+  `&amp;` / `&gt;`. Для LLM-вывода это не редкость.
+- **Severity:** major
+- **Уверенность:** точно (выполнено)
+
+### [ ] R-9 `<ol>` не в allowlist: нумерованный список превращается в осиротевшие `<li>`
+- **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:12`
+- **Что не так:** `allowedTags` содержит `ul`, `li`, но не `ol`. При `disallowedTagsMode: "discard"`
+  `<ol>` выбрасывается, а его `<li>` остаются.
+- **Как проявится:** проверено: `"<ol><li>a</li><li>b</li></ol>"` → `"<li>a</li><li>b</li>"` —
+  `<li>` вне списка, без маркеров и отступов. Модель регулярно нумерует рекомендации.
+- **Severity:** minor
+- **Уверенность:** точно (выполнено)
+- **Не находка (проверено и чисто):** сам allowlist безопасен. `allowedAttributes: {}` убивает
+  `href`, `style` и все `on*`; `script`/`img onerror`/`a href="javascript:"`/`svg onload`/`iframe`
+  вырезаются полностью (`nonTextTags` по умолчанию съедает и содержимое `script`/`style`).
+  Зависимость в правильном `src/frontend/package.json` (prod) + `@types` в dev, залочено
+  (`sanitize-html 2.17.7` в `package-lock.json`).
+
+### [ ] R-10 W-9: ▲▼ удалены по неверному обоснованию — переупорядочивание уже персистится в соседнем экране
+- **Коммит/файл:** `316da24`;
+  `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:287-292` и
+  `.../skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx:264-269`
+  (новый текст «нет способа переупорядочить»), против уже существующего
+  `src/frontend/app/(org)/org/content/lessons/[lessonId]/page.tsx:181-199`
+- **Что не так:** коммит утверждает «there is no bulk-reorder endpoint on the backend … building
+  one isn't a night-run call» и удаляет кнопки. Но org-редактор оверрайдов **уже** персистит
+  переупорядочивание существующим эндпоинтом: `moveExerciseInList` + цикл
+  `updateExercise.mutateAsync({ exerciseId, body: { …, orderInLesson } })` по каждому сдвинутому
+  упражнению. Bulk-эндпоинт для этого и не нужен, а `updateExerciseMut` в удалённом экране уже
+  был под рукой (`page.tsx:151`).
+- **Как проявится:** контент-админ теряет рабочую функцию, и получает в интерфейсе утверждение
+  «persisting a new order needs a backend endpoint that doesn't exist today», которое неверно —
+  в двух шагах от него РОП переупорядочивает упражнения и это сохраняется.
+- **Severity:** major
+- **Уверенность:** точно
+
+### [ ] R-11 `saveExercise` на успехе сбрасывает `localRows` целиком и теряет несохранённые правки других строк
+- **Коммит/файл:** `316da24`;
+  `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:204-212` (`await qc.invalidateQueries(...); setLocalRows(null);`),
+  `:164-178` (`rows = localRows ?? server`, `setRows` пишет в `localRows`)
+- **Что не так:** `localRows` — единая теневая копия **всего списка**. `setLocalRows(null)` после
+  успешного сохранения одной строки выбрасывает вместе с ней все несохранённые изменения
+  остальных строк, которые до этого коммита жили в теневой копии сколько угодно долго.
+- **Как проявится:** админ правит текст упражнения A, не сохраняя, переключается на упражнение B
+  (`editingId` один, так что A остаётся отредактированным в `localRows`), сохраняет B →
+  `setLocalRows(null)` → правки A молча исчезают, список перерисовывается с сервера.
+- **Severity:** minor (данные на сервере целы, теряется только набранный текст — но молча)
+- **Уверенность:** точно по коду, требует проверки в UI (зависит от того, разрешает ли экран
+  оставить A изменённым и уйти на B)
+
+### [ ] R-12 Конкурентные удаления: `onError` одного восстанавливает строку, уже удалённую другим
+- **Коммит/файл:** `316da24`; те же два файла, `deleteRow`, `:225-243`
+  (`const previousRows = rows; … onError: () => setRows(previousRows)`)
+- **Что не так:** `previousRows` — снимок **всего** списка на момент клика. Откат одного
+  провалившегося DELETE записывает этот снимок целиком.
+- **Как проявится:** админ быстро удаляет A, затем B. DELETE B успешен, DELETE A падает →
+  `onError` A ставит `previousRows` A, где B ещё присутствует → B возвращается в список, хотя
+  на сервере он удалён. Ошибка исчезнет только после ручной перезагрузки. Плюс `onError` снова
+  прибивает `localRows` как постоянную тень сервера — то, от чего коммит и уходил.
+- **Severity:** minor
+- **Уверенность:** точно
+
+### [ ] R-13 Composer держит уже «отправленный» текст на экране весь round-trip — реплика видна дважды
+- **Коммит/файл:** `0ee865a`; `src/frontend/features/dialog/components/chat-input.tsx:18-25`
+  (`const succeeded = await onSend(...); if (succeeded) setInputValue("")`),
+  `src/frontend/app/dialog/[bundleId]/[modeId]/page.tsx:171` (оптимистичный бабл добавляется
+  **до** `await sendDialogMessage`), `src/frontend/app/companies/[id]/call/chat/page.tsx:154-168`
+- **Что не так:** оптимистичный бабл кладётся в стенограмму сразу, а поле ввода теперь очищается
+  только после ответа сервера. Между этими двумя моментами — полный round-trip до OpenAI.
+- **Как проявится:** учащийся отправляет реплику в диалоговом тренажёре. 3–10 секунд один и тот же
+  текст висит одновременно в стенограмме и в (задизейбленном, opacity 0.5) поле ввода. Читается
+  как «не отправилось», и это провоцирует именно то повторное нажатие, от которого фикс уходил.
+- **Severity:** minor
+- **Уверенность:** точно по коду; в friends-чате проблемы нет (там нет оптимистичного бабла)
+- **Не находка (проверено):** двойной отправки нет — `disabled` в обоих composer'ах привязан к
+  `isSending` / `sendMutation.isPending`, а `handleSendMessage` дополнительно возвращает `false`
+  при `isSending`. Все места вызова обновлены (два `ChatInput` и два `RailChatInput`),
+  `npx tsc --noEmit` чист, «легаси-алиас» `export { RailChatInput as ChatInput }` никем не
+  импортируется.
+
+### [ ] R-14 Откат оптимистичного бабла слепо срезает последний элемент, а не свой
+- **Коммит/файл:** `0ee865a`; `src/frontend/app/dialog/[bundleId]/[modeId]/page.tsx:188`
+  (`setMessages((prev) => prev.slice(0, -1))`), конкурирующие писатели —
+  `:298-321` (`handleVoiceTranscript` / `handleVoiceAiResponse`, оба добавляют сообщения и
+  **не** трогают `isSending`)
+- **Что не так:** `slice(0, -1)` предполагает, что последний элемент — именно свой оптимистичный
+  бабл. Голосовой путь (`useVoice`) пишет в тот же `messages` через отдельные колбэки без
+  синхронизации с `isSending`.
+- **Как проявится:** пользователь в голосовом режиме, WS-ответ ещё в пути; он переключает
+  `chatMode` на текст и отправляет реплику, которая падает → откат срезает пришедшую голосовую
+  реплику ИИ вместо своего бабла. Узкое окно, но детерминированное.
+- **Severity:** minor
+- **Уверенность:** требует проверки (нужен точный сценарий переключения режима на живом WS)
+
+### [ ] R-15 Новый ai→learning lookup без кеша: полный каталог навыков на каждый запрос списка диалогов и на каждую запись бандла
+- **Коммит/файл:** `2717266`;
+  `src/backend/ai-service/Ai/Infrastructure/Learning/SkillLookupClient.cs:38-56`,
+  `src/backend/learning-service/Learning/Features/SkillTree/InternalSkillsController.cs:27-34`
+  (`database.Skills.Select(...).ToListAsync()` — без фильтров и пагинации),
+  `src/backend/ai-service/Ai/Features/Dialog/DialogController.cs:70`,
+  `src/backend/ai-service/Ai/Features/Dialog/AdminDialogController.cs:63,90,113,148`
+- **Что не так:** ни `IMemoryCache`, ни ETag, ни circuit breaker, ни retry. Навыки — глобальный
+  контент (`OrganizationId IS NULL` на всю фазу 40.10), то есть идеальный кандидат на кеш; вместо
+  этого таблица целиком тянется по HTTP на **каждый** `GET /dialog/bundles`,
+  `GET /admin/dialog/bundles`, `GET /admin/dialog/bundles/{id}`, `POST /admin/dialog/bundles` и
+  `PUT /admin/dialog/bundles/{id}` — включая два маршрута записи, которым каталог нужен
+  исключительно чтобы украсить тело ответа.
+- **Как проявится:** learning-service тормозит (холодный старт, GC-пауза, всплеск запросов) →
+  каждое открытие `/dialog` у каждого учащегося добавляет до 5 с (клиентский таймаут,
+  `Math.Clamp(TimeoutSeconds, 1, 30)`, дефолт 5) и только потом рисует список **без** названий
+  навыков. Админ, сохраняющий бандл, ждёт те же +5 с после того, как запись уже прошла.
+- **Severity:** major
+- **Уверенность:** точно
+- **Не находка (проверено):** fail-open работает — любое исключение ловится и даёт пустую карту,
+  список бандлов не падает; `catch (OperationCanceledException) when (ct.IsCancellationRequested)`
+  корректно пробрасывает только отмену вызывающего. Эндпоинт действительно недостижим снаружи:
+  `/internal` отсутствует в таблице маршрутов гейтвея (94 маршрута в
+  `src/backend/gateway/Gateway/appsettings.json`, ни одного `internal`), это пинится
+  `RouteParity.Tests` (`ControllerRouteInventory.cs:57` — `UnroutedPrefixes`), а порты сервисов в
+  `docker-compose.yml` публикуются только на `127.0.0.1`. Ключи handshake совпадают на обоих
+  концах (`InternalServiceAuthentication.SecretConfigurationKey == "InternalAuth:ServiceSecret"`,
+  и `InternalAuth__ServiceSecret` проброшен всем пяти сервисам, у которых есть либо
+  internal-эндпоинт, либо internal-клиент: identity, ai, learning, company, organization).
+
+### [ ] R-16 `LearningService__BaseUrl` не выставлен для профиля Local Dev — новый lookup локально не работает вообще
+- **Коммит/файл:** `2717266`;
+  `src/backend/ai-service/Ai/appsettings.json:32-36` (`"BaseUrl": "http://learning:8080"`),
+  `docker-compose.yml:214` (единственное место, где переменная задаётся),
+  `scripts/lib-local-env.sh` / `scripts/dev-ai.sh` (переменной нет; в
+  `lib-local-env.sh:248-253` для соседнего клиента `IdentityService__BaseUrl` её как раз
+  переопределяют на `http://localhost:...` именно из-за этой проблемы)
+- **Что не так:** `http://learning:8080` — имя в docker-сети, на хосте не резолвится. Профиль
+  Local Dev (по `.claude/CLAUDE.md` — дефолтный) запускает бэкенды на хосте, поэтому новый
+  `SkillLookupClient` там падает на DNS **всегда**, тихо (fail-open → пустая карта → пустые
+  `skillSlug`/`skillTitle`).
+- **Как проявится:** локально `/dialog` и `/admin/dialog` показывают бандлы без названия навыка,
+  в логах — только `LogWarning`. То есть C-3 в дефолтном dev-профиле не проверяем, и заявление
+  коммита о том, что поле теперь заполняется, локально не воспроизводится.
+- **Severity:** minor
+- **Уверенность:** точно (переменная присутствует ровно в одном файле — docker-compose.yml)
+
+### [ ] R-17 Гейт перед деплоем: T-2 включает Production, и без `INTERNAL_SERVICE_SECRET` в прод `.env` все internal-вызовы начнут молча деградировать
+- **Коммит/файл:** `1a7606c`; `docker-compose.prod.yml:48-101`,
+  `src/backend/learning-service/Learning/Common/Security/InternalServiceAuthFilter.cs:39-54`,
+  `src/backend/ai-service/Ai/Infrastructure/Learning/LearningClientServiceCollectionExtensions.cs:39-46,72-79`
+- **Что не так:** сам фикс верен и проверен мной независимо (см. раздел проверок — merge даёт
+  `Production` всем десяти .NET-сервисам, не затирая остальной `environment`, а базовый файл в
+  одиночку по-прежнему `Development`). Проблема в последствии: `InternalServiceAuthFilter` вне
+  Development при пустом секрете отвечает 403, а **клиенты при пустом секрете просто не
+  отправляют заголовок**. Значит если `INTERNAL_SERVICE_SECRET` в реальном прод `.env` не задан,
+  каждый internal-вызов получит 403. Для двух ai→learning клиентов это fail-open, то есть
+  **молча**: `SkillLookupClient` → пустые названия навыков; `AssignmentPracticeContextClient` →
+  «нет задания», то есть неперсонализированная практика для всех, кто стартует по заданию.
+  Автор зафиксировал это в `docs/DONT_FORGET.md`, но это не проверка, а обязательный ручной гейт.
+- **Как проявится:** деплой проходит, ошибок в UI нет, у всех учащихся практика по заданию
+  перестаёт быть персонализированной, а у бандлов пропадают подписи навыков. В логах —
+  `LogError` про неконфигурированный секрет и `LogWarning` от клиентов.
+- **Severity:** blocker (как условие деплоя, не как дефект кода)
+- **Уверенность:** точно (весь путь прочитан; факт наличия/отсутствия переменной в прод `.env`
+  из репозитория не проверить — переменная не задана даже в локальном окружении, `docker compose
+  config` предупредил «INTERNAL_SERVICE_SECRET is not set»)
+
+### [ ] R-18 `[TenantScoped]` на learner-контроллерах ломает demo-token
+- **Коммит/файл:** `846c020`;
+  `src/backend/building-blocks/BuildingBlocks/Tenancy/TenantContextMiddleware.cs:51-57`,
+  `src/backend/identity-service/Identity/Features/Auth/DemoTokenController.cs:36-48`
+  («the token it issues carries no role and no organization»), контроллеры —
+  `SkillsController`, `SkillTreeController`, `ExerciseController`, `ReferenceController`,
+  `TechniqueController`, `DailyQuotesController`, `ProgramController`, `AssignmentsController`,
+  `DialogReviewsController`, `DialogController`
+- **Что не так:** demo-token не несёт ни организации, ни роли, поэтому
+  `!organizationIdWasResolved && !callerIsPlatformStaff` → 403 на **весь** learner-API. Это прямо
+  противоречит зафиксированному в коде инварианту: комментарий в
+  `src/frontend/features/auth/components/awaiting-organization-gate.tsx:30-35` утверждает
+  «the demo token — which has no user row at all — keeps working».
+- **Как проявится:** `POST /demo/token` (только вне Production), затем любой learner-экран → 403
+  на все данные. В проде не проявится вообще: T-2 (`1a7606c`) делает окружение Production, где
+  demo-контроллер отдаёт 404.
+- **Severity:** minor (dev-only, но инвариант в коде теперь ложный)
+- **Уверенность:** точно по коду; фронтенд `POST /demo/token` не вызывает, так что это ручной
+  dev-инструмент
+
+### [ ] R-19 В коммит «apply [TenantScoped]» въехало расширение tenancy-границы, не упомянутое в сообщении
+- **Коммит/файл:** `846c020`;
+  `src/backend/ai-service/Ai/Features/Quotas/AdminAiQuotaController.cs:80-89` — новый маршрут
+  `GET /admin/ai-quota/{organizationId:guid}`; allow-list — `scripts/tenancy-boundary-lint.py:87,97`,
+  добавлен **другим** коммитом (`cccc8b9`)
+- **Что не так:** сообщение `846c020` перечисляет только добавленные атрибуты и явно называет,
+  чего не трогало. При этом коммит вводит первый в ai-service маршрут, берущий `organizationId`
+  **из URL** — исключение из правила «организация приходит только из `ITenantContext`»
+  (docs/TENANCY §1.3). Само исключение выглядит корректно ограниченным
+  (`[Authorize(Policy = RequirePlatformAdministrator)]`, только `GET`, `PUT` продолжает писать в
+  свою организацию), но линт, который должен был это поймать, был разрешён отдельным более поздним
+  коммитом — то есть между `846c020` и `cccc8b9` `tenancy-boundary-lint` на main падал.
+- **Как проявится:** ревью tenancy-границ по сообщениям коммитов пропустит это изменение;
+  `git bisect` по линту даст красный интервал.
+- **Severity:** minor (гигиена и обозреваемость границы, не утечка)
+- **Уверенность:** точно по содержимому коммитов; что линт падал в интервале — требует проверки
+  (я запускал его только на HEAD, где он чист)
+
+### [ ] R-20 `DialogModeKey = ""` безопасен только благодаря валидации на записи; для legacy-строк проверки нет
+- **Коммит/файл:** `e2f68df`;
+  `src/backend/learning-service/Learning/Eventing/AssignmentThresholdConsumer.cs:138`,
+  `.../Assignments/Services/Implementation/AssignmentThresholdEvaluator.cs:233-250`
+  (`modeKeys.Contains(score.DialogModeKey)`),
+  `.../Assignments/Services/Implementation/AssignmentDocumentSerializer.cs:101-105`
+- **Что не так:** утверждение коммита «`modeKeys.Contains("")` is false for every real assignment
+  reference» опирается ровно на одну строку — сериализатор отвергает `reference.Length == 0` **на
+  записи**. На чтении (`DeserializeContent`) повторной проверки нет. Любая строка `Assignments`,
+  созданная до появления этой валидации или записанная в БД в обход сервиса, с
+  `kind = "dialog_scenario"` и пустым `reference` даст `modeKeys = [""]` — и тогда **каждый**
+  диалог без mode key этого пользователя за окно засчитается в задание.
+- **Как проявится:** такое задание мгновенно «выполняется» у всех, у кого есть хоть три
+  mode-key-less диалога с оценкой ≥ порога — то есть ровно тот вред, который старый drop и
+  предотвращал.
+- **Severity:** minor
+- **Уверенность:** требует проверки (нужен SQL по `Assignments.Content` на пустые reference —
+  я прод-БД не трогал)
+- **Не находка (проверено):** остальные опасения по e2f68df закрыты.
+  `DialogModeKey` — `IsRequired()` + `HasMaxLength(100)`, пустая строка это NOT NULL, ограничение
+  не нарушает. Уникальный индекс — `(OrganizationId, UserId, SessionId)`, `DialogModeKey` в него
+  не входит, дублей не появится. `DialogModeId` — не FK («Never matched on»), `Guid.Empty`
+  допустим. `TeamSkillMapService:105` группирует по `UserId` и не смотрит на `DialogModeKey`.
+
+### [ ] R-21 Корневой `app/not-found.tsx` накрывает и англоязычную `/admin/*`, и формальную `/org/*`
+- **Коммит/файл:** `953d598`; `src/frontend/app/not-found.tsx:1-32` (единственный `not-found.tsx`
+  в проекте — проверено `find app -name not-found.tsx`)
+- **Что не так:** корневой `not-found` в App Router перехватывает все несовпавшие URL. Текст —
+  русский в неформальном «ты»-регистре («Вернуться к пути»), а `/admin/*` в этом проекте
+  полностью англоязычна («Edit Exercises», «+ Add exercise», «Delete this exercise?»), а `/org/*`
+  ведётся в формальном «вы» (см. комментарий в `src/frontend/app/demo/page.tsx:36-39`).
+  Кнопка ведёт на `/tree` — экран учащегося, для платформенного админа и РОПа не тот адрес.
+- **Как проявится:** опечатка в `/admin/lesons` → русская страница 404 из учебного приложения
+  с предложением «Вернуться к пути» посреди англоязычной админки.
+- **Severity:** minor
+- **Уверенность:** точно
+
+### [ ] R-22 `aria-pressed` навешен на каждый кликабельный `Chip`, включая не-тогглы
+- **Коммит/файл:** `d06ae60`; `src/frontend/shared/components/chip.tsx:60-72`
+- **Что не так:** `aria-pressed={active}` выставляется всегда, когда передан `onClick`.
+  `active` по умолчанию `false`, поэтому любой чип-действие (не переключатель) объявляется
+  скринридеру как «кнопка-тоггл, выключена».
+- **Как проявится:** VoiceOver/NVDA читает «переключатель, не нажат» там, где на деле обычное
+  действие. Фильтры (`app/(org)/org/content/overrides/page.tsx:139-144`) — настоящие тогглы и
+  корректны; проблема в остальных.
+- **Severity:** minor
+- **Уверенность:** точно
+- **Не находка (проверено):** визуальной регрессии от подмены `<span>` на `<button>` нет —
+  инлайн-`style` задаёт `background`, `color`, `border`, `fontFamily`, `fontSize`, `fontWeight`,
+  `padding` и фиксированную `height`, то есть перекрывает всё, что браузер навязал бы кнопке.
+  Вложенных интерактивных элементов не нашёл: `Chip` внутри `<Link>` идёт без `onClick` и
+  рендерится `<span>` (`features/org-dialogs/components/dialog-session-list.tsx:109`).
+
+---
+
+## Что проверено и чисто (тоже результат)
+
+- **Область 1, `[TenantScoped]`-безопасность:** `TenantConnectionInterceptor.BuildSetLocalCommandText`
+  при отсутствии организации возвращает `null` и **ничего не выполняет** — добавленные скоупы не
+  могут упасть на «нет тенанта». Fail-closed обеспечивается RLS-политикой
+  (`current_setting(..., true)`), а не исключением.
+- **Область 3, T-5 (`e64c296`):** `AiTenantTransactionScope` действительно реентрантен —
+  `CurrentTransaction is not null` даёт инертный скоуп, внешний владеет коммитом, read-скоуп
+  делает `RollbackAsync`. Ни один из пяти новых скоупов не оборачивает `SaveChangesAsync`:
+  `GetModeByIdAsync` вызывается из `StartSessionAsync`/`SendMessageAsync`/`CompleteSessionAsync`
+  до внешнего вызова OpenAI, сессии живут в Mongo. Транзакция вокруг вызова OpenAI не держится —
+  это в коммите обосновано и соответствует коду.
+- **Область 3, T-4 (`9c1650d`):** `[TenantTransaction]` на классе + `using Sellevate.Learning.Features.Content;`
+  — сборка и 90 юнит-тестов зелёные, паттерн совпадает с четырьмя соседними контроллерами.
+- **Область 3, T-2 (`1a7606c`), проверено независимо:** `docker compose -f docker-compose.yml -f
+  docker-compose.prod.yml config --format json` → `ASPNETCORE_ENVIRONMENT=Production` у всех
+  десяти .NET-сервисов, при этом остальные ключи `environment` сохранены (ai 37 ключей,
+  identity 28, gateway 15, social 15, organization 14, learning 12, notification 12,
+  gamification 10, company 9, analytics 7) и `InternalAuth__ServiceSecret` остался у identity,
+  ai, learning, company, organization. То есть слияние списков `environment` действительно
+  merge-per-key, а не replace — прод-конфиг не обнулён.
+- **Локальная разработка не сломана:** `scripts/lib-local-env.sh` (8 мест) и `scripts/dev-*.sh`
+  экспортируют `ASPNETCORE_ENVIRONMENT="Development"` напрямую и не читают compose-оверлей;
+  `InternalAuth__ServiceSecret` там намеренно не задан и `InternalServiceAuthFilter` в Development
+  пропускает (`lib-local-env.sh:249-252`). Единственная локальная дырка — R-16.
+- **Область 2:** все места вызова `onSend` обновлены, двойной отправки нет, откат работает
+  (детали в R-13/R-14).
+- **Область 4:** fail-open, недостижимость `/internal` извне и совпадение ключей handshake —
+  подробно в R-15.
+- **Область 5:** ограничения БД, уникальный индекс и группировка — подробно в R-20.
+- **Общий свод по диффу:** ни одного `console.log`/`debugger`/`TODO`/`FIXME`/`HACK`, ни одного
+  добавленного `any`/`as any`, ни закомментированного кода. Единственное совпадение по гриппу —
+  слово «any» внутри английского комментария (`friends/[userId]` E-10).
+- **Мёртвых ссылок после удаления ▲▼ нет:** `moveExercise`/`moveExerciseInList` остались только
+  там, где используются (`app/(org)/org/content/lessons/[lessonId]/page.tsx`,
+  `features/org-content-overrides/utils/exercise-summary.ts` + его тест); переменная `index`
+  в обоих отредактированных файлах по-прежнему нужна.
+- **Взаимных откатов между агентами не нашёл.** Файлы, тронутые несколькими коммитами:
+  `app/session/[lessonId]/page.tsx` (4: `e608179`, `16afd08`, `c8fe966`, `953d598`),
+  `SkillsController.cs` (3: `b724a2c`, `c78fe2c`, `846c020`),
+  `TechniqueService.cs` (3: `9b3080a`, `7a79dec`, `df11c47`),
+  `use-team-directory.ts` (2: `ef4939e`, `d854e4c`),
+  `use-auth.ts` (2), `use-admin-dialog.ts` (2), `guidebook/page.tsx` (3), `friends/[userId]` (3).
+  Итоговый дифф каждого из них связный: правки складываются, а не затирают друг друга.
+  `use-admin.ts`, вопреки предупреждению, тронут ровно одним коммитом (`b393059`).
+- **`use-admin.ts` язык корректен:** тосты по-английски (`Failed to create skill: …`) — совпадает
+  с англоязычной платформенной админкой. Русские тексты — только на learner/org-экранах.
+
+---
+
+## Покрытие: что реально прочитано, а что нет
+
+| # | Область | Статус |
+|---|---------|--------|
+| 1 | `29a9a22` logout `onSuccess`→`onSettled` | **разобрано полностью** (стор, api-client, refresh, оба места вызова, серверный logout/refresh) → R-1, R-2, R-3 |
+| 2 | `0ee865a`/`8a73356` `onSend: Promise<boolean>` | **разобрано полностью** (оба composer'а, все 4 места вызова, мутация friends-чата, голосовой путь) → R-13, R-14 |
+| 3 | Tenancy T-1/T-2/T-4/T-5/T-6 | **разобрано** (`AiTenantTransactionScope`, `TenantConnectionInterceptor`, `TenantContextMiddleware`, все 28 добавленных `[TenantScoped]` по списку, merge prod-оверлея, dev-скрипты) → R-18, R-19. **Не проверял:** каждый из 28 контроллеров построчно на соответствие атрибута реальному запросу — читал их по классу вызывающего (learner / org-admin / platform-only) и по гейту `[Authorize]`, а не пометоду |
+| 4 | `2717266` ai→learning skill lookup | **разобрано полностью** (клиент, DI, таймаут, эндпоинт, гейтвей, route-parity, порты, ключи секрета, локальная конфигурация) → R-15, R-16, R-17 |
+| 5 | `e2f68df` `DialogModeKey = ""` | **разобрано полностью** (консьюмер, entity, конфигурация EF, оба читателя, валидация reference) → R-20 |
+| 6 | `b128e0a` `sanitize-html` / `FeedbackHtml` | **разобрано полностью, с прогоном пакета** → R-7, R-8, R-9 |
+| 7 | `16afd08` `submitError` ×10 и серия E-фиксов | **разобрано** → R-4, R-5, R-6. **Не проверял:** все 10 компонентов упражнений по отдельности (проверил общий футер + `ai-dialogue-exercise`, остальные 8 получают проп транзитом через тот же футер); из ~18 E-фиксов прочитал целиком `e608179` и `c7e54d9`, остальные — по диффу на форму гейта |
+| 8 | `316da24` exercise-editor / `localRows` / ▲▼ | **разобрано полностью** (оба файла, `saveExercise`, `deleteRow`, `setRows`, мёртвые ссылки, соседний org-редактор) → R-10, R-11, R-12 |
+
+**Не дошёл (честно):**
+- 4 коммита, приземлившиеся во время ревью: `8ef73b5` (AD-2 unknown skill stage),
+  `7d93a1f` (AD-4 сортировка списка уроков), `cccc8b9` (AD-5 фронтенд квоты),
+  `7aa7800` (AD-6 `isHidden`). Из них `cccc8b9` косвенно затронут в R-19.
+- Серия «error-masking» E-фиксов (`b046303` и ~15 коммитов под ним) прочитана выборочно —
+  общая форма гейта проверена (R-6), но каждый экран отдельно не открывал.
+- Коммиты null-safety (`df11c47`, `7a79dec`, `deaca92`, `d854e4c`, `ef4939e`) и мелкие org-фиксы
+  (`7a372e1`, `37f27b6`, `6faf0db`, `063290f`, `b9c5565`, `775a945`, `adc5023`, `df2fec7`)
+  прочитаны только по диффу, без разбора вызывающих.
+- Интеграционные тесты (`TestCategory=Integration`) нигде не запускались — им нужен живой
+  Postgres, а серверы я по правилам прогона не поднимал. Значит **RLS-поведение добавленных
+  скоупов и тенант-изоляция на живой БД не проверены ни мной, ни авторами** (в их же коммитах:
+  «11/14/12 integration tests skipped, need live Postgres»).
+- Прод-`.env` и деплой-артефакт из репозитория не проверить — см. R-17.
+
+---
+
+## Результаты проверочных команд (verbatim, HEAD `7aa7800`)
+
+```
+$ cd src/frontend && npx tsc --noEmit
+TSC_EXIT=0
+(без вывода)
+
+$ cd src/frontend && npx vitest run
+ Test Files  87 passed (87)
+      Tests  977 passed (977)
+   Duration  7.01s
+[exited with code 0]
+
+$ bash scripts/tenancy-boundary-lint.sh
+tenancy-boundary-lint: clean.
+
+$ bash scripts/tenancy-pool-lint.sh
+tenancy-pool-lint: clean.
+
+$ cd src/backend && dotnet build ai-service/Ai.Tests
+Build succeeded.
+    0 Error(s)
+$ dotnet test ai-service/Ai.Tests --no-build --filter "TestCategory!=Integration"
+Passed!  - Failed:     0, Passed:   170, Skipped:     0, Total:   170, Duration: 736 ms
+
+$ dotnet build company-service/Company.Tests
+Build succeeded.
+    0 Error(s)
+$ dotnet test company-service/Company.Tests --no-build --filter "TestCategory!=Integration"
+Passed!  - Failed:     0, Passed:   135, Skipped:     0, Total:   135, Duration: 1 s
+
+$ dotnet build identity-service/Identity.Tests
+Build succeeded.
+    0 Error(s)
+$ dotnet test identity-service/Identity.Tests --no-build --filter "TestCategory!=Integration"
+Passed!  - Failed:     0, Passed:   136, Skipped:     0, Total:   136, Duration: 3 s
+
+$ dotnet build learning-service/Learning.Tests
+Build succeeded.
+    0 Error(s)
+$ dotnet test learning-service/Learning.Tests --no-build --filter "TestCategory!=Integration"
+Passed!  - Failed:     0, Passed:    90, Skipped:     0, Total:    90, Duration: 1 s
+
+$ dotnet test route-parity/RouteParity.Tests --no-build
+Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 14 ms
+
+$ docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json
+(предупреждения: "INTERNAL_SERVICE_SECRET is not set. Defaulting to a blank string." ×5,
+ "DEMO_REQUESTS_NOTIFICATION_EMAIL is not set")
+ai               ASPNETCORE=Production   nEnvKeys= 37 secret=True
+analytics        ASPNETCORE=Production   nEnvKeys=  7 secret=False
+company          ASPNETCORE=Production   nEnvKeys=  9 secret=True
+gamification     ASPNETCORE=Production   nEnvKeys= 10 secret=False
+gateway          ASPNETCORE=Production   nEnvKeys= 15 secret=False
+identity         ASPNETCORE=Production   nEnvKeys= 28 secret=True
+learning         ASPNETCORE=Production   nEnvKeys= 12 secret=True
+notification     ASPNETCORE=Production   nEnvKeys= 12 secret=False
+organization     ASPNETCORE=Production   nEnvKeys= 14 secret=True
+social           ASPNETCORE=Production   nEnvKeys= 15 secret=False
+```
+
+Прогон `sanitize-html@2.17.7` (обоснование R-7, R-8, R-9):
+
+```
+$ node -e '...' в src/frontend
+strip("<h3>Итог</h3><p>Первое предложение.</p><p>Второе предложение.</p>")
+  → "ИтогПервое предложение.Второе предложение."
+strip("<ul><li>раз</li><li>два</li></ul>")      → "раздва"
+strip("строка1<br>строка2")                      → "строка1строка2"
+strip("Оценка < 70 & \"низко\"")                 → "Оценка &lt; 70 &amp; \"низко\""
+strip("Клиент сказал: 5 > 3")                    → "Клиент сказал: 5 &gt; 3"
+keep("<script>alert(1)</script><img src=x onerror=alert(1)><a href=\"javascript:alert(1)\">x</a>")
+  → "x"
+keep("<ol><li>a</li><li>b</li></ol>")            → "<li>a</li><li>b</li>"
+keep("<p style=\"position:fixed\" onclick=\"x()\">t</p>") → "<p>t</p>"
+keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
+```
+
+---
+
+## Вердикт
+
+**REQUEST CHANGES.** Все автоматические проверки зелёные — ни одна из находок ниже ими не
+ловится, что само по себе стоит отметить: у 977 фронтенд-тестов и 531 бэкенд-юнит-теста нет
+покрытия ни на липкость `mutation.error` (R-4), ни на `stripFeedbackHtml` (R-7/R-8), ни на
+поведение `isError` при наличии данных (R-5).
+
+Блокирует деплой: **R-17** (ручной гейт: подтвердить `INTERNAL_SERVICE_SECRET` в прод `.env`
+до того, как T-2 включит Production).
+Требует правки до пуша: **R-1**, **R-4**, **R-5**, **R-7**, **R-8**, **R-10**, **R-15**.
