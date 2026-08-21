@@ -521,27 +521,23 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Слой:** backend
 - **Severity:** critical (для затронутого аккаунта обучение остановлено полностью)
 
-### [ ] X-12 `POST /exercises/{id}/submit` без обёртки `answer` отвечает 503 «AI сервис временно недоступен» вместо 400
+### [x] X-12 `POST /exercises/{id}/submit` без обёртки `answer` отвечает 503 «AI сервис временно недоступен» вместо 400
 - **Где:** `POST /exercises/{exerciseId}/submit`; `ExerciseController.cs:106-120`
 - **Что делал:** отправил одно и то же детерминированное `choose_option`-упражнение (`12a58554-…`, оценивается `ChooseOptionEvaluationStrategy`, ИИ в пути нет) шестью разными телами подряд.
 - **Что произошло:** `{"answer":{"selectedOptionIndex":1}}` → **200**; `{"answer":{"foo":"bar"}}` → **400** `Answer must contain integer field 'selectedOptionIndex'.` (правильно); а `{"selectedOptionIndex":1}`, `{}`, `{"answer":null}` и `{"answer":"abc"}` — все четыре → **503** `{"message":"AI сервис временно недоступен. Попробуйте позже."}`, воспроизводится стабильно. То есть отсутствующий/не-объектный `answer` роняет `InvalidOperationException` внутри сервиса, а контроллер ловит `InvalidOperationException`/`HttpRequestException` в общую ветку «ИИ недоступен» — клиенту (и мониторингу, и дежурному) сообщается о падении ai-service там, где ИИ не участвует вовсе, а на самом деле это некорректный запрос. Из текущего UI недостижимо (фронт всегда оборачивает в `answer`), но это публичный API: любой другой клиент получает ложную причину, а 503 ещё и приглашает повторить запрос, который никогда не пройдёт.
 - **Ожидалось:** 400 с сообщением про отсутствующий `answer`; ветка 503 остаётся только для настоящих отказов ИИ (типизированное исключение, а не любой `InvalidOperationException`).
 - **Слой:** backend
 - **Severity:** minor
-- **Skipped (2026-08-21):** root cause confirmed — `SingleCorrectOptionEvaluationStrategy
-  .EvaluateAnswerAsync` calls `userAnswer.TryGetProperty(...)`, which itself throws
-  `InvalidOperationException` when `userAnswer.ValueKind` is not `Object` (the four 503 repro
-  bodies are all non-object: `Undefined`, `Null`, or `String`), and that raw exception is then
-  caught by `ExerciseController`'s generic `catch (InvalidOperationException)` → 503 branch,
-  which exists for genuine `AiEvaluationClient` failures. A correct, generic fix has to touch
-  either `ExerciseController.cs`'s submit action or the shared `ExerciseService
-  .SubmitExerciseAnswerAsync`/per-type evaluation-strategy code — all three are named as the other
-  concurrent agent's territory this session (the submit endpoint plus the
-  `choose_option`/`fill_blank`/`reorder`/`spot_mistake` evaluation strategies, which already saw a
-  commit today, `116704eb`, touching this exact method for X-3/X-6/X-8). Left open rather than
-  risk a collision on the shared submit path; a full fix (guard `userAnswer.ValueKind` before any
-  `TryGetProperty`/`GetProperty` call, or give `AiEvaluationClient`'s failures a dedicated
-  exception type so the controller's 503 branch cannot catch anything else) is still needed.
+- **Resolved (2026-08-21):** `ExerciseService.SubmitExerciseAnswerAsync` now checks
+  `userAnswer.ValueKind != JsonValueKind.Object` before invoking any evaluation strategy —
+  deterministic or AI-backed — and throws `ExerciseAnswerValidationException` (already mapped by
+  `ExerciseController` to 400) instead of letting the strategy's own `TryGetProperty`/`GetProperty`
+  call throw `InvalidOperationException`, which the controller's generic AI-failure branch was
+  swallowing into a false 503. One check at the single call site covers every strategy (`reorder`,
+  `choose_option`/`fill_blank` via `SingleCorrectOptionEvaluationStrategy`, `categorize`,
+  `match_pairs`, and the AI-graded types), so no per-strategy edits were needed and the success
+  path (`answer` always an object from the current UI) is unchanged.
+  `src/backend/learning-service/Learning/Features/Exercises/Services/Implementation/ExerciseService.cs`.
 
 ### Проверено, дефектов не обнаружено (прогон 4)
 - **Пройдены целиком 4 урока** и все 5 типов упражнений, которые есть в контенте прода:

@@ -484,6 +484,15 @@ internal sealed class ExerciseService(
         }
         else
         {
+            // docs/AUDIT_PROD.md X-12: every evaluation strategy reads its answer fields off
+            // `userAnswer` with `TryGetProperty`/`GetProperty`, which throw `InvalidOperationException`
+            // when `userAnswer` isn't a JSON object (missing/`null`/non-object `answer`). That exception
+            // is indistinguishable from a genuine AI-service failure once it reaches the controller, so
+            // it must be turned into a client error here, before any strategy — deterministic or
+            // AI-backed — ever touches the value.
+            if (userAnswer.ValueKind != JsonValueKind.Object)
+                throw new ExerciseAnswerValidationException("Answer must be a JSON object.");
+
             var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
 
             var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
