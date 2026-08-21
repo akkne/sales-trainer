@@ -13,7 +13,7 @@
 
 ## Находки
 
-### [ ] R-1 Провал `POST /auth/logout` оставляет живую refresh-cookie, и api-client молча выдаёт по ней новый access-token
+### [x] R-1 Провал `POST /auth/logout` оставляет живую refresh-cookie, и api-client молча выдаёт по ней новый access-token
 - **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:280-296`,
   `src/frontend/shared/stores/auth-store.ts:70-73`, `src/frontend/shared/api/api-client.ts:78-86`,
   `src/backend/identity-service/Identity/Features/Auth/AuthController.cs:327-338`
@@ -38,8 +38,14 @@
   остался `null`); конкретный автотриггер сразу после выхода — требует проверки (`track.ts`
   защищён `hasAccessToken()`, `/auth/login/start` анонимен, так что на самом `/login` ничего
   не «оживляет» сессию само)
+- **Resolved (commit `8f98116a`):** `clearAuthSession()` now sets an `authSessionTerminated`
+  localStorage marker; `attemptTokenRefresh()` in `api-client.ts` checks it before calling
+  `doRefresh()` and short-circuits to `false` if set, so a leftover refresh-cookie can no longer
+  mint a new access token after a logout. `setAccessToken()` clears the marker on the next
+  successful login. A live session's ordinary refresh (no logout involved) never sets the marker,
+  so that path is unchanged.
 
-### [ ] R-2 На истёкшей сессии logout даёт двойную навигацию и пугающий тост про смену пароля
+### [x] R-2 На истёкшей сессии logout даёт двойную навигацию и пугающий тост про смену пароля
 - **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:283-296`,
   `src/frontend/shared/api/api-client.ts:78-86`
 - **Что не так:** если `POST /auth/logout` вернул 401 и refresh не удался, api-client сам делает
@@ -52,8 +58,12 @@
   Жмёт «Выйти» → мигает тост про смену пароля → жёсткая перезагрузка `/login` съедает его.
 - **Severity:** minor
 - **Уверенность:** точно
+- **Resolved (commit `8f98116a`):** `SessionExpiredError` (thrown by `fetchWithAuthToken`'s 401
+  branch instead of the previous plain `Error`) lets `useLogout` tell "session already expired,
+  api-client already hard-navigated" apart from an actual failed revoke. `onError` now skips the
+  password-change toast, and `onSettled` skips the redundant `router.push` for this case.
 
-### [ ] R-3 `useLogout` не чистит кеш React Query, в отличие от входа
+### [x] R-3 `useLogout` не чистит кеш React Query, в отличие от входа
 - **Коммит/файл:** `29a9a22`; `src/frontend/features/auth/hooks/use-auth.ts:288-292` против
   `use-auth.ts:36-37` (`useHandleSuccessfulAuth` делает `queryClient.clear()`)
 - **Что не так:** выход оставляет в кеше все данные вышедшего пользователя. Сейчас это прикрыто
@@ -64,8 +74,10 @@
   часть экранов рисуется из кеша прошлой сессии без запроса.
 - **Severity:** minor
 - **Уверенность:** точно (что `clear()` нет), требует проверки (что это где-то видно глазом)
+- **Resolved (commit `8f98116a`):** `useLogout`'s `onSettled` now calls `queryClient.clear()`,
+  matching `useHandleSuccessfulAuth`'s behavior on login.
 
-### [ ] R-4 `submitError` — общая мутация на весь урок, её никто не сбрасывает: ошибка едет на следующие упражнения
+### [x] R-4 `submitError` — общая мутация на весь урок, её никто не сбрасывает: ошибка едет на следующие упражнения
 - **Коммит/файл:** `16afd08`; `src/frontend/app/session/[lessonId]/page.tsx:70` (`useSubmitExercise()`
   один инстанс на весь `SessionFlow`), `:146-152` (`handleSkip` / `handleContinueAfterResult` —
   `submitExerciseMutation.reset()` не вызывается нигде), `:280..389` (`submitError={submitExerciseMutation.error}`
@@ -81,8 +93,12 @@
   ошибок» (`handleStartMistakesReview` тоже не сбрасывает).
 - **Severity:** major
 - **Уверенность:** точно
+- **Resolved (commit `472aba7b`):** `advanceToNext()` — the single chokepoint both `handleSkip`
+  and `handleContinueAfterResult` funnel through — now calls `submitExerciseMutation.reset()`
+  before advancing, so the error clears on every exercise transition (including into the
+  mistakes-review round, which is reached through the same function).
 
-### [ ] R-5 E-11: `isError` в `SessionRouter` выбрасывает весь урок при провале фонового refetch
+### [x] R-5 E-11: `isError` в `SessionRouter` выбрасывает весь урок при провале фонового refetch
 - **Коммит/файл:** `e608179`; `src/frontend/app/session/[lessonId]/page.tsx:594-620`
   (`if (isError || !exercises) return <ErrorState .../>`), хук —
   `src/frontend/features/exercise/hooks/use-lesson.ts:47-52` (без `staleTime`/`refetchOnWindowFocus`),
@@ -101,8 +117,15 @@
 - **Severity:** major
 - **Уверенность:** механизм `isError` при наличии данных — точно; что `refetchOnWindowFocus`
   реально стреляет в этом хуке — требует проверки в браузере
+- **Resolved (commit `0f6a53ee`):** `SessionRouter` now destructures `isLoadingError` instead of
+  `isError` and gates the full-screen error state on that (plus `!exercises` for the belt-and-
+  braces "no data at all" case). `isLoadingError` is only `true` on a first-load failure with no
+  data ever obtained; a background-refetch failure (`isRefetchError`) leaves `exercises` populated
+  and now falls through to the normal render, per the AD-7-established
+  `isLoadingError`/`isRefetchError` split for this installed `@tanstack/react-query` version
+  (see `docs/DECISIONS.md`).
 
-### [ ] R-6 Тот же shape во всей серии E-фиксов: `isError` проверяется раньше «пусто» и вытесняет уже отрисованные данные
+### [~] R-6 Тот же shape во всей серии E-фиксов: `isError` проверяется раньше «пусто» и вытесняет уже отрисованные данные — PARTIALLY RESOLVED, see note below
 - **Коммит/файл:** серия `c7e54d9`, `529c096`, `b75563d`, `6817709`, `84ecf34`, `248115d`,
   `eb9d771`, `be193e4`; пример — `src/frontend/app/(main)/tree/page.tsx:201-208`
   (`if (isError) return <ErrorState .../>` стоит **до** `if (enrolledSkills.length === 0)`) и
@@ -117,6 +140,15 @@
 - **Severity:** minor (для `/tree` и остальных — косметика; для `/session` то же самое стоит
   major, см. R-5, потому что там теряется работа)
 - **Уверенность:** точно (код), требует проверки (частота реального триггера)
+- **Partially resolved (commit `8cd7e975`):** swapped the same `isError` → `isLoadingError` gate
+  (see R-5) in the four highest-impact screens named in the task scope —
+  `app/(main)/tree/page.tsx` (`PathSkillList`, `PathOverallProgress`, `PathCenterColumn`,
+  `SkillTreePage` root), `app/(main)/skill/[id]/page.tsx`, `app/(main)/skill/[id]/map/page.tsx`,
+  and `app/(main)/profile/page.tsx` (the "Уроки" stat tile and the "Изучаемые навыки" card).
+  **Not swept tonight:** the other E-series screens sharing this shape — `/reference/<id>` (E-1),
+  `/guidebook` (E-8), `/companies/<id>` (E-9), `/friends` + `/friends/<userId>` (E-10), and the
+  E-13..E-17 admin content-list screens (owned by a concurrent agent's pass, not re-checked here).
+  Recorded as `docs/NIGHT_AUDIT_QUESTIONS.md` Q-14 rather than left unmentioned.
 
 ### [ ] R-7 `stripFeedbackHtml` склеивает слова на границах блочных тегов
 - **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;

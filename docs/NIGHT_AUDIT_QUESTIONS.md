@@ -413,3 +413,30 @@ topic's first lesson on topic completion», 2026-07-24, уже в `origin/main`)
    остальных 14 уроков (в них, среди прочего, единственный шанс проверить типы упражнений, которых
    нет в теме 1). Это запись в прод-данные, поэтому агент её не делал: правка `UserLessonProgress`
    на живой базе — решение владельца, а не аудита.
+
+### Q-14 — R-6: the isError-before-empty sweep only covered session/tree/skill/profile; five more screens share the same shape and were not touched tonight
+
+`docs/AUDIT_NIGHT_REVIEW.md` R-6 named the general defect across the E-fix series — `isError` is
+checked before the empty case, with no `isLoadingError`/`isRefetchError` split, so a failed
+*background* refetch of an already-loaded screen replaces good, still-cached content with the
+error state instead of leaving it alone. Fixed tonight (commit `8cd7e975`, plus `0f6a53ee` for
+R-5/`/session`) in the four screens the run scope called out as highest-impact: `/session/<id>`,
+`/tree`, `/skill/<slug>`, `/skill/<slug>/map`, and `/profile`.
+
+**Not swept** — same `isError`-gates-a-whole-region shape, same fix would apply (swap the
+destructive gate to `isLoadingError`, per the AD-7-established split, `docs/DECISIONS.md`):
+- `/reference/<materialId>` (E-1) — `app/(main)/reference/[id]/page.tsx`
+- `/guidebook` (E-8) — `app/(main)/guidebook/page.tsx`
+- `/companies/<id>` (E-9) — `app/(main)/companies/[id]/page.tsx` and its
+  `CompanyTimeline`/`CompanyContactsCard` children
+- `/friends` and `/friends/<userId>` (E-10) — `app/(main)/friends/page.tsx`,
+  `app/(main)/friends/[userId]/page.tsx`
+- `/admin/*` content-list screens (E-13..E-17) — out of tonight's scope already per the audit's
+  own note that these are owned by a concurrent agent's pass; not re-checked here either.
+
+**Нужно решение / follow-up:** no owner decision needed to fix these — it's the same mechanical
+`isError` → `isLoadingError` swap already applied four times tonight. Flagging here only so the
+remaining sweep isn't lost: whoever picks this up next should grep for `isError` in
+`app/(main)/reference`, `app/(main)/guidebook`, `app/(main)/companies`, `app/(main)/friends`, and
+the `app/(admin)/admin/**` content-list pages, and apply the same `isLoadingError` gate wherever
+`isError` currently discards an already-rendered region rather than only gating an empty state.
