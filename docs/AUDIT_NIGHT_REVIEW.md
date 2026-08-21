@@ -302,7 +302,7 @@
 - **Severity:** minor
 - **Уверенность:** требует проверки (нужен точный сценарий переключения режима на живом WS)
 
-### [ ] R-15 Новый ai→learning lookup без кеша: полный каталог навыков на каждый запрос списка диалогов и на каждую запись бандла
+### [x] R-15 Новый ai→learning lookup без кеша: полный каталог навыков на каждый запрос списка диалогов и на каждую запись бандла
 - **Коммит/файл:** `2717266`;
   `src/backend/ai-service/Ai/Infrastructure/Learning/SkillLookupClient.cs:38-56`,
   `src/backend/learning-service/Learning/Features/SkillTree/InternalSkillsController.cs:27-34`
@@ -331,8 +331,19 @@
   концах (`InternalServiceAuthentication.SecretConfigurationKey == "InternalAuth:ServiceSecret"`,
   и `InternalAuth__ServiceSecret` проброшен всем пяти сервисам, у которых есть либо
   internal-эндпоинт, либо internal-клиент: identity, ai, learning, company, organization).
+- **Resolved:** added `SkillCatalogCache` (`src/backend/ai-service/Ai/Infrastructure/Learning/
+  SkillCatalogCache.cs`) — a process-wide `MemoryCache` singleton, the same pattern this codebase
+  already uses for `TtsAudioCache` (the only other cache in the backend): its own `MemoryCache`
+  instance rather than DI's `IMemoryCache`, registered `AddSingleton` and injected into the
+  per-request typed client. `SkillLookupClient.GetSkillSummariesAsync` now checks the cache first
+  and only hits learning-service on a miss; a successful fetch populates one shared entry (key:
+  the whole catalog, since skills are global content) with a TTL from the new
+  `LearningServiceConfiguration.SkillCatalogCacheMinutes` (default 5 minutes). A failure never
+  caches the empty fallback, so an outage keeps retrying on the next call instead of pinning every
+  bundle to "no skill label" for the TTL. `dotnet build`/`dotnet test` for `ai-service/Ai.Tests`:
+  0 errors, 170/170 passed.
 
-### [ ] R-16 `LearningService__BaseUrl` не выставлен для профиля Local Dev — новый lookup локально не работает вообще
+### [x] R-16 `LearningService__BaseUrl` не выставлен для профиля Local Dev — новый lookup локально не работает вообще
 - **Коммит/файл:** `2717266`;
   `src/backend/ai-service/Ai/appsettings.json:32-36` (`"BaseUrl": "http://learning:8080"`),
   `docker-compose.yml:214` (единственное место, где переменная задаётся),
@@ -348,6 +359,12 @@
   коммита о том, что поле теперь заполняется, локально не воспроизводится.
 - **Severity:** minor
 - **Уверенность:** точно (переменная присутствует ровно в одном файле — docker-compose.yml)
+- **Resolved:** added `export LearningService__BaseUrl="http://localhost:${LOCAL_LEARNING_PORT}"`
+  to `scripts/dev-ai.sh`, following the same reasoning `export_organization_env` already documents
+  for `IdentityService__BaseUrl` in `scripts/lib-local-env.sh` — the committed
+  `http://learning:8080` is a Docker-network hostname that doesn't resolve on the host. Both
+  `SkillLookupClient` and `AssignmentPracticeContextClient` read the same `LearningService:BaseUrl`
+  key, so this fix reaches both.
 
 ### [ ] R-17 Гейт перед деплоем: T-2 включает Production, и без `INTERNAL_SERVICE_SECRET` в прод `.env` все internal-вызовы начнут молча деградировать
 - **Коммит/файл:** `1a7606c`; `docker-compose.prod.yml:48-101`,

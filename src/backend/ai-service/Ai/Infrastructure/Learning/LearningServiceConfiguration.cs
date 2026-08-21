@@ -20,4 +20,12 @@ public sealed class LearningServiceConfiguration
     /// conversation rather than a practice screen that will not open.
     /// </summary>
     public int TimeoutSeconds { get; init; } = 5;
+
+    /// <summary>
+    /// R-15 audit fix. How long <see cref="SkillCatalogCache"/> keeps the skill catalog before
+    /// re-fetching it. Skills are global, rarely-changing content, so minutes rather than seconds is
+    /// the right order of magnitude — a title edit in the admin skill editor does not need to be
+    /// reflected in a dialog-bundle label within the same request.
+    /// </summary>
+    public int SkillCatalogCacheMinutes { get; init; } = 5;
 }

@@ -67,6 +67,10 @@ public static class LearningClientServiceCollectionExtensions
         services.Configure<LearningServiceConfiguration>(
             configuration.GetSection(LearningServiceConfiguration.SectionName));
 
+        // R-15 audit fix. Singleton so the cached catalog is shared across every request, the same
+        // way TtsAudioCache is the one singleton cache in ai-service's voice feature.
+        services.AddSingleton<SkillCatalogCache>();
+
         services.AddHttpClient<ISkillLookupClient, SkillLookupClient>(httpClient =>
         {
             var internalServiceSecret = configuration[InternalServiceAuthentication.SecretConfigurationKey];

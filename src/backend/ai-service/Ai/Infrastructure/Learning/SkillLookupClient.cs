@@ -14,6 +14,12 @@ namespace Sellevate.Ai.Infrastructure.Learning;
 /// bundles because learning-service is unreachable would take the whole feature down with the one
 /// that names it. Every failure returns an empty map and logs a warning.
 /// </para>
+///
+/// <para>
+/// R-15 audit fix: the whole catalog is read through <see cref="SkillCatalogCache"/> rather than
+/// being re-fetched on every call — skills are global content, so one cached copy serves every
+/// dialog-list request and every bundle write until it expires.
+/// </para>
 /// </summary>
 internal sealed class SkillLookupClient : ISkillLookupClient
 {
@@ -23,21 +29,29 @@ internal sealed class SkillLookupClient : ISkillLookupClient
 
     private readonly HttpClient _httpClient;
     private readonly LearningServiceConfiguration _configuration;
+    private readonly SkillCatalogCache _cache;
     private readonly ILogger<SkillLookupClient> _logger;
 
     public SkillLookupClient(
         HttpClient httpClient,
         IOptions<LearningServiceConfiguration> configurationOptions,
+        SkillCatalogCache cache,
         ILogger<SkillLookupClient> logger)
     {
         _httpClient = httpClient;
         _configuration = configurationOptions.Value;
+        _cache = cache;
         _logger = logger;
     }
 
     public async Task<IReadOnlyDictionary<Guid, SkillSummary>> GetSkillSummariesAsync(
         CancellationToken cancellationToken = default)
     {
+        if (_cache.TryGet(out var cached))
+        {
+            return cached;
+        }
+
         var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.SkillLookupPath;
 
         try
@@ -50,11 +64,14 @@ internal sealed class SkillLookupClient : ISkillLookupClient
                 return Empty;
             }
 
-            return payload
+            var catalog = payload
                 .Where(skill => skill.Id != Guid.Empty)
                 .ToDictionary(
                     skill => skill.Id,
                     skill => new SkillSummary(skill.IconicName ?? string.Empty, skill.Title ?? string.Empty));
+
+            _cache.Set(catalog);
+            return catalog;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

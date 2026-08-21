@@ -18,6 +18,13 @@ export Mongo__DatabaseName="sallevate"
 export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
 
+# R-16 audit fix. The committed default (http://learning:8080) is a Docker network hostname and
+# does not resolve on the host — the same fix organization-service's export_organization_env
+# applies for IdentityService__BaseUrl (scripts/lib-local-env.sh). Without this, both
+# SkillLookupClient and AssignmentPracticeContextClient fail every call locally (fail-open, so
+# silently: dialog bundles render with no skill label, practice starts un-personalised).
+export LearningService__BaseUrl="http://localhost:${LOCAL_LEARNING_PORT}"
+
 export Jwt__Key="${JWT_KEY}"
 export OpenAI__ApiKey="${OPENAI_API_KEY}"
 export OpenAI__BaseUrl="${OPENAI_BASE_URL}"
