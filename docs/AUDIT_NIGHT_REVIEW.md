@@ -719,7 +719,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 
 Нумерация `R2-n` отдельная; секции R-1…R-22 выше не переписывались и не пересматривались.
 
-### [ ] R2-1 ▲▼ в админском редакторе упражнений не сохраняют порядок вообще: `changedRows` всегда пустой
+### [x] R2-1 ▲▼ в админском редакторе упражнений не сохраняют порядок вообще: `changedRows` всегда пустой
 - **Коммит/файл:** `ad47210b` (восстановление кнопок) + `5a1a4572`;
   `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:228-259`,
   `src/frontend/app/(admin)/admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx`
@@ -773,7 +773,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
   фактическое состояние сервера, а не выдуманный откат. Правильнее — bulk-эндпоинт реордера в
   одной транзакции.
 
-### [ ] R2-3 `setLocalRows(null)` убран из `saveExercise` и `deleteRow.onSuccess`: теневая копия навсегда перекрывает рефетч
+### [x] R2-3 `setLocalRows(null)` убран из `saveExercise` и `deleteRow.onSuccess`: теневая копия навсегда перекрывает рефетч
 - **Коммит/файл:** `5a1a4572`; `.../admin/lessons/[lessonId]/exercises/page.tsx:207-217, 277-292`
   (и тот же код во втором редакторе)
 - **Что не так:** коммит удалил оба сброса вместе с комментарием, который прямо объяснял, зачем

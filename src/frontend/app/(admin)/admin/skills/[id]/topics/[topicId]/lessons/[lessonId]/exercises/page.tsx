@@ -210,12 +210,25 @@ export default function AdminTopicLessonExercisesPage({
         await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         // Only reconcile the row we just saved with the server's copy - other rows may still
         // carry unsaved edits in the shadow copy and must not be discarded (R-11).
-        setRows((prev) => prev.map((r) => (r === row ? {
-            id: saved.id,
-            type: saved.type as ExerciseType,
-            sortOrder: saved.orderInLesson,
-            content: saved.content as unknown as ExerciseContent,
-        } : r)));
+        let hasOtherUnsavedRow = false;
+        setRows((prev) => prev.map((r) => {
+            if (r === row) {
+                return {
+                    id: saved.id,
+                    type: saved.type as ExerciseType,
+                    sortOrder: saved.orderInLesson,
+                    content: saved.content as unknown as ExerciseContent,
+                };
+            }
+            if (r.id === null) hasOtherUnsavedRow = true;
+            return r;
+        }));
+        // R2-3: once the row just saved matches the server (which the refetch above just
+        // confirmed), drop the shadow copy so the screen resynchronises with the server on the
+        // next refetch — e.g. another admin's concurrent edits, or the server's own renumbering —
+        // instead of shadowing it forever. Only an unsaved brand-new row (no id yet) is a reason
+        // to keep the shadow copy alive.
+        if (!hasOtherUnsavedRow) setLocalRows(null);
         setEditingId(null);
     }
 
@@ -236,9 +249,15 @@ export default function AdminTopicLessonExercisesPage({
         const renumbered = reordered.map((row, i) => ({ ...row, sortOrder: i + 1 }));
         setRows(renumbered);
 
-        const changedRows = renumbered.filter(
-            (row, i) => row.id && row.sortOrder !== previousRows[i]?.sortOrder
-        );
+        // R2-1: compare each row's new `sortOrder` against its *own* previous value (by id), not
+        // against whichever row used to sit at the same array position — a positional comparison
+        // is always a no-op for a contiguously-numbered `1..n` list, which is the common case
+        // (new rows, seeded content, generator output all number this way), so no PUT ever went
+        // out and the reorder silently failed to persist.
+        const changedRows = renumbered.filter((row) => {
+            const previous = previousRows.find((candidate) => candidate.id === row.id);
+            return row.id && row.sortOrder !== previous?.sortOrder;
+        });
 
         try {
             for (const row of changedRows) {
@@ -281,6 +300,10 @@ export default function AdminTopicLessonExercisesPage({
         deleteMut.mutate(id, {
             onSuccess: async () => {
                 await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+                // R2-3: drop the shadow copy once nothing local remains unsaved, so the screen
+                // resynchronises with the server instead of shadowing it forever. Keep it only if
+                // an unsaved brand-new row (no id yet) is still waiting to be created.
+                setLocalRows((prev) => (prev?.some((r) => r.id === null) ? prev : null));
             },
             onError: () => {
                 // Re-insert only the row this delete removed, not a whole-list snapshot that

@@ -180,9 +180,14 @@ export default function OrganizationLessonEditorPage() {
 
     const moveExercise = async (fromIndex: number, toIndex: number) => {
         const reordered = moveExerciseInList(exercises, fromIndex, toIndex);
-        const moved = reordered.filter(
-            (exercise, index) => exercise.orderInLesson !== exercises[index]?.orderInLesson
-        );
+        // R2-1: compare each row's new `orderInLesson` against its *own* previous value (by id),
+        // not against whichever row used to sit at the same array position — a positional
+        // comparison is always a no-op for a contiguously-numbered `1..n` list, which is the
+        // common case, so no PUT ever went out and the reorder silently failed to persist.
+        const moved = reordered.filter((exercise) => {
+            const previous = exercises.find((candidate) => candidate.id === exercise.id);
+            return exercise.orderInLesson !== previous?.orderInLesson;
+        });
 
         await withDraft(async () => {
             for (const exercise of moved) {
