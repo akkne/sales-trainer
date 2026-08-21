@@ -43,14 +43,13 @@ internal sealed class SpotMistakeEvaluationStrategy(
         var selectedLineIndex = userAnswer.GetProperty("selectedLineIndex").GetInt32();
         var lineCorrect = selectedLineIndex == mistakeIndex;
 
-        // X-7: finding the mistake line *is* the exercise the "необязательно" label promises — an
-        // explanation is authored as optional colour, not as half the grade. Scoring it as half the
-        // credit meant a correct, unexplained line topped out at 50 and "Почти", so a learner who did
-        // exactly what was asked could never pass. The line alone now earns full credit; a written
-        // explanation is still graded for its own feedback, it just never lowers the score the line
-        // already earned. docs/DECISIONS.md records this as the chosen resolution over the other
-        // option (making the field mandatory).
-        var score = lineCorrect ? 100 : 0;
+        // Q-15 (docs/NIGHT_AUDIT_QUESTIONS.md, docs/DECISIONS.md): the mistake line alone *is* the
+        // exercise the "необязательно" label promises, so it earns the session's own pass mark (70,
+        // the same >=70 the session gate uses) on its own — a learner who did exactly what was asked
+        // always passes. A written explanation is graded by the AI and can raise the score up to 100,
+        // but only as a bonus on top of the 70 the line already earned: it never pulls the score back
+        // below the pass mark, even when the AI grades it poorly or fails to parse.
+        var score = lineCorrect ? 70 : 0;
         var feedback = new StringBuilder();
 
         if (!lineCorrect)
@@ -78,6 +77,13 @@ internal sealed class SpotMistakeEvaluationStrategy(
 
             if (!string.IsNullOrEmpty(aiResult.AiFeedback))
                 feedback.AppendLine(aiResult.AiFeedback);
+
+            // aiResult.Score is the AI grader's rating*10, in [10, 100] (or 0 if the AI response
+            // failed to parse). Map it onto the [0, 30] bonus range and add it to the 70 the correct
+            // line already earned — clamped so a weak or failed explanation never drops the score
+            // below the pass mark and a strong one never pushes it past 100.
+            var bonus = (aiResult.Score - 10) * 30 / 90;
+            score = Math.Clamp(70 + bonus, 70, 100);
         }
 
         string? explanation = null;

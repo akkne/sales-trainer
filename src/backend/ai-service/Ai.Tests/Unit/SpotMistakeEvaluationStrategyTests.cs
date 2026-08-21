@@ -47,12 +47,12 @@ public class SpotMistakeEvaluationStrategyTests
         result.IsCorrect.Should().BeFalse();
     }
 
-    // X-7 (docs/AUDIT_PROD.md, docs/DECISIONS.md): the explanation field is labelled optional, so the
-    // mistake line alone must earn full credit — it used to score only 50 and read as "Почти", which
-    // meant a learner who found the right line and left the (truly optional) field blank could never
-    // pass the exercise.
+    // Q-15 (docs/NIGHT_AUDIT_QUESTIONS.md, docs/DECISIONS.md): the explanation field is labelled
+    // optional, so the mistake line alone must earn the session's pass mark (70, the same >=70 the
+    // session gate uses) on its own — a learner who found the right line and left the (truly
+    // optional) field blank passes without ever needing the AI grader.
     [Test]
-    public async Task EvaluateAnswer_CorrectLine_NoExplanation_ScoresFull_WithoutCallingAi()
+    public async Task EvaluateAnswer_CorrectLine_NoExplanation_ScoresPassMark_WithoutCallingAi()
     {
         var strategy = CreateStrategy();
         var content = JsonDocument.Parse(Dialogue).RootElement;
@@ -60,7 +60,7 @@ public class SpotMistakeEvaluationStrategyTests
 
         var result = await strategy.EvaluateAnswerAsync(content, answer, null);
 
-        result.Score.Should().Be(100);
+        result.Score.Should().Be(70);
         result.IsCorrect.Should().BeTrue();
     }
 }

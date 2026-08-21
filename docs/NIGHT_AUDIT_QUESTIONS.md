@@ -542,6 +542,18 @@ is still sent to the AI grader and its feedback is still shown, but it can no lo
 existing "no explanation" test was updated to assert the new (100, correct) outcome instead of the old
 (50, incorrect) one it had been asserting — that assertion previously encoded the bug being fixed.
 
+**Owner's answer (2026-08-21): the middle option — 70, not 100.** Neither "the line alone scores
+100" (what shipped in `90d5e491`) nor the original "the line alone scores 50" is right. A correct
+line alone now scores **70** (`isCorrect: true`) — the same number the session gate already treats as
+a pass (`>= 70`, `app/session/[lessonId]/page.tsx:28`'s `PASSING_SCORE_THRESHOLD * 10`), so a learner
+who does exactly what the exercise asks passes, no more and no less. A written explanation stays
+optional and is still graded by the AI, but now as a genuine bonus: it can raise the score up to 100
+and can never pull it back below 70, even when the AI grades it poorly or its response fails to
+parse. Implemented in `SpotMistakeEvaluationStrategy.cs` (see the `fix:` commit that follows this
+answer in `git log` for the exact hash); `Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s
+"no explanation" test was updated again, from `(100, true)` to `(70, true)`. Recorded in
+`docs/DECISIONS.md` under the same Q-15 entry.
+
 ### Q-16 — X-4 side effect: pressing «Пропустить» on every exercise now completes the lesson and unlocks the next one, at score 0
 
 **What shipped.** `d7b090d1` (X-4) made "Skip" record a real, ungraded `UserExerciseAttempt`

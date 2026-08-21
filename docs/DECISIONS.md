@@ -6170,6 +6170,24 @@ silently re-lower the score.
 asserted `Score == 50, IsCorrect == false` — i.e. it encoded the bug — and was updated to assert
 `Score == 100, IsCorrect == true` to match the corrected, intentional behaviour.
 
+**Superseded 2026-08-21 (owner's answer to Q-15): 100 was too generous, 50 was too stingy — the
+correct answer is the pass mark, 70.** The owner picked the middle option this entry did not offer:
+a correct line alone now scores **70** (`isCorrect: true`), not 100. 70 is not arbitrary — it is the
+exact number the session gate already uses (`>= 70`, `app/session/[lessonId]/page.tsx:28`'s
+`PASSING_SCORE_THRESHOLD * 10`), so a learner who correctly finds the mistake passes the exercise,
+full stop. A written explanation stays optional (the label and `docs/NEW_EXERCISE_TYPES.md` are
+unchanged) but is now a genuine bonus: the AI grades it and can raise the score up to 100, and by
+construction (`Math.Clamp(70 + bonus, 70, 100)`) can never pull it back below 70 — a weak explanation
+or an AI response that fails to parse costs the learner nothing beyond the bonus they did not earn.
+This is a smaller change than either of the two options this entry weighed: it does not touch the
+frontend label or add a validation gate (option 2, still rejected for the same reason as above), and
+it does not reward a bare correct line as generously as full marks (this entry's option 1, now
+revised). **What changed (again):** the same file's `score` now starts at `lineCorrect ? 70 : 0`
+instead of `100 : 0`; the AI-graded branch adds a clamped `[0, 30]` bonus derived from the grader's
+rating instead of overwriting the score outright.
+`Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s "no explanation" test was updated a second
+time, from `(100, true)` to `(70, true)`.
+
 ## 2026-08-21 — Night audit review 2: `SkillCatalogCache` keyed by tenant (R2-11)
 
 ### R2-11: the cache key is now tenant-qualified — chose not to rely on a "skills are global" proof
