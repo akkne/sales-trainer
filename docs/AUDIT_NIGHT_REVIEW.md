@@ -457,7 +457,7 @@
   (новая запись «R-19: ...») с воспроизведённым выводом линтера. `tenancy-boundary-lint` на текущем
   HEAD подтверждён чистым (`tenancy-boundary-lint: clean.`).
 
-### [ ] R-20 `DialogModeKey = ""` безопасен только благодаря валидации на записи; для legacy-строк проверки нет
+### [x] R-20 `DialogModeKey = ""` безопасен только благодаря валидации на записи; для legacy-строк проверки нет
 - **Коммит/файл:** `e2f68df`;
   `src/backend/learning-service/Learning/Eventing/AssignmentThresholdConsumer.cs:138`,
   `.../Assignments/Services/Implementation/AssignmentThresholdEvaluator.cs:233-250`
@@ -480,6 +480,17 @@
   не нарушает. Уникальный индекс — `(OrganizationId, UserId, SessionId)`, `DialogModeKey` в него
   не входит, дублей не появится. `DialogModeId` — не FK («Never matched on»), `Guid.Empty`
   допустим. `TeamSkillMapService:105` группирует по `UserId` и не смотрит на `DialogModeKey`.
+- **Resolved (commit `604dd1d3`):** `AssignmentThresholdEvaluator.MeasureDialoguesAsync` теперь
+  сам отфильтровывает пустые/whitespace `Reference` при построении `modeKeys`
+  (`.Where(reference => !string.IsNullOrWhiteSpace(reference))`), а не полагается на то, что
+  `SerializeContent` всегда отверг такую строку на записи. Второй потребитель того же поля,
+  `MyAssignmentService`'s practice-context lookup, перепроверен и не нуждается в правке: он
+  принимает mode key как параметр и уже отвергает пустой `modeKey` до сравнения, так что пустой
+  `Reference` там не может совпасть ни при каком входе. `TeamSkillMapService` не читает
+  `DialogModeKey` вовсе — подтверждено ранее. Build learning-service чист,
+  `dotnet test learning-service/Learning.Tests --filter "TestCategory!=Integration"` 90/0 (метод
+  не покрыт юнит-тестами — только пропущенным integration-тестом, `docs/TESTING/PHASE_40_BACKLOG.md`
+  строка 54), оба tenancy-линта чисты, `route-parity/RouteParity.Tests` 5/0 (маршруты не менялись).
 
 ### [ ] R-21 Корневой `app/not-found.tsx` накрывает и англоязычную `/admin/*`, и формальную `/org/*`
 - **Коммит/файл:** `953d598`; `src/frontend/app/not-found.tsx:1-32` (единственный `not-found.tsx`
