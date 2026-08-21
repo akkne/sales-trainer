@@ -28,8 +28,16 @@ public sealed class TenantContextMiddleware(RequestDelegate next)
     /// <para>
     /// Platform staff normally hold no membership and therefore no organization header, so a
     /// tenant-scoped route must not turn them away: their scope is <em>every</em> organization,
-    /// which is a wider answer to "which tenant is this?" rather than a missing one. Only a caller
-    /// who is neither scoped to an organization nor platform staff gets 403.
+    /// which is a wider answer to "which tenant is this?" rather than a missing one.
+    /// </para>
+    ///
+    /// <para>
+    /// A demo caller (<see cref="DemoCallers.IsDemoCaller"/>) is the third exception, and a
+    /// narrower one: it passes the gate without entering platform-wide mode and without an
+    /// organization, so <see cref="ITenantContext"/> stays in the same "neither" state
+    /// <see cref="TenantConnectionInterceptor"/> already treats as fail-closed — global content
+    /// only, nothing tenant-scoped, never another organization's data. Only a caller who is
+    /// scoped to no organization, is not platform staff, and is not the demo caller gets 403.
     /// </para>
     /// </summary>
     public async Task InvokeAsync(HttpContext httpContext, TenantContext tenantContext)
@@ -48,8 +56,10 @@ public sealed class TenantContextMiddleware(RequestDelegate next)
             tenantContext.EnterPlatformMode();
         }
 
+        var callerIsDemo = DemoCallers.IsDemoCaller(httpContext.User);
+
         var routeRequiresTenantScope = httpContext.GetEndpoint()?.Metadata.GetMetadata<TenantScopedAttribute>() is not null;
-        if (routeRequiresTenantScope && !organizationIdWasResolved && !callerIsPlatformStaff)
+        if (routeRequiresTenantScope && !organizationIdWasResolved && !callerIsPlatformStaff && !callerIsDemo)
         {
             httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
