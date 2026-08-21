@@ -150,7 +150,7 @@
   E-13..E-17 admin content-list screens (owned by a concurrent agent's pass, not re-checked here).
   Recorded as `docs/NIGHT_AUDIT_QUESTIONS.md` Q-14 rather than left unmentioned.
 
-### [ ] R-7 `stripFeedbackHtml` склеивает слова на границах блочных тегов
+### [x] R-7 `stripFeedbackHtml` склеивает слова на границах блочных тегов
 - **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;
   потребитель — `src/frontend/features/org-dialogs/components/dialog-session-list.tsx:105`
 - **Что не так:** `sanitizeHtml(html, { allowedTags: [] })` вырезает теги, **не подставляя
@@ -163,8 +163,15 @@
   РОП видит в списке `/org/dialogs` превью фидбэка со склеенными словами в каждой второй строке.
 - **Severity:** major
 - **Уверенность:** точно (выполнено, вывод выше)
+- **Resolved:** `stripFeedbackHtml` (`src/frontend/shared/components/feedback-html.tsx`) now
+  sanitizes to the safe allowlist first, then replaces block-boundary tags (`h3`/`p`/`ul`/`ol`/
+  `li`/`br`) with a literal space *before* discarding the remaining tags, so block boundaries
+  never glue words together. Re-run oracle: `"<h3>Итог</h3><p>Первое предложение.</p><p>Второе
+  предложение.</p>"` → `"Итог Первое предложение. Второе предложение."`;
+  `"<ul><li>раз</li><li>два</li></ul>"` → `"раз два"`; `"строка1<br>строка2"` →
+  `"строка1 строка2"`.
 
-### [ ] R-8 `stripFeedbackHtml` возвращает HTML-escaped сущности, а рендерится как текст
+### [x] R-8 `stripFeedbackHtml` возвращает HTML-escaped сущности, а рендерится как текст
 - **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;
   `src/frontend/features/org-dialogs/components/dialog-session-list.tsx:105`
   (`{stripFeedbackHtml(session.feedbackSummary)}` — текстовый child React, не `innerHTML`)
@@ -177,8 +184,13 @@
   `&amp;` / `&gt;`. Для LLM-вывода это не редкость.
 - **Severity:** major
 - **Уверенность:** точно (выполнено)
+- **Resolved:** added `decodeFeedbackTextEntities` in `feedback-html.tsx`, which undoes exactly
+  the three entities `sanitize-html`'s text escaper produces (`&lt;`, `&gt;`, `&amp;` — decoded
+  last to avoid mangling a literal `&lt;` typed by the model), applied after the plain-text pass.
+  Re-run oracle: `"Оценка < 70 & \"низко\""` → `"Оценка < 70 & \"низко\""`;
+  `"Клиент сказал: 5 > 3"` → `"Клиент сказал: 5 > 3"`.
 
-### [ ] R-9 `<ol>` не в allowlist: нумерованный список превращается в осиротевшие `<li>`
+### [x] R-9 `<ol>` не в allowlist: нумерованный список превращается в осиротевшие `<li>`
 - **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:12`
 - **Что не так:** `allowedTags` содержит `ul`, `li`, но не `ol`. При `disallowedTagsMode: "discard"`
   `<ol>` выбрасывается, а его `<li>` остаются.
@@ -186,11 +198,21 @@
   `<li>` вне списка, без маркеров и отступов. Модель регулярно нумерует рекомендации.
 - **Severity:** minor
 - **Уверенность:** точно (выполнено)
+- **Resolved:** added `"ol"` to `FEEDBACK_HTML_OPTIONS.allowedTags` in `feedback-html.tsx`.
+  Re-run oracle: `sanitizeFeedbackHtml("<ol><li>a</li><li>b</li></ol>")` →
+  `"<ol><li>a</li><li>b</li></ol>"` (kept intact); `stripFeedbackHtml` of the same input →
+  `"a b"`.
 - **Не находка (проверено и чисто):** сам allowlist безопасен. `allowedAttributes: {}` убивает
   `href`, `style` и все `on*`; `script`/`img onerror`/`a href="javascript:"`/`svg onload`/`iframe`
   вырезаются полностью (`nonTextTags` по умолчанию съедает и содержимое `script`/`style`).
   Зависимость в правильном `src/frontend/package.json` (prod) + `@types` в dev, залочено
   (`sanitize-html 2.17.7` в `package-lock.json`).
+- **Re-verified after the R-7/R-8/R-9 fix (allowlist unchanged, only text-joining/decoding
+  logic added around it):** `strip("<script>alert(1)</script><img src=x onerror=alert(1)><a
+  href=\"javascript:alert(1)\">x</a>")` → `"x"`; `strip('<p style="position:fixed"
+  onclick="x()">t</p>')` → `"t"` (`sanitizeFeedbackHtml` of the same → `"<p>t</p>"`, no `style`/
+  `onclick`); `strip("<svg onload=alert(1)></svg><iframe src=x></iframe>")` → `""`. All three
+  match pre-fix behavior — nothing dangerous survives.
 
 ### [ ] R-10 W-9: ▲▼ удалены по неверному обоснованию — переупорядочивание уже персистится в соседнем экране
 - **Коммит/файл:** `316da24`;
