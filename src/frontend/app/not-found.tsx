@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
@@ -19,6 +20,23 @@ import { Button } from "@/shared/components/button";
 // `app/demo/page.tsx` and `app/(org)/layout.tsx`).
 export default function NotFound() {
     const pathname = usePathname();
+
+    // R2-12: this boundary has no request context to read a real path from at prerender time
+    // (Next.js's docs say as much: "not-found.js ... do not accept any props"), so `usePathname()`
+    // is `null` for as long as this render has no client to hydrate into — during static
+    // prerendering, and again for the very first client render before hydration attaches. Without
+    // this guard the fallback branch below (the learner app's Russian copy) always wins that first
+    // paint, then flashes over to the right variant once hydration resolves the real pathname. This
+    // waits for that one client-only effect before rendering any variant at all, so the first thing
+    // ever painted with real copy is already the right one — never a flash of the wrong language.
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return <NotFoundLayout>{null}</NotFoundLayout>;
+    }
 
     if (pathname?.startsWith("/admin")) {
         return (
