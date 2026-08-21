@@ -30,12 +30,13 @@ export function Chip({
     children,
     tone = "neutral",
     size = "md",
-    active = false,
+    active,
     onClick,
     icon,
     className = "",
 }: ChipProps) {
     const t = TONE_STYLES[tone];
+    const isActive = active ?? false;
     const sizeStyles = size === "sm"
         ? { padding: "2px 8px", fontSize: "11px", height: "20px" }
         : { padding: "4px 10px", fontSize: "12px", height: "24px" };
@@ -44,9 +45,9 @@ export function Chip({
         display: "inline-flex",
         alignItems: "center",
         gap: "6px",
-        background: active ? "var(--ink)" : t.bg,
-        color: active ? "var(--bg)" : t.color,
-        border: `1px solid ${active ? "var(--ink)" : t.border}`,
+        background: isActive ? "var(--ink)" : t.bg,
+        color: isActive ? "var(--bg)" : t.color,
+        border: `1px solid ${isActive ? "var(--ink)" : t.border}`,
         borderRadius: "999px",
         ...sizeStyles,
         fontWeight: 500,
@@ -62,7 +63,10 @@ export function Chip({
             <button
                 type="button"
                 onClick={onClick}
-                aria-pressed={active}
+                // Only announce toggle state when the caller actually passed `active` - an
+                // onClick chip that never opted into being a toggle (e.g. a plain chip-action)
+                // must not be misannounced to screen readers as a pressed/unpressed button (R-22).
+                aria-pressed={active === undefined ? undefined : active}
                 style={style}
                 className={className}
             >
