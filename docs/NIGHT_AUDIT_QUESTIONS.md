@@ -470,6 +470,45 @@ remaining sweep isn't lost: whoever picks this up next should grep for `isError`
 the `app/(admin)/admin/**` content-list pages, and apply the same `isLoadingError` gate wherever
 `isError` currently discards an already-rendered region rather than only gating an empty state.
 
+**Update (2026-08-21) — swept, no owner decision was needed.** Applied the mechanical
+`isError`/bare-`error` → `isLoadingError` swap to every screen listed above, plus every admin
+content-list screen found by grepping the whole `app/(admin)/admin/**` tree (broader than the
+E-13..E-17 subset originally named — the same shape also turned up in a few screens Q-14 didn't
+enumerate). `docs/AUDIT_NIGHT_REVIEW.md` R-6 is now `[x]`.
+
+Files touched:
+- `app/(main)/reference/[id]/page.tsx` (E-1)
+- `app/(main)/guidebook/page.tsx` (E-8)
+- `app/(main)/companies/[id]/page.tsx` (E-9) — the top-level `error`/`isLoadingError` gate plus the
+  `errorMessage` props fed to `CompanyContactsCard` and `CompanyTimeline` (those two components
+  needed no change themselves — the destructive gate lived in the page, not the component).
+  `CompanyReadinessCard`/`CompanyBriefingCard` needed no change: they already gate on data
+  presence (`hasScore`/`hasContent`), not on `isError`.
+- `app/(main)/friends/page.tsx` (E-10, the friends-grid gate only — the incoming-requests banner
+  was already additive and non-destructive). `app/(main)/friends/[userId]/page.tsx` needed no
+  change: it already gates on `!profile` (data presence).
+- Admin content-list/detail screens: `organizations/page.tsx` (both the organizations table and
+  the impersonation-audit list), `skill-stages/page.tsx`, `users/page.tsx`, `prompts/page.tsx`
+  (both the prompts list and the rewards list), `lessons/page.tsx`, `skills/page.tsx`,
+  `reference/page.tsx`, `topics/page.tsx`, `techniques/page.tsx`, `leagues/tiers/page.tsx`,
+  `skills/[id]/page.tsx`, `skills/[id]/topics/[topicId]/page.tsx` (three gates: skills, topics,
+  lessons), `skills/[id]/reference/page.tsx`, `lessons/[lessonId]/exercises/page.tsx`,
+  `skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx`, `demo-requests/page.tsx`,
+  `dialog/page.tsx`, `dialog/[bundleId]/page.tsx`, and
+  `organizations/[organizationId]/quota/page.tsx` (the `SpendPanel`'s `isError` prop).
+- **Already correct, left untouched:** `admin/voice/usage/page.tsx` (already used the full
+  `isLoadingError`/`isRefetchError` split — a good reference implementation), `admin/quotes/page.tsx`
+  and `admin/discuss/page.tsx` (error banners already additive, never gating the list/calendar),
+  `admin/gamification/page.tsx`/`admin/leagues/page.tsx`/`admin/dialog/page.tsx`'s mutation
+  `.isError` banners (mutations don't have `isLoadingError`/`isRefetchError` and don't discard
+  fetched data — not the R-6 shape at all).
+- One pre-existing test needed its mocks updated to match the more precise gate:
+  `__tests__/CompanyPage.test.tsx`'s two error-scenario mocks (`data: undefined, error: ...`) now
+  also set `isLoadingError: true`, since that is exactly what a first-load failure with no data is
+  — the mock was just missing a field the real hook always computes.
+- Verified with `npx tsc --noEmit` (clean) and `npx vitest run` (977/977 passing) in
+  `src/frontend`.
+
 ### Q-15 — X-7: `spot_mistake`'s explanation field was scored as half the grade while labelled optional; resolved as "the line alone passes", not "make the field mandatory"
 
 **The conflict.** `spot_mistake`'s textarea is labelled «Объясни, почему это ошибка (необязательно)»
@@ -502,3 +541,46 @@ is still sent to the AI grader and its feedback is still shown, but it can no lo
 `docs/DECISIONS.md` records the same call; `Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s
 existing "no explanation" test was updated to assert the new (100, correct) outcome instead of the old
 (50, incorrect) one it had been asserting — that assertion previously encoded the bug being fixed.
+
+### Q-16 — X-4 side effect: pressing «Пропустить» on every exercise now completes the lesson and unlocks the next one, at score 0
+
+**What shipped.** `d7b090d1` (X-4) made "Skip" record a real, ungraded `UserExerciseAttempt`
+instead of advancing the client queue with the server never seeing anything. That was the right
+call for the bug it fixed — before it, a lesson finished entirely by skipping showed «Урок
+завершён» on the client while the backend's completion gate never closed, so the lesson stayed
+open forever and nothing after it ever unlocked.
+
+**The consequence nobody wrote down.** `ExerciseService.UpdateLessonProgressAsync` computes
+`attemptedExercises` as "distinct exercises of this lesson with **any** attempt row" — a skip is
+indistinguishable from an answer there. So `allAttempted` becomes true, the lesson flips to
+`Completed` with `BestScore = 0`, `UnlockNextLessonInTopicAsync` fires, and `6893c2ad`'s new
+read-time unlock derivation (which also chains off `Completed`) reports the next lesson
+`available`. Net effect: **a learner can walk the entire skill tree by pressing «Пропустить»,
+finishing every lesson at 0 %.** Nothing gates on the score: `PASSING_SCORE_THRESHOLD`
+(`app/session/[lessonId]/page.tsx:106`) only decides whether an exercise goes into the
+end-of-lesson mistakes-review round, not whether the lesson counts.
+
+**Why this is a question and not a finding to fix unilaterally.** The three ways out are all
+product calls, not bug fixes:
+
+1. **Leave it.** Skipping is a legitimate "I don't want to do this one" affordance, progress is
+   the learner's own business, and `BestScore = 0` already records the truth for anyone looking
+   at the admin panel or team analytics. Simplest, and consistent with the current "attempted,
+   not passed" completion gate.
+2. **Count only non-skipped attempts towards completion, but keep the attempt row.** Restores the
+   integrity of "completed", and X-4's original bug does not come back for a learner who actually
+   answers — but a lesson finished *entirely* by skipping goes back to never closing, which is the
+   dead end X-4 was filed about. Would need a separate way out of that dead end (e.g. a skip
+   budget per lesson).
+3. **Require a minimum score to complete a lesson** (i.e. move the completion gate from
+   "attempted" to "passed"). The largest change: it reverses the current documented gate, affects
+   every existing learner's progress, and would need a backfill decision for accounts already
+   marked complete at low scores.
+
+**Recommendation if no answer comes:** option 1 (leave it) plus one line in
+`docs/LEARNING_SERVICE.md` making it explicit that lesson completion means *attempted*, not
+*passed*, and that skipping counts — so the next person reading the unlock chain does not
+rediscover this as a bug. Option 2 or 3 should not be taken by an audit agent without the owner:
+both change what "completed" means for data already in the database.
+
+Raised from `docs/AUDIT_NIGHT_REVIEW.md` R2-7 (second review, commits `7870d60f..90d5e491`).

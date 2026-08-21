@@ -421,6 +421,12 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Ожидалось:** либо ↑/↓ действительно переставляют выбранный элемент, либо подсказка не обещает того, чего нет.
 - **Слой:** frontend
 - **Severity:** minor
+- **Skipped (2026-08-21):** the fix (real fix or hint-copy fix) has to touch
+  `features/exercise/components/reorder-exercise.tsx`, which another agent is actively rewriting
+  in the same session (shuffle logic for X-2/X-3, plus the correct-answer reveal for X-6/X-8/etc.
+  already landed in `116704eb`). Left open rather than risk colliding on that file — see
+  `docs/NIGHT_AUDIT_QUESTIONS.md` for the coordination note if a decision is needed on which fix
+  (implement ↑/↓ vs. drop the hint copy) is preferred.
 
 ### [x] X-2 `reorder`: перемешивание может выдать элементы уже в правильном порядке — упражнение решается нажатием «Проверить» без единого действия
 - **Где:** `/session/3e307adc-bc1f-426d-aa7d-f312c9fd09f8`, круг «Работа над ошибками», упражнение `3ec6a5a2-63b7-4dab-a7d1-f6d62baee7c7`; `features/exercise/components/reorder-exercise.tsx:37-44`
@@ -478,21 +484,34 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Слой:** frontend (использует поле, которого нет в контракте) + backend (не сообщает правильный индекс в ответе на проверку)
 - **Severity:** major
 
-### [ ] X-9 Экран «Работа над ошибками» — единственная кнопка и ни одного выхода из сеанса
+### [x] X-9 Экран «Работа над ошибками» — единственная кнопка и ни одного выхода из сеанса
 - **Где:** любой урок, где была хотя бы одна ошибка (воспроизведено на `/session/3e307adc-…` и `/session/6efc8a23-…`); `app/session/[lessonId]/page.tsx:505-539` (`MistakesIntroScreen`)
 - **Что делал:** дошёл до экрана-шлюза «Теперь обработаем ошибки» и перечислил все интерактивные элементы страницы.
 - **Что произошло:** на экране ровно одна кнопка — «Начать работу над ошибками» (`[...document.querySelectorAll('button,a')]` → 1 элемент). Шапки сеанса с «✕» здесь нет, отложить или отказаться от круга повторения нельзя, ссылки в дерево тоже нет — выйти можно только кнопкой «назад» в браузере или через адресную строку. Для сравнения: на самих упражнениях «✕» есть, и на экране ошибки загрузки урока (`:625-648`) — тоже.
 - **Ожидалось:** тот же «✕» → `exitHref`, что и на остальных экранах сеанса (и/или второстепенная кнопка «Позже»).
 - **Слой:** frontend
 - **Severity:** minor
+- **Resolved (2026-08-21):** `MistakesIntroScreen` now takes `exitHref` and renders the same
+  `session-top` header with the `✕` → `exitHref` icon button every other session screen (queue,
+  empty-list guard, error state) already has. `app/session/[lessonId]/page.tsx`.
 
-### [ ] X-10 `/invite/<битый токен>`: сырое английское «Invite not found.» вместо русского текста, и то — только после ввода имени и пароля
+### [x] X-10 `/invite/<битый токен>`: сырое английское «Invite not found.» вместо русского текста, и то — только после ввода имени и пароля
 - **Где:** `https://sellevate.site/invite/not-a-real-token-12345`; `app/(auth)/invite/[token]/page.tsx:52-57`; `POST /auth/invites/{token}/accept`
 - **Что делал:** открыл ссылку с заведомо несуществующим токеном, дождался загрузки, затем заполнил «Твоё имя» и «Пароль» и нажал «Принять приглашение» (перехват `fetch` включён).
 - **Что произошло:** (1) страница открывается **полностью рабочей формой** — токен нигде не проверяется, ни одного запроса при загрузке нет, признаков «ссылка мертва» тоже; (2) после отправки `POST /auth/invites/not-a-real-token-12345/accept` → **404** `{"message":"Invite not found."}`, и на экране под полями появляется ровно этот английский текст — «Invite not found.» — на русскоязычной странице. Русская заготовка в компоненте есть (`acceptInviteMutation.error?.message ?? "Приглашение недействительно или уже использовано"`), но она не срабатывает никогда: api-клиент всегда заполняет `message`, поэтому ветка `??` — мёртвый код. (3) Что делать дальше, страница не говорит: ни «попросите новое приглашение», ни ссылки на поддержку — только «Уже есть аккаунт? Войти».
 - **Ожидалось:** токен проверяется при открытии страницы (или хотя бы 404 переводится в русскую фразу), и приглашённому объясняют следующий шаг, а не показывают серверную строку на английском.
 - **Слой:** frontend
 - **Severity:** major
+- **Resolved (2026-08-21):** added a read-only `GET /auth/invites/{token}/status` check
+  (`IInviteService.ValidateAsync`, `AuthController.GetInviteStatus`) that the acceptance page now
+  calls before rendering the form — a garbage/expired/revoked/already-used token shows a localized
+  Russian error screen (with next-step guidance and a support-email action) instead of a working
+  form that only fails after the invitee types in a name and password. The 400/404/409/410 the
+  accept endpoint already returned are now also mapped to the same localized copy for the submit
+  path, since `ApiError.message` is English wire text and was never meant to be shown as-is.
+  Files: `src/backend/identity-service/Identity/Features/Invites/Services/{Abstract/IInviteService.cs,Implementation/InviteService.cs}`,
+  `src/backend/identity-service/Identity/Features/Auth/AuthController.cs`,
+  `src/frontend/features/auth/hooks/use-auth.ts`, `src/frontend/app/(auth)/invite/[token]/page.tsx`.
 
 ### [x] X-11 Дерево обучения — тупик: вся тема 1 пройдена, все остальные 14 уроков навсегда `locked`, разблокировать нечем
 - **Где:** `/tree` → «Первый контакт»; `GET /skills/first-contact/lessons`; `ExerciseService.UpdateLessonProgressAsync` (`:583-587`) и `UnlockNextLessonInTopicAsync` (`:620-646`)
@@ -509,6 +528,20 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 - **Ожидалось:** 400 с сообщением про отсутствующий `answer`; ветка 503 остаётся только для настоящих отказов ИИ (типизированное исключение, а не любой `InvalidOperationException`).
 - **Слой:** backend
 - **Severity:** minor
+- **Skipped (2026-08-21):** root cause confirmed — `SingleCorrectOptionEvaluationStrategy
+  .EvaluateAnswerAsync` calls `userAnswer.TryGetProperty(...)`, which itself throws
+  `InvalidOperationException` when `userAnswer.ValueKind` is not `Object` (the four 503 repro
+  bodies are all non-object: `Undefined`, `Null`, or `String`), and that raw exception is then
+  caught by `ExerciseController`'s generic `catch (InvalidOperationException)` → 503 branch,
+  which exists for genuine `AiEvaluationClient` failures. A correct, generic fix has to touch
+  either `ExerciseController.cs`'s submit action or the shared `ExerciseService
+  .SubmitExerciseAnswerAsync`/per-type evaluation-strategy code — all three are named as the other
+  concurrent agent's territory this session (the submit endpoint plus the
+  `choose_option`/`fill_blank`/`reorder`/`spot_mistake` evaluation strategies, which already saw a
+  commit today, `116704eb`, touching this exact method for X-3/X-6/X-8). Left open rather than
+  risk a collision on the shared submit path; a full fix (guard `userAnswer.ValueKind` before any
+  `TryGetProperty`/`GetProperty` call, or give `AiEvaluationClient`'s failures a dedicated
+  exception type so the controller's 503 branch cannot catch anything else) is still needed.
 
 ### Проверено, дефектов не обнаружено (прогон 4)
 - **Пройдены целиком 4 урока** и все 5 типов упражнений, которые есть в контенте прода:

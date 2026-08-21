@@ -125,7 +125,7 @@
   `isLoadingError`/`isRefetchError` split for this installed `@tanstack/react-query` version
   (see `docs/DECISIONS.md`).
 
-### [~] R-6 Тот же shape во всей серии E-фиксов: `isError` проверяется раньше «пусто» и вытесняет уже отрисованные данные — PARTIALLY RESOLVED, see note below
+### [x] R-6 Тот же shape во всей серии E-фиксов: `isError` проверяется раньше «пусто» и вытесняет уже отрисованные данные — RESOLVED
 - **Коммит/файл:** серия `c7e54d9`, `529c096`, `b75563d`, `6817709`, `84ecf34`, `248115d`,
   `eb9d771`, `be193e4`; пример — `src/frontend/app/(main)/tree/page.tsx:201-208`
   (`if (isError) return <ErrorState .../>` стоит **до** `if (enrolledSkills.length === 0)`) и
@@ -149,6 +149,19 @@
   `/guidebook` (E-8), `/companies/<id>` (E-9), `/friends` + `/friends/<userId>` (E-10), and the
   E-13..E-17 admin content-list screens (owned by a concurrent agent's pass, not re-checked here).
   Recorded as `docs/NIGHT_AUDIT_QUESTIONS.md` Q-14 rather than left unmentioned.
+- **Fully resolved (2026-08-21, see Q-14):** swept every remaining screen named above plus the
+  admin content-list screens. `/friends/[userId]/page.tsx` needed no change — it already gates on
+  `!profile` (data presence), not on `isError`. `/friends/page.tsx`'s incoming-requests banner and
+  `/admin/quotes`, `/admin/discuss`, and `CompanyReadinessCard`/`CompanyBriefingCard` needed no
+  change either — each is already additive (never discards already-rendered content) or already
+  gates on data presence. `/admin/voice/usage` already used the full
+  `isLoadingError`/`isRefetchError` split and was left untouched. Everywhere else the destructive
+  gate (`isError`/bare `error` before an early return, or before an already-populated list) was
+  swapped for `isLoadingError`, exactly as done for R-5/the first R-6 pass: no inversion of
+  behaviour, only the background-refetch-discards-good-data case is now fixed. 20 screens/files
+  touched in total — see `docs/NIGHT_AUDIT_QUESTIONS.md` Q-14 for the full file list and the one
+  pre-existing test (`__tests__/CompanyPage.test.tsx`) whose mocks needed `isLoadingError: true`
+  added to keep matching the (now more precise) production gate.
 
 ### [x] R-7 `stripFeedbackHtml` склеивает слова на границах блочных тегов
 - **Коммит/файл:** `b128e0a`; `src/frontend/shared/components/feedback-html.tsx:29-31`;
@@ -693,3 +706,429 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 Блокирует деплой: **R-17** (ручной гейт: подтвердить `INTERNAL_SERVICE_SECRET` в прод `.env`
 до того, как T-2 включит Production).
 Требует правки до пуша: **R-1**, **R-4**, **R-5**, **R-7**, **R-8**, **R-10**, **R-15**.
+
+---
+
+## Ревью 2 — коммиты после первого ревью
+
+**Диапазон:** `7870d60f..90d5e491` (25 коммитов). `7870d60f` — коммит, которым был создан этот
+файл, то есть граница первого ревью; `90d5e491` — HEAD на момент проверки. Рабочее дерево при
+этом было грязным (другой агент правил ~26 файлов, включая `use-auth.ts`,
+`app/session/[lessonId]/page.tsx` и оба админских редактора упражнений) — ревью проведено по
+**закоммиченному** состоянию `90d5e491`, незакоммиченные правки не смотрелись.
+
+Нумерация `R2-n` отдельная; секции R-1…R-22 выше не переписывались и не пересматривались.
+
+### [ ] R2-1 ▲▼ в админском редакторе упражнений не сохраняют порядок вообще: `changedRows` всегда пустой
+- **Коммит/файл:** `ad47210b` (восстановление кнопок) + `5a1a4572`;
+  `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:228-259`,
+  `src/frontend/app/(admin)/admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx`
+  (тот же код), источник шаблона —
+  `src/frontend/app/(org)/org/content/lessons/[lessonId]/page.tsx:181-186` +
+  `src/frontend/features/org-content-overrides/utils/exercise-summary.ts:98`
+- **Что не так:** `renumbered` присваивает каждой строке `sortOrder = i + 1` по её **новой**
+  позиции, а фильтр сравнивает это с `previousRows[i]?.sortOrder` — то есть с `sortOrder`
+  **прежнего жильца той же позиции**, а не самой строки. Для списка, пронумерованного подряд
+  `1..n` (обычный случай: `addExercise` ставит `rows.length + 1`,
+  `ContentGenerationStepRunner` — `orderInLesson++`, сиды — `1, 2, 3`), обе части всегда равны
+  `i + 1`, и фильтр не отбирает ничего. Проверено прогоном ровно этого выражения:
+  ```
+  contiguous 1..3, move idx0 -> idx1 (down): {"order":"r1:1,r0:2,r2:3","puts":[]}
+  contiguous 1..3, move idx2 -> idx0 (up x2): {"order":"r2:1,r0:2,r1:3","puts":[]}
+  contiguous 1..5, move idx3 -> idx1:        {"order":"r0:1,r3:2,r1:3,r2:4,r4:5","puts":[]}
+  0-based 0..2,    move idx0 -> idx1:        {"order":"r1:1,r0:2,r2:3","puts":["r1->1","r0->2","r2->3"]}
+  sparse 1,2,4,    move idx0 -> idx1:        {"order":"r1:1,r0:2,r2:3","puts":["r2->3"]}
+  ```
+  Ни одного `PUT` не уходит, дальше `try` доходит до `invalidateQueries` + `setLocalRows(null)`,
+  и список схлопывается назад к серверному порядку.
+- **Как проявится:** админ жмёт ▲ или ▼, строка визуально переезжает, экран моргает рефетчем и
+  строка возвращается на место. Ни ошибки, ни тоста — кнопки просто не работают. То есть
+  `ad47210b` вернул органы управления, которые ничего не делают, ровно тем же способом, каким
+  R-1 «починил» логаут: обоснование («org-редактор уже персистит реордер таким же циклом»)
+  взято из файла, где сломан тот же фильтр — `moveExerciseInList` тоже перенумеровывает по
+  позиции (`index + 1`), а `moved` считается тем же позиционным сравнением. То есть дефект в
+  org-редакторе существовал до диапазона, а `ad47210b` скопировал его в два админских экрана,
+  сославшись на него как на доказательство работоспособности.
+- **Severity:** major
+- **Уверенность:** точно (выражение прогнано, вывод выше)
+- **Как править:** сравнивать по идентичности строки, а не по позиции:
+  `previousRows.find(p => p.id === row.id)?.sortOrder !== row.sortOrder`. Тот же фикс нужен и в
+  org-редакторе (вне диапазона, но это первоисточник).
+
+### [ ] R2-2 при частично прошедшем реордере экран и сервер расходятся молча
+- **Коммит/файл:** `ad47210b`; `.../admin/lessons/[lessonId]/exercises/page.tsx:249-259`
+  (`moveExercise`, блок `catch`)
+- **Что не так:** цикл делает по одному `PUT /admin/exercises/{id}` на строку последовательно.
+  Если падает второй из трёх, первый уже записан. `catch` делает только
+  `setRows(previousRows)` — ни `setLocalRows(null)`, ни `invalidateQueries`. Экран показывает
+  исходный порядок, сервер держит наполовину перенумерованный список, и следующее нажатие ▲
+  считает `changedRows` от неверной базы.
+- **Как проявится:** админ видит тост об ошибке и «откат», но ученик получает урок с
+  задвоенным/пропущенным `orderInLesson`. Триггерится только там, где `PUT`-ы реально уходят
+  (см. R2-1: непрерывная нумерация `1..n` их не отправляет вообще), то есть на контенте с
+  разреженным или нулевым `orderInLesson`.
+- **Severity:** major
+- **Уверенность:** точно (путь кода однозначен), но триггер узкий
+- **Как править:** в `catch` — `setLocalRows(null)` + `invalidateQueries`, чтобы экран показал
+  фактическое состояние сервера, а не выдуманный откат. Правильнее — bulk-эндпоинт реордера в
+  одной транзакции.
+
+### [ ] R2-3 `setLocalRows(null)` убран из `saveExercise` и `deleteRow.onSuccess`: теневая копия навсегда перекрывает рефетч
+- **Коммит/файл:** `5a1a4572`; `.../admin/lessons/[lessonId]/exercises/page.tsx:207-217, 277-292`
+  (и тот же код во втором редакторе)
+- **Что не так:** коммит удалил оба сброса вместе с комментарием, который прямо объяснял, зачем
+  они нужны («otherwise localRows keeps overriding every future refetch forever»). `rows` — это
+  `localRows ?? exercises.map(...)`; `localRows` становится непустым при первой же правке и
+  теперь обнуляется **только** на успешной ветке `moveExercise`. Следствия: `await
+  qc.invalidateQueries(...)` в `saveExercise` — мёртвая работа (рефетч выполняется, результат
+  не используется никогда); правки другого админа не появляются до перезагрузки страницы;
+  серверная перенумерация остальных строк не приезжает. И главное — сверка по ссылке
+  `r === row` работает **только** потому, что `localRows` больше не сбрасывается: обнулись он
+  между `await` и `setRows`, и `prev` пересобрался бы из серверных данных, где объекта `row` уже
+  нет, — `map` не совпал бы ни с чем.
+- **Как проявится:** редактор упражнений «залипает» на локальной копии до перезагрузки; двое
+  админов в одном уроке не видят правок друг друга; исправление R-11 держится на неочевидной
+  связке двух состояний.
+- **Severity:** major
+- **Уверенность:** точно
+- **Как править:** сверять сохранённую строку по `id` (для create — по временному ключу), а не
+  по ссылке, и вернуть сброс теневой копии там, где локальных несохранённых правок больше нет.
+
+### [ ] R2-4 X-2 закрыт не полностью: защита от «перемешали в правильный порядок» сравнивает с авторским порядком массива, а не с верным
+- **Коммит/файл:** `116704eb` (галочка X-2 — `bddf08ae`);
+  `src/frontend/features/exercise/components/reorder-exercise.tsx:11, 39-46`
+- **Что не так:** тип объявляет `correct_position: number`, но `StripAnswerKeyFields` вырезает
+  это поле из ученического контента — значит в рантайме оно `undefined` у всех элементов.
+  `sort((a, b) => a.pos - b.pos)` получает `NaN` на каждой паре и оставляет порядок как есть.
+  Проверено: `[{},{},{}]` → `preSubmitCorrectOrderGuess = [0,1,2]`, то есть тождество.
+  Защита X-2 поэтому отказывается выдать только **авторский порядок массива**. При этом
+  `src/frontend/features/admin/components/exercise-editors/ordering-editor.tsx:19-32` меняет
+  местами **значения** `correct_position`, не двигая элементы в массиве, — то есть у любого
+  упражнения, которое автор правил кнопками ↑↓ в редакторе, порядок массива и верный порядок
+  расходятся.
+- **Как проявится:** на таком упражнении Fisher–Yates по-прежнему может выдать решённый
+  порядок, и «Проверить» даёт 100 % без единого действия — ровно то, что X-2 описывает и что
+  `bddf08ae` отметил как `[x]`. TypeScript при этом молчит: тип обещает `number` там, где всегда
+  `undefined`, — тот же класс дефекта, который X-3/X-6/X-8 и устраняли.
+- **Severity:** major
+- **Уверенность:** точно (механизм воспроизведён на выражении; частота зависит от контента)
+- **Как править:** на ученической стороне тип должен запрещать поле (`correct_position?: never`),
+  а перемешивание — уехать на сервер (или сервер должен отдавать готовый `shuffledOrder`):
+  клиент принципиально не может проверить свою перестановку против ответа, которого у него нет.
+
+### [ ] R2-5 разовый сбой `/auth/me` навсегда выключает молчаливое обновление токена
+- **Коммит/файл:** `8f98116a`; `src/frontend/features/auth/hooks/use-auth.ts:77`,
+  `src/frontend/shared/stores/auth-store.ts:82`, `src/frontend/shared/api/api-client.ts:60, 131`
+- **Что не так:** `useInitAuth` делает `.catch(() => clearAuthSession())` на **любой** отказ
+  `/auth/me` — 500, сетевой обрыв, `RequestTimeoutError`, не только отвергнутый токен. А
+  `clearAuthSession` теперь пишет липкий маркер `authSessionTerminated`, который
+  `attemptTokenRefresh` уважает до следующего явного `setAccessToken`. До этого коммита тот же
+  `catch` лишь убирал access-token, и первый же 401 молча обновлял сессию по refresh-куке.
+- **Как проявится:** одна икота гейтвея на загрузке страницы — и пользователя выкидывает на
+  `/login` по-настоящему, при полностью живой refresh-куке. Восстанавливается только повторным
+  входом. R-1 при этом закрыт корректно (логаут действительно стал терминальным) — проблема в
+  том, что «сессия завершена намеренно» расширили до «`/auth/me` однажды не ответил».
+- **Severity:** major
+- **Уверенность:** точно (путь кода), частота — требует проверки
+- **Как править:** ставить маркер только на пути логаута и на явном отказе аутентификации
+  (`SessionExpiredError` / `ApiError` со `status === 401`), а не на любом отказе `/auth/me`.
+
+### [ ] R2-6 ключ `authSessionTerminated` продублирован строковым литералом в двух файлах
+- **Коммит/файл:** `8f98116a`; `src/frontend/shared/api/api-client.ts:60`
+  (`const SESSION_TERMINATED_KEY`, не экспортируется) против
+  `src/frontend/shared/stores/auth-store.ts:73, 82` (литерал `"authSessionTerminated"`)
+- **Что не так:** единственное, что держит два места вместе, — комментарий «Keep this key name in
+  sync». Опечатка в любом из них бесшумно возвращает R-1, и ни один тест не упадёт. В том же
+  прогоне `3ce8b8f8` специально завёл `DemoCallers.IsDemoClaimType`, чтобы издатель и проверяющий
+  не могли разойтись в написании клейма, — здесь сделано наоборот.
+- **Как проявится:** тихая регрессия R-1 при любой будущей правке имени ключа.
+- **Severity:** minor
+- **Уверенность:** точно
+- **Как править:** экспортировать `SESSION_TERMINATED_KEY` (или вынести в общий модуль) и
+  импортировать в стор.
+
+### [ ] R2-7 «Пропустить» на каждом упражнении теперь закрывает урок и открывает следующий — со счётом 0
+- **Коммит/файл:** `d7b090d1` + `6893c2ad`;
+  `src/frontend/app/session/[lessonId]/page.tsx:150-165`,
+  `src/backend/learning-service/Learning/Features/Exercises/Services/Implementation/ExerciseService.cs:481-484, 588-600, 634-645`
+- **Что не так:** скип теперь пишет настоящую строку `UserExerciseAttempt`, а
+  `UpdateLessonProgressAsync` считает `attemptedExercises` как «различные упражнения урока, по
+  которым есть **хоть какая-нибудь** попытка» — скип от ответа там неотличим. Значит
+  `allAttempted` → `Completed` → `UnlockNextLessonInTopicAsync`; а вывод разблокировки из
+  `6893c2ad` тоже цепляется именно за `Completed`.
+- **Как проявится:** ученик проходит всё дерево, нажимая «Пропустить», получая `completed` и
+  `bestScore = 0` на каждом уроке. X-4 действительно требовалось закрыть (иначе урок,
+  пройденный скипами, не закрывался никогда), но это следствие нигде не записано — ни в
+  `d7b090d1`, ни в `docs/DECISIONS.md`. Вынесено владельцу как `docs/NIGHT_AUDIT_QUESTIONS.md`
+  Q-16.
+- **Severity:** major
+- **Уверенность:** точно (механизм); продуктовое решение — за владельцем
+
+### [ ] R2-8 `advanceToNext()` не сбрасывает `lastSubmissionResult` — новый DTO с ответом в одном вызывающем от преждевременного раскрытия
+- **Коммит/файл:** `472aba7b` + `d7b090d1` + `116704eb`;
+  `src/frontend/app/session/[lessonId]/page.tsx:132-147`
+- **Что не так:** сегодня утечки нет, все пути проверены: `handleContinueAfterResult` (`:166`) и
+  `handleStartMistakesReview` (`:179`) чистят состояние сами, а `handleSkip` его никогда не
+  ставит (скип и разобранный результат взаимоисключающи — при `isAnswered` футер меняется с
+  `ExerciseActionFooter` на `ExerciseResultBanner`, кнопки «Пропустить» там уже нет). Но
+  `submittedResult` — это теперь **носитель ключа ответа** (`correctAnswer`), а
+  `isAnswered = submittedResult != null`. Любой будущий вызывающий, который переходит к
+  следующему упражнению после ответа не почистив состояние, отрисует следующее упражнение как
+  уже отвеченное и подсветит в нём индекс из ответа на предыдущее.
+- **Как проявится:** сейчас — никак; при следующей правке очереди упражнений — раскрытие
+  правильного ответа до ответа ученика.
+- **Severity:** minor (латентно; последствие при срабатывании — major)
+- **Уверенность:** точно
+- **Как править:** перенести `setLastSubmissionResult(null)` внутрь `advanceToNext()`, рядом с
+  `submitExerciseMutation.reset()`, который `472aba7b` там уже поставил.
+
+### [ ] R2-9 `stripFeedbackHtml` теперь возвращает живую разметку (XSS-аллоулист при этом цел)
+- **Коммит/файл:** `11c7069c`; `src/frontend/shared/components/feedback-html.tsx:23-35, 43-51`
+- **Что не так:** аллоулист проверен заново и держится — все векторы вырезаются (вывод ниже, в
+  секции верификации). Но `decodeFeedbackTextEntities` работает **после** санитайза, поэтому
+  обезвреженная полезная нагрузка возвращается в живой вид как текст:
+  `strip("&lt;script&gt;alert(1)&lt;/script&gt;")` → `"<script>alert(1)</script>"`. Сегодня это
+  безопасно: единственный потребитель —
+  `src/frontend/features/org-dialogs/components/dialog-session-list.tsx:105`, где результат
+  подставляется текстовым child-ом React и экранируется им повторно. Опасность в контракте:
+  функция с именем `strip…Html` отдаёт живую разметку, и следующий потребитель (`title=`,
+  тултип, `innerHTML`) получит stored XSS.
+- **Как проявится:** сейчас — никак. При добавлении любого не-текстового потребителя — XSS из
+  вывода LLM.
+- **Severity:** minor
+- **Уверенность:** точно (замерено)
+- **Как править:** зафиксировать контракт в docstring («результат безопасен только как текстовый
+  узел») либо не декодировать сущности, а отдавать отдельную функцию для текстового рендера.
+
+### [ ] R2-10 вывод разблокировки X-11 сделан только в одном из трёх путей чтения уроков
+- **Коммит/файл:** `6893c2ad`;
+  `.../Exercises/Services/Implementation/ExerciseService.cs:106` (`GetAllLessonsAsync`),
+  `:171` (`GetLessonsForTopicAsync`) против `:246-262` (исправленный `GetLessonsForSkillAsync`)
+- **Что не так:** два других пути по-прежнему возвращают `progressRecord?.Status ??
+  LessonProgressStatuses.Locked`, причём `GetAllLessonsAsync` (`GET /lessons`) не открывает даже
+  первый урок. Сегодня безвредно: все три ученических экрана (`/tree`, `/skill/[id]`,
+  `/skill/[id]/map`) ходят через `useLessonsForSkill`, а `useAllLessons`
+  (`src/frontend/features/exercise/hooks/use-lesson.ts:42`) **экспортирован и не используется
+  нигде** — мёртвый код. Прочее по коммиту чисто: `previousLessonCompleted` считается от
+  **сохранённого** статуса, поэтому разблокировка не разбегается каскадом; порядок обхода —
+  `topicOrder`, затем `orderInTopic`; тема без уроков просто не даёт элементов и не рвёт цепочку;
+  новых запросов на горячем пути не добавлено (цикл идёт по уже загруженным данным).
+- **Как проявится:** сейчас — никак; при подключении `GET /lessons` или
+  `GET /topics/{id}/lessons` к любому экрану X-11 вернётся именно там.
+- **Severity:** minor
+- **Уверенность:** точно
+
+### [ ] R2-11 ключ `SkillCatalogCache` не квалифицирован тенантом, хотя `Skill.OrganizationId` — реальная колонка
+- **Коммит/файл:** `01de8624`;
+  `src/backend/ai-service/Ai/Infrastructure/Learning/SkillCatalogCache.cs:26-59`,
+  `src/backend/learning-service/Learning/Infrastructure/Data/LearningDbContext.cs:189`
+- **Что не так:** по трём заданным вопросам кеш чист: рост ограничен (один фиксированный ключ
+  `"skill-catalog"`), отравления сбоем нет (`Set` не кеширует пустой каталог, `return Empty` на
+  ошибке проходит мимо кеша), `MemoryCache` потокобезопасен. Утечки между тенантами сегодня тоже
+  нет — internal-вызов не несёт заголовка организации, поэтому фильтр
+  `IsPlatformWide || OrganizationId == null || OrganizationId == _tenantContext.OrganizationId`
+  сводится к «только глобальные», детерминированно. Но посылка «навыки глобальны» — это
+  комментарий, а не инвариант, который кеш проверяет: тенантные навыки — поддерживаемая форма
+  (`Learning.Tests/Unit/LearningTenancyModelTests.cs:111-112` их прямо засеивает). В день, когда
+  этот lookup получит заголовок организации или платформенный режим, названия навыков одного
+  тенанта будут отдаваться всем на время TTL.
+- **Как проявится:** сейчас — никак; при расширении internal-контракта — межтенантная утечка
+  названий навыков на 5 минут.
+- **Severity:** minor
+- **Уверенность:** точно по форме, низкая по вероятности срабатывания
+- **Прочее (не находка):** защиты от «стампеда» нет — N одновременных промахов дадут N запросов.
+  Для каталога навыков это неважно.
+
+### [ ] R2-12 корневой `not-found.tsx` стал клиентским; на 404 внутри `/admin` мигает ученическая русская копия
+- **Коммит/файл:** `afacedb0`; `src/frontend/app/not-found.tsx:1-8`
+- **Что не так:** добавлены `"use client"` и `usePathname()`. При пререндере границы
+  `/_not-found` `usePathname()` возвращает `null`, оба guard-а (`pathname?.startsWith`) не
+  срабатывают и в первый HTML уходит ученический вариант; английский admin-вариант и формальный
+  org-вариант появляются только после гидратации.
+- **Как проявится:** админ, набравший опечатку в `/admin/...`, видит вспышку «Страница не
+  найдена / Вернуться к пути» до подмены на «Page not found / Back to admin». Сама по себе
+  правка R-21 верная — вопрос только в порядке рендера.
+- **Severity:** minor
+- **Уверенность:** требует проверки (поведение зависит от версии Next.js; проверяется одной
+  ручной загрузкой битого `/admin/...`)
+
+### Чисто (проверено, находок нет)
+
+- **`116704eb` / `90d5e491` — главный вопрос «может ли правильный ответ утечь до ответа
+  ученика»: нет.** `StripAnswerKeyFields`
+  (`ExerciseService.cs:358-420`) не тронут и по-прежнему срезает всё, что срезал:
+  `is_correct` у `choose_option`/`fill_blank`, `correct_position` у `reorder`, `category` у
+  `categorize`, `is_mistake` у `spot_mistake`, `ai_prompt` у `ai_dialogue`.
+  `ExerciseSubmissionResultDto` конструируется ровно в одном месте — `ExerciseService.cs:548`,
+  внутри `SubmitExerciseAnswerAsync` (проверено grep-ом по всему репозиторию); ветка
+  `isSkipped` собирает `ExerciseEvaluationResult` без `CorrectAnswer`, то есть скип не
+  раскрывает ничего. В логах и телах ошибок DTO не появляется: `AiEvaluationClient` логирует
+  только тело **не**-2xx-ответа, в котором результата нет, а `EvaluationController` отдаёт на
+  сбоях `{ message }` без результата. Кеша запросов на пути submit нет (это мутация).
+- **Плумбинг `AiEvaluationResult` / `AiExerciseEvaluationStrategy` — корректен для отсутствующего
+  значения.** `CorrectLineIndex` — необязательный параметр записи со значением по умолчанию
+  `null` на обеих сторонах, ai-service отдаёт запись напрямую (`Ok(result)`), клиент читает её
+  через `JsonSerializerDefaults.Web` — имена совпадают. На learning-стороне стоит
+  pattern-guard `result.CorrectLineIndex is int correctLineIndex`, поэтому отсутствующее поле
+  даёт `CorrectAnswer: null`, а не фиктивный индекс `0`. В ai-service `mistakeIndex >= 0 ?
+  mistakeIndex : null` — упражнение без помеченной ошибки не выдаёт индекс `-1` наружу. На
+  фронтенде `correctLineIndex ?? -1` и `correctOptionIndex ?? null` обрабатывают отсутствие
+  без подсветки чужой строки.
+- **`90d5e491` — правка теста законна, а не подогнана.** От прежних 50 не зависело ничего:
+  единственные потребители балла упражнения — `app/session/[lessonId]/page.tsx:106`
+  (`score >= 70`) и `features/exercise/components/exercise-result-banner.tsx:22-23` (полосы
+  70/40); `AssignmentThresholdEvaluator` считает пороги по `UserDialogScores`, а не по
+  упражнениям; прогресс урока берёт `Math.max` лучшего балла. Обратной регрессии тоже нет: вызов
+  ИИ и раньше стоял под `lineCorrect && …`, поэтому неверная строка давала 0 и до, и после —
+  снятое `score += aiScore` не могло ничего отнять. Ветка `isCorrect = lineCorrect` заменяет
+  порог `score >= 75`, который при значениях 0/100 эквивалентен.
+- **`3ce8b8f8` — граница безопасности держится.** Клейм `isDemo` минтится ровно в одном месте
+  (`DemoTokenController.IssueDemoToken`), которое отвечает 404 при `environment.IsProduction()`,
+  а `docker-compose.prod.yml:52-100` выставляет `ASPNETCORE_ENVIRONMENT=Production` всем
+  сервисам — то есть в проде токен не выдаётся вообще. Клейм едет внутри подписанного JWT,
+  поэтому клиент его себе не присвоит. Исключение — один булев терм в одном `if`
+  (`TenantContextMiddleware.cs:62`): `EnterPlatformMode()` для демо не вызывается,
+  `SetOrganization` тоже, так что `ITenantContext` остаётся в состоянии «ни организации, ни
+  платформы», которое `TenantConnectionInterceptor` уже трактует fail-closed.
+  `DemoTokenController` теперь читает имя клейма из той же константы, которой минтит. Оба
+  tenancy-линта чисты.
+- **`604dd1d3` — корректно и по месту.** Фильтр пустых `Reference` стоит до `Distinct`, а
+  `modeKeys.Count == 0 → return null` (`AssignmentThresholdEvaluator.cs:253-256`) означает, что
+  задание, у которого **все** ссылки на сценарии пустые, трактуется как «требования по диалогам
+  нет», а не как «порог выполнен автоматически». Это правильная сторона ошибки.
+- **`2d66f469` — чисто.** `disabled={isSending || …}` стоит на обоих вызовах `ChatInput`
+  (`app/dialog/[bundleId]/[modeId]/page.tsx:590`,
+  `app/companies/[id]/call/chat/page.tsx:305`), поэтому восстановление черновика при неудаче не
+  затрёт свежий ввод. Сверка по идентичности при откате не может не совпасть: единственные пути,
+  заменяющие массив целиком (`setMessages(session.messages)`, `setMessages([])`), и так убирают
+  оптимистичный пузырь.
+- **`6e575822`, `472aba7b`, `0f6a53ee`, `aa8e36bb`, `8cd7e975`, `d7b090d1` (кроме R2-7),
+  `95a826a1`, `b9314b90`, `bd7d9e85`, `da35e502`, `f5252317`, `20f920a9`, `bddf08ae` (кроме
+  галочки X-2, см. R2-4)** — читаны, находок нет.
+- **Прочёс диапазона:** ни одного `console.log`/`console.debug`/`debugger`, ни одного
+  `TODO`/`HACK`/`FIXME`/`XXX`, ни одного нового `any` (проверено по всем изменённым `.ts`,
+  `.tsx`, `.cs` и отдельно по добавленным строкам диффа). Мёртвого кода от снятых-и-возвращённых
+  ▲▼ не осталось. Копии не в том языке для своей области не найдено (`afacedb0` как раз это и
+  чинит). Молчаливых перезаписей между агентами нет: четыре коммита в
+  `app/session/[lessonId]/page.tsx` и четыре в `ExerciseService.cs` — аддитивные и не
+  перекрывающиеся (проверено полным диффом диапазона по каждому файлу).
+
+### Вне диапазона, но присутствует на `90d5e491` — блокирует пуш
+
+- **Два падающих фронтенд-теста.** `__tests__/CompanyPage.test.tsx` → «shows the not-found state
+  on a 404» и «shows a generic error state with retry for non-404 failures». Причина — не в моём
+  диапазоне: `app/(main)/companies/[id]/page.tsx:138` гейтит полноэкранную замену на
+  `isLoadingError`, а тест мокает только `isError`, поэтому компонент рендерит пустоту. Внёс это
+  `eb9d771d` (2026-08-21 01:34), то есть **до** границы первого ревью `7870d60f` (03:42);
+  в диапазоне `7870d60f..HEAD` файлы `companies/**` и сам тест не менялись вовсе (проверено
+  `git log --name-only`). Первое ревью это пропустило. Нарушает CLAUDE.md Rule #4 («Never commit
+  with failing tests») и должно быть закрыто до пуша — либо мок теста дополняется
+  `isLoadingError`, либо гейт возвращается к `isError`.
+- **5 нарушений `codestyle-lint`** в
+  `src/backend/identity-service/Identity/Features/Auth/Services/Implementation/AuthenticationService.cs:152-153,
+  262-264` (Rule 9). Файл в диапазоне не менялся — нарушения предшествуют границе.
+
+### Покрытие
+
+Просмотрены все 7 заявленных областей:
+
+1. Контракт `submit`-ответа (`116704eb`, `90d5e491`) — **разобран полностью**, включая
+   `StripAnswerKeyFields`, единственную точку сборки DTO, ветку скипа, логи/тела ошибок и
+   плумбинг `AiEvaluationResult`/`AiExerciseEvaluationStrategy` на null/отсутствие. Утечки до
+   ответа нет; см. R2-8 (латентно) и R2-4.
+2. Смена семантики оценивания (`90d5e491`) — **разобрана**, потребители порогов перечислены.
+   Правка теста законна.
+3. Изъятие демо-токена из tenancy (`3ce8b8f8`) — **разобрано**, чисто.
+4. `604dd1d3` и `6893c2ad` — **разобраны**; `604dd1d3` чисто, по `6893c2ad` — R2-10 (плюс
+   проверены преждевременная разблокировка, N+1 и тема без уроков — всё чисто).
+5. Редактор упражнений / композер (`5a1a4572`, `2d66f469`, `ad47210b`) — **разобраны**; R2-1,
+   R2-2, R2-3.
+6. Санитайзер (`11c7069c`) — **разобран, аллоулист перепроверен эмпирически**; R2-9.
+7. `SkillCatalogCache` (`01de8624`) — **разобран**; R2-11.
+
+Не дотянулся: рантайм-проверок не делал (сервера не трогал) — R2-1 и R2-12 стоило бы
+подтвердить одним кликом в живом приложении, хотя R2-1 воспроизведён на самом выражении.
+Интеграционные наборы бэкенда (`TestCategory=Integration`) не запускались по условию задания.
+Незакоммиченные правки рабочего дерева (~26 файлов, другой агент) не ревьюились.
+
+### Верификация (вывод дословно)
+
+```
+$ cd src/frontend && npx tsc --noEmit
+EXIT=0
+```
+
+```
+$ cd src/frontend && npx vitest run
+ ❯ __tests__/CompanyPage.test.tsx (10 tests | 2 failed) 290ms
+   × CompanyPage > shows the not-found state on a 404
+     → Unable to find an element with the text: Компания не найдена.
+   × CompanyPage > shows a generic error state with retry for non-404 failures
+     → Unable to find an element with the text: Не удалось загрузить.
+
+ Test Files  1 failed | 86 passed (87)
+      Tests  2 failed | 975 passed (977)
+EXIT=1
+```
+
+```
+$ scripts/tenancy-boundary-lint.sh
+tenancy-boundary-lint: clean.
+EXIT=0
+
+$ scripts/tenancy-pool-lint.sh
+tenancy-pool-lint: clean.
+EXIT=0
+```
+
+```
+$ cd src/backend && dotnet build <project>
+=== BUILD learning-service/Learning ===   Build succeeded. 0 Warning(s) 0 Error(s)
+=== BUILD ai-service/Ai ===               0 Error(s); 4 warnings (NU1902 SharpCompress 0.30.1, NU1903 Snappier 1.0.0 — транзитивные, вне диапазона)
+=== BUILD identity-service/Identity ===   Build succeeded. 0 Warning(s) 0 Error(s)
+=== BUILD building-blocks/BuildingBlocks === Build succeeded. 0 Warning(s) 0 Error(s)
+```
+
+```
+$ cd src/backend && dotnet test <project> --filter "TestCategory!=Integration"
+learning-service/Learning.Tests        Passed! Failed: 0, Passed:  90, Skipped: 0, Total:  90
+ai-service/Ai.Tests                    Passed! Failed: 0, Passed: 170, Skipped: 0, Total: 170
+identity-service/Identity.Tests        Passed! Failed: 0, Passed: 136, Skipped: 0, Total: 136
+building-blocks/BuildingBlocks.Tests   Passed! Failed: 0, Passed: 119, Skipped: 4, Total: 123
+```
+
+```
+$ scripts/codestyle-lint.sh
+src/backend/identity-service/.../AuthenticationService.cs:152: explanatory comment forbidden, use /// XML documentation (Rule 9)
+src/backend/identity-service/.../AuthenticationService.cs:153: explanatory comment forbidden, use /// XML documentation (Rule 9)
+src/backend/identity-service/.../AuthenticationService.cs:262: explanatory comment forbidden, use /// XML documentation (Rule 9)
+src/backend/identity-service/.../AuthenticationService.cs:263: explanatory comment forbidden, use /// XML documentation (Rule 9)
+src/backend/identity-service/.../AuthenticationService.cs:264: explanatory comment forbidden, use /// XML documentation (Rule 9)
+codestyle-lint: 5 violation(s) found.   (файл вне диапазона)
+```
+
+Оракул санитайзера (`11c7069c`), прогнан на `sanitize-html 2.17.7` из
+`src/frontend/node_modules` с точными опциями из `feedback-html.tsx`:
+
+```
+"<script>alert(1)</script>"                        san -> ""                          strip-> ""
+"<img src=x onerror=alert(1)>"                     san -> ""                          strip-> ""
+"<a href=\"javascript:alert(1)\">x</a>"            san -> "x"                         strip-> "x"
+"<p style=\"position:fixed\" onclick=\"x()\">t</p>" san -> "<p>t</p>"                  strip-> "t"
+"<svg onload=alert(1)></svg>"                      san -> ""                          strip-> ""
+"<iframe src=x></iframe>"                          san -> ""                          strip-> ""
+"<h3>Итог</h3><p>Первое.</p><p>Второе.</p>"        san -> "<h3>Итог</h3><p>…</p>"      strip-> "Итог Первое. Второе."
+"<ol><li>a</li><li>b</li></ol>"                    san -> "<ol><li>a</li><li>b</li></ol>" strip-> "a b"
+"строка1<br>строка2"                               san -> "строка1<br />строка2"       strip-> "строка1 строка2"
+"Оценка < 70 & \"низко\""                          san -> "Оценка &lt; 70 &amp; …"     strip-> "Оценка < 70 & \"низко\""
+"&lt;script&gt;alert(1)&lt;/script&gt;"            san -> "&lt;script&gt;…&lt;/script&gt;" strip-> "<script>alert(1)</script>"   <- R2-9
+"&lt;img src=x onerror=alert(1)&gt;"               san -> "&lt;img …&gt;"              strip-> "<img src=x onerror=alert(1)>"    <- R2-9
+"&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;" san -> "&amp;lt;script&amp;gt;…" strip-> "&lt;script&gt;alert(1)&lt;/script&gt;"
+```
+
+Итог: `<script>`, `onerror`, `javascript:`-href, инлайновый `style`, `onclick`, `<svg onload>`,
+`<iframe>` вырезаются и `sanitizeFeedbackHtml`, и `stripFeedbackHtml` — после правки с
+декодированием сущностей аллоулист не ослаб. Единственное следствие — R2-9.
+
+**Требует правки до пуша:** R2-1, R2-3, R2-5 + два падающих теста `CompanyPage` (вне диапазона).
+**Требует решения владельца:** R2-7 → `docs/NIGHT_AUDIT_QUESTIONS.md` Q-16.
