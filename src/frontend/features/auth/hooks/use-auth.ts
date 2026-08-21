@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ApiError, apiClient } from "@/shared/api/api-client";
+import { ApiError, apiClient, SessionExpiredError } from "@/shared/api/api-client";
 import { useAuthStore, type OrgRole, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { toast } from "@/features/notifications/store/toast-store";
@@ -274,6 +274,7 @@ export function useGoogleLogin() {
  */
 export function useLogout() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { clearAuthSession } = useAuthStore();
 
     return useMutation({
@@ -282,6 +283,14 @@ export function useLogout() {
             clientLogger.info("User logged out");
         },
         onError: (error) => {
+            // R-2: `SessionExpiredError` means the session was already expired before logout even
+            // ran — `fetchWithAuthToken` already cleared the token and started a hard navigation
+            // to /login itself. That's a routine expiry, not a possibly-stolen-session event, so
+            // it gets a quiet log line instead of the "change your password" warning below.
+            if (error instanceof SessionExpiredError) {
+                clientLogger.info("Logout ran on an already-expired session");
+                return;
+            }
             clientLogger.warn("Logout request failed; clearing local session anyway", {
                 error: (error as Error).message,
             });
@@ -290,8 +299,16 @@ export function useLogout() {
                     "Вы вышли на этом устройстве, но советуем сменить пароль, если устройство не ваше."
             );
         },
-        onSettled: () => {
+        onSettled: (_data, error) => {
             clearAuthSession();
+            // R-3: match login's `queryClient.clear()` — otherwise the next person to sign in on
+            // this browser (or a token silently restored, see R-1) can briefly render this user's
+            // cached data.
+            queryClient.clear();
+            // R-2: a SessionExpiredError already triggered `window.location.href = "/login"` (a
+            // hard navigation) inside the failed request itself — an extra `router.push` here
+            // would just race a second, SPA-level navigation on top of it.
+            if (error instanceof SessionExpiredError) return;
             router.push("/login");
         },
     });

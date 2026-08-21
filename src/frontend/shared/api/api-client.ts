@@ -33,6 +33,32 @@ export class RequestTimeoutError extends Error {
     }
 }
 
+/**
+ * Thrown when a request got a 401 and the refresh attempt also failed (or was skipped because
+ * the session was deliberately ended, see `SESSION_TERMINATED_KEY` below). `fetchWithAuthToken`
+ * already starts a hard navigation to `/login` itself in this case, so callers must not also
+ * soft-navigate or show a "your session may have been stolen" warning on top of a plain expiry
+ * (R-2).
+ */
+export class SessionExpiredError extends Error {
+    constructor() {
+        super("Session expired");
+        this.name = "SessionExpiredError";
+    }
+}
+
+/**
+ * R-1: set by `useAuthStore.clearAuthSession()` whenever the client deliberately ends a session
+ * (logout, or `/auth/me` rejecting the stored token) — regardless of whether the server-side
+ * revoke call itself succeeded. As long as this flag is set, `attemptTokenRefresh` below refuses
+ * to mint a new access token from a leftover refresh-cookie, so a failed `POST /auth/logout`
+ * cannot be silently undone by the very next request's 401. Cleared by `useAuthStore.setAccessToken`
+ * on the next successful login, which is the only place a new session legitimately begins — the
+ * ordinary "access token merely expired, refresh cookie is still good" refresh on a *live* session
+ * never sets this flag, so that path is unaffected.
+ */
+const SESSION_TERMINATED_KEY = "authSessionTerminated";
+
 export interface ApiRequestOptions {
     /** Abort the request after this many milliseconds and throw `RequestTimeoutError`. */
     timeoutMs?: number;
@@ -84,7 +110,7 @@ async function fetchWithAuthToken<TResponseBody>(
         }
         localStorage.removeItem("accessToken");
         window.location.href = "/login";
-        throw new Error("Session expired");
+        throw new SessionExpiredError();
     }
 
     if (!response.ok) {
@@ -102,6 +128,9 @@ async function fetchWithAuthToken<TResponseBody>(
 let pendingRefresh: Promise<boolean> | null = null;
 
 async function attemptTokenRefresh(): Promise<boolean> {
+    if (typeof window !== "undefined" && localStorage.getItem(SESSION_TERMINATED_KEY)) {
+        return false;
+    }
     if (pendingRefresh) return pendingRefresh;
     pendingRefresh = doRefresh().finally(() => {
         pendingRefresh = null;

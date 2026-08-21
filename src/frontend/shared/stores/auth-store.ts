@@ -67,11 +67,19 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
 
     setAccessToken: (token) => {
         localStorage.setItem("accessToken", token);
+        // R-1: a fresh access token means a new session legitimately began (login/register/
+        // Google sign-in) — un-terminate so the next 401 is allowed to refresh normally again.
+        // Keep this key name in sync with `SESSION_TERMINATED_KEY` in shared/api/api-client.ts.
+        localStorage.removeItem("authSessionTerminated");
         set({ accessToken: token });
     },
 
     clearAuthSession: () => {
         localStorage.removeItem("accessToken");
+        // R-1: mark the session as deliberately ended so a leftover refresh-cookie (e.g. because
+        // the server-side POST /auth/logout revoke failed) cannot silently mint a new access
+        // token on the next 401 — see `attemptTokenRefresh` in shared/api/api-client.ts.
+        localStorage.setItem("authSessionTerminated", "1");
         set({ authenticatedUser: null, accessToken: null });
     },
 }));
