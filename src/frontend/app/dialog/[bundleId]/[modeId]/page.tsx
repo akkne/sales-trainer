@@ -184,8 +184,10 @@ export default function ChatPage() {
         } catch (sendError) {
             // The server never saw this turn — roll back the optimistic bubble instead of
             // leaving a reply on screen that diverges from the transcript it will grade
-            // (docs/AUDIT_SILENT_WRITES.md W-5).
-            setMessages((previousMessages) => previousMessages.slice(0, -1));
+            // (docs/AUDIT_SILENT_WRITES.md W-5). Remove `userMessage` by identity rather than
+            // slicing off the last element, since the voice path can append its own messages
+            // to this same array while this send is in flight (R-14).
+            setMessages((previousMessages) => previousMessages.filter((message) => message !== userMessage));
             setError(sendError instanceof Error ? sendError.message : "Ошибка отправки");
             return false;
         } finally {
