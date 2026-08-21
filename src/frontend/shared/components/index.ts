@@ -50,4 +50,4 @@ export { Tabs } from "./tabs";
 export type { TabItem } from "./tabs";
 export { MetricBar } from "./metric-bar";
 export type { MetricBarTone } from "./metric-bar";
-export { FeedbackHtml, sanitizeFeedbackHtml, stripFeedbackHtml } from "./feedback-html";
+export { FeedbackHtml, FeedbackTextPreview, sanitizeFeedbackHtml } from "./feedback-html";

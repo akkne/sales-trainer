@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Chip, type ChipTone } from "@/shared/components/chip";
 import { Icon } from "@/shared/components/icon";
-import { stripFeedbackHtml } from "@/shared/components/feedback-html";
+import { FeedbackTextPreview } from "@/shared/components/feedback-html";
 import type { DialogSessionSummary } from "@/features/org-dialogs/hooks/use-dialog-sessions";
 import {
     formatDialogMoment,
@@ -102,7 +102,7 @@ export function DialogSessionList({ sessions, memberNamesByUserId }: DialogSessi
                                     overflow: "hidden",
                                 }}
                             >
-                                {stripFeedbackHtml(session.feedbackSummary)}
+                                <FeedbackTextPreview html={session.feedbackSummary} />
                             </p>
                         )}
 

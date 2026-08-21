@@ -899,7 +899,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Как править:** перенести `setLastSubmissionResult(null)` внутрь `advanceToNext()`, рядом с
   `submitExerciseMutation.reset()`, который `472aba7b` там уже поставил.
 
-### [ ] R2-9 `stripFeedbackHtml` теперь возвращает живую разметку (XSS-аллоулист при этом цел)
+### [x] R2-9 `stripFeedbackHtml` теперь возвращает живую разметку (XSS-аллоулист при этом цел)
 - **Коммит/файл:** `11c7069c`; `src/frontend/shared/components/feedback-html.tsx:23-35, 43-51`
 - **Что не так:** аллоулист проверен заново и держится — все векторы вырезаются (вывод ниже, в
   секции верификации). Но `decodeFeedbackTextEntities` работает **после** санитайза, поэтому

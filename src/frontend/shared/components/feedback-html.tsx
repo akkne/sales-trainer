@@ -25,7 +25,7 @@ const BLOCK_BOUNDARY_TAG_PATTERN = /<\/?(?:h3|p|ul|ol|li|br)\b[^>]*\/?>/gi;
 
 /**
  * `sanitize-html`'s plain-text mode escapes `&`, `<`, `>` in text nodes because its output is
- * meant for `innerHTML` — but `stripFeedbackHtml`'s result is rendered as a React text child,
+ * meant for `innerHTML` — but `FeedbackTextPreview` renders its result as a React text child,
  * which escapes it a second time (R-8). Undo the HTML escaping so the reader sees the literal
  * characters. Only `&`, `<`, `>` are ever produced by `sanitize-html`'s text escaper here (it
  * does not escape quotes outside of attribute values), and `&amp;` is decoded last so a literal
@@ -40,8 +40,19 @@ export function sanitizeFeedbackHtml(html: string): string {
     return sanitizeHtml(html, FEEDBACK_HTML_OPTIONS);
 }
 
-/** For previews that can't host block markup (e.g. a line-clamped list row): tags gone, text kept. */
-export function stripFeedbackHtml(html: string): string {
+/**
+ * Reduces the LLM's markup to plain text (e.g. for a line-clamped list row that can't host block
+ * markup): tags gone, text kept. This decodes HTML entities back to their literal characters
+ * (`&lt;script&gt;` -> `<script>`) so a model-authored `<`/`>`/`&` reads correctly instead of as a
+ * visible entity (R-7/R-8) — which means the returned string is, by construction, not something
+ * that may ever be safe to hand to `dangerouslySetInnerHTML`, a `title=`, or any other non-React
+ * sink: it can contain live-looking markup text. R2-9 found the previous shape of this helper
+ * (a plain exported string function) safe only because its one caller happened to render the
+ * result as a React text child. Not exported on purpose — go through `FeedbackTextPreview` below,
+ * which is typed to only ever be usable as a React child, so misuse is a type error, not a
+ * runtime XSS.
+ */
+function stripFeedbackHtmlToText(html: string): string {
     // Sanitize to the safe allowlist first (strips <script>, event handlers, javascript: hrefs,
     // inline style, etc. — same guarantees as sanitizeFeedbackHtml), then turn block-level
     // boundaries into spaces *before* discarding the remaining tags, so "<h3>Итог</h3><p>..."
@@ -49,6 +60,15 @@ export function stripFeedbackHtml(html: string): string {
     const safeHtml = sanitizeFeedbackHtml(html).replace(BLOCK_BOUNDARY_TAG_PATTERN, " ");
     const textOnly = sanitizeHtml(safeHtml, PLAIN_TEXT_OPTIONS);
     return decodeFeedbackTextEntities(textOnly).replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A plain-text preview of AI feedback HTML, for a spot that can't host block markup (e.g. a
+ * line-clamped list row). Renders as a React text child only — see `stripFeedbackHtmlToText`
+ * above for why that string is never exposed directly (R2-9).
+ */
+export function FeedbackTextPreview({ html }: { html: string }) {
+    return <>{stripFeedbackHtmlToText(html)}</>;
 }
 
 interface FeedbackHtmlProps {
