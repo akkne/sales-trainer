@@ -214,7 +214,7 @@
   `onclick`); `strip("<svg onload=alert(1)></svg><iframe src=x></iframe>")` → `""`. All three
   match pre-fix behavior — nothing dangerous survives.
 
-### [ ] R-10 W-9: ▲▼ удалены по неверному обоснованию — переупорядочивание уже персистится в соседнем экране
+### [x] R-10 W-9: ▲▼ удалены по неверному обоснованию — переупорядочивание уже персистится в соседнем экране
 - **Коммит/файл:** `316da24`;
   `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:287-292` и
   `.../skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx:264-269`
@@ -231,6 +231,18 @@
   в двух шагах от него РОП переупорядочивает упражнения и это сохраняется.
 - **Severity:** major
 - **Уверенность:** точно
+- **Resolved:** verified the claim independently by reading all three files named above (not
+  taking either the commit message or this review on faith) — confirmed org editor's
+  `moveExercise` persists via a per-row `updateExercise.mutateAsync({..., orderInLesson})` loop,
+  and confirmed `PUT /admin/exercises/{id}` (`AdminExercisesController.cs:187`) persists
+  `OrderInLesson` and is the very endpoint W-9's own `updateExerciseMut` already calls on save.
+  Restored the ▲▼ buttons in both admin screens
+  (`app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx`,
+  `.../admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx`), added a
+  `moveExercise(fromIndex, toIndex)` in each that renumbers locally then loops the existing
+  `updateExerciseMut.mutateAsync` over every row whose `sortOrder` changed (rolling back on
+  failure), and removed the now-false "no way to reorder" note. Full evidence and correction
+  appended to `docs/NIGHT_AUDIT_QUESTIONS.md` Q-8.
 
 ### [ ] R-11 `saveExercise` на успехе сбрасывает `localRows` целиком и теряет несохранённые правки других строк
 - **Коммит/файл:** `316da24`;

@@ -204,6 +204,35 @@ SECURITY` не применяется — RLS не фильтрует ничег
 решат заводить: нужна миграция/эндпойнт в learning-service + фронтовая мутация, которая шлёт весь
 новый порядок одним запросом (не по одной строке — иначе частичный отказ снова разъедет `sortOrder`).
 
+**Correction (R-10, `docs/AUDIT_NIGHT_REVIEW.md`; verified independently, not on the review's
+say-so):** the claim above — "порядка нет" / "there is no way to persist a new order" — is wrong,
+and I verified it myself by reading three files, not by trusting either W-9's commit message or
+the reviewer's finding second-hand:
+
+- `src/frontend/app/(org)/org/content/lessons/[lessonId]/page.tsx:181-199` (`moveExercise`) already
+  persists a reorder today, in production, on the org content-override screen: it computes the
+  shifted rows via `moveExerciseInList` and, for every exercise whose `orderInLesson` actually
+  changed, awaits `updateExercise.mutateAsync({ exerciseId, body: { ..., orderInLesson } })` — one
+  `PUT` per changed row, no bulk endpoint.
+- `src/backend/learning-service/Learning/Features/Admin/AdminExercisesController.cs:174-199`
+  (`PUT /admin/exercises/{id}`) reads `exercise.OrderInLesson = requestDto.OrderInLesson;` before
+  saving — the single-exercise update endpoint already accepts and persists `orderInLesson`. This
+  is the same endpoint W-9's own `updateExerciseMut` (`page.tsx:148-150` in both admin screens) was
+  already calling for every "Save changes" click.
+- So "building a bulk-reorder endpoint isn't a night-run call" was true but beside the point — no
+  bulk endpoint is needed to move one row past its neighbor, exactly as the org editor demonstrates.
+
+Restored the ▲▼ buttons in both admin screens
+(`app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx` and
+`.../admin/skills/[id]/topics/[topicId]/lessons/[lessonId]/exercises/page.tsx`), wired to a new
+`moveExercise(fromIndex, toIndex)` that renumbers the local rows, then loops the same
+`updateExerciseMut.mutateAsync` (already in each file) over every row whose `sortOrder` changed,
+mirroring the org editor's persistence exactly. On failure it rolls the local reorder back (the
+mutation's own `onError` already toasts). Fixed in commit (see `docs/AUDIT_NIGHT_REVIEW.md` R-10).
+The open decision above — whether a real bulk-reorder endpoint is worth building for atomicity —
+still stands and is unaffected by this correction; per-row `PUT`s is what shipped, not a batch
+transaction.
+
 ### Q-9 — AD-7: production showed no error on a failed refetch even though the installed
 ### `@tanstack/react-query` (and `main`'s `page.tsx`) should have surfaced one — needs a live-prod recheck once prod catches up to `main`
 

@@ -211,6 +211,48 @@ export default function AdminLessonExercisesPage({
         setEditingId(null);
     }
 
+    /**
+     * Reordering is a swap persisted through the same `PUT /admin/exercises/{id}` used by
+     * `saveExercise` above — there is no bulk-reorder endpoint, but none is needed for moving one
+     * row past its neighbor. This mirrors the sibling org editor's `moveExercise`
+     * (app/(org)/org/content/lessons/[lessonId]/page.tsx), which persists a reorder the same way:
+     * one PUT per row whose `orderInLesson` actually changed.
+     */
+    async function moveExercise(fromIndex: number, toIndex: number) {
+        if (toIndex < 0 || toIndex >= rows.length) return;
+
+        const previousRows = rows;
+        const reordered = [...rows];
+        const [moved] = reordered.splice(fromIndex, 1);
+        reordered.splice(toIndex, 0, moved);
+        const renumbered = reordered.map((row, i) => ({ ...row, sortOrder: i + 1 }));
+        setRows(renumbered);
+
+        const changedRows = renumbered.filter(
+            (row, i) => row.id && row.sortOrder !== previousRows[i]?.sortOrder
+        );
+
+        try {
+            for (const row of changedRows) {
+                await updateExerciseMut.mutateAsync({
+                    exerciseId: row.id as string,
+                    body: {
+                        type: row.type,
+                        orderInLesson: row.sortOrder,
+                        content: row.content as unknown as Record<string, unknown>,
+                        customAiPrompt: null,
+                    },
+                });
+            }
+            await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            setLocalRows(null);
+        } catch {
+            // updateExerciseMut's own onError already toasted; roll the reorder back so the
+            // screen doesn't show an order that never made it to the server.
+            setRows(previousRows);
+        }
+    }
+
     function addExercise() {
         const newRow: ExerciseRow = {
             id: null,
@@ -268,7 +310,7 @@ export default function AdminLessonExercisesPage({
                 </Link>
             </div>
 
-            <div className="flex flex-wrap gap-3 items-center justify-between mb-2">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                 <h1 className="text-lg font-semibold text-ink">Edit Exercises</h1>
                 <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -287,12 +329,6 @@ export default function AdminLessonExercisesPage({
                     </button>
                 </div>
             </div>
-            <p className="text-xs text-ink-3 mb-4">
-                Order is set when an exercise is created; there is no way to reorder existing
-                exercises yet (persisting a new order needs a backend endpoint that doesn&apos;t exist
-                today).
-            </p>
-
             <ImportPanel
                 title="Import Exercises"
                 description="Paste a JSON array of exercise objects. Download the template to see all supported types."
@@ -339,6 +375,20 @@ export default function AdminLessonExercisesPage({
                         <div key={rowKey} className={cardCls}>
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                        <button
+                                            disabled={index === 0 || isLoadingMut}
+                                            onClick={() => void moveExercise(index, index - 1)}
+                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
+                                            title="Move up"
+                                        >▲</button>
+                                        <button
+                                            disabled={index === rows.length - 1 || isLoadingMut}
+                                            onClick={() => void moveExercise(index, index + 1)}
+                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
+                                            title="Move down"
+                                        >▼</button>
+                                    </div>
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
                                         {TYPE_LABELS[row.type] ?? row.type}
                                     </span>
