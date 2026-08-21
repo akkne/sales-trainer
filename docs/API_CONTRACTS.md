@@ -417,11 +417,19 @@ nothing here to switch to" and none should resolve into a move nobody asked for.
 | GET | /lessons | — | `LessonSummaryDto[]` (all skills) |
 | GET | /topics/:topicId/lessons | — | `LessonSummaryDto[]` (one topic, with the caller's per-lesson status) |
 | GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` (200 `[]` for a real lesson with no exercises yet; 404 only when `:lessonId` names no lesson at all — docs/AUDIT_PROD.md X-5) |
-| POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
+| POST | /exercises/:exerciseId/submit | `{answer: <jsonb>, skipped?: boolean}` | `ExerciseSubmissionResultDto` |
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
 | POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |
 
 `LessonSummaryDto`: `{lessonId, title, orderInTopic, topicOrder, status, bestScore, kind}` where `kind` is `"theory"` (every exercise is a `theory_card`) or `"practice"`. Theory lessons are played as swipeable cards; the client submits the last card once to complete them. Across a skill, lessons are ordered by `topicOrder` (the topic's `OrderInSkill`) first, then by `orderInTopic` — so topics stay grouped instead of interleaving; the client sorts by `(topicOrder, orderInTopic)`.
+
+**`POST /exercises/:exerciseId/submit`'s `skipped` field (docs/AUDIT_PROD.md X-4):** the client's "Skip"
+button sends `{answer: {}, skipped: true}` instead of calling nothing. A skipped submission records a
+real `UserExerciseAttempt` (always `isCorrect: false`, `score: 0`, no AI call and no grading strategy
+invoked) so it counts toward the lesson's every-exercise-attempted completion gate the same as a wrong
+answer would — before this, a lesson finished entirely by skipping showed the learner "Урок завершён"
+for a lesson the backend never actually closed. Omitting `skipped` (or sending `false`) behaves exactly
+as before.
 
 **AI Dialog Chat Endpoint:**
 `POST /exercises/:exerciseId/chat` — for `ai_dialog` type exercises only. Handles multi-turn conversation.

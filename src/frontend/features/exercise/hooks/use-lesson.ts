@@ -57,13 +57,18 @@ export function useSubmitExercise() {
         mutationFn: ({
             exerciseId,
             answer,
+            skipped,
         }: {
             exerciseId: string;
             answer: unknown;
+            // X-4: records a real, ungraded attempt on the server instead of only advancing
+            // the client's own queue, so a lesson finished by skipping every remaining
+            // exercise actually satisfies the backend's every-exercise-attempted completion gate.
+            skipped?: boolean;
         }) =>
             apiClient.post<ExerciseSubmissionResult>(
                 `/exercises/${exerciseId}/submit`,
-                { answer }
+                { answer, skipped }
             ),
         // Progress may have changed (lesson completed / next lesson unlocked), so drop
         // the cached lesson lists — the path/tree/skill views refetch fresh statuses.

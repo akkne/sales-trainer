@@ -45,10 +45,17 @@ public interface IExerciseService
         Guid lessonId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <paramref name="isSkipped"/> (X-4) records the attempt without grading it: no evaluation
+    /// strategy runs (so a skip never triggers an AI call), and the stored attempt is always
+    /// <c>IsCorrect: false</c>, <c>Score: 0</c>. It still counts toward the lesson's
+    /// every-exercise-attempted completion gate, the same as a wrong answer would.
+    /// </summary>
     Task<ExerciseSubmissionResultDto> SubmitExerciseAnswerAsync(
         Guid userId,
         Guid exerciseId,
         JsonElement userAnswer,
+        bool isSkipped = false,
         CancellationToken cancellationToken = default);
 
     Task<ExerciseChatResponseDto> SendChatMessageAsync(

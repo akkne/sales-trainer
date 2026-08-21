@@ -451,11 +451,22 @@ internal sealed class ExerciseService(
     /// completion is the exception: it is decided by querying committed lesson progress, so it runs after
     /// that flush and its own outbox row is flushed behind it, all still inside the one transaction.
     /// </para>
+    ///
+    /// <para>
+    /// <b><paramref name="isSkipped"/> records a real attempt without grading it (X-4).</b> The client's
+    /// "Skip" button used to call no endpoint at all, so a lesson finished entirely by skipping showed
+    /// the learner a "lesson completed" screen the server never agreed with — the backend's completion
+    /// gate counts attempted exercises (right or wrong), and a skip was never an attempt. Skipping the
+    /// evaluation strategy here rather than sending it a placeholder answer matters for two reasons: some
+    /// deterministic strategies would throw on a shape they do not expect, and the AI-graded types would
+    /// otherwise place a real model call for an answer nobody gave.
+    /// </para>
     /// </summary>
     public async Task<ExerciseSubmissionResultDto> SubmitExerciseAnswerAsync(
         Guid userId,
         Guid exerciseId,
         JsonElement userAnswer,
+        bool isSkipped = false,
         CancellationToken cancellationToken = default)
     {
         Exercise exercise;
@@ -466,18 +477,26 @@ internal sealed class ExerciseService(
                 ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
         }
 
-        var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
+        ExerciseEvaluationResult evaluationResult;
+        if (isSkipped)
+        {
+            evaluationResult = new ExerciseEvaluationResult(IsCorrect: false, Score: 0, Explanation: null, AiFeedback: null);
+        }
+        else
+        {
+            var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
 
-        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
-        var unresolved = new List<string>();
-        var exerciseContent = JsonDocument
-            .Parse(OrganizationPlaceholderRenderer.RenderJsonStrings(exercise.SerializedContent, profile, unresolved))
-            .RootElement;
+            var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+            var unresolved = new List<string>();
+            var exerciseContent = JsonDocument
+                .Parse(OrganizationPlaceholderRenderer.RenderJsonStrings(exercise.SerializedContent, profile, unresolved))
+                .RootElement;
 
-        LogUnresolved(unresolved);
+            LogUnresolved(unresolved);
 
-        var evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
-            exerciseContent, userAnswer, cancellationToken);
+            evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
+                exerciseContent, userAnswer, cancellationToken);
+        }
 
         var lessonVersionId = await lessonVersionService.EnsurePublishedVersionIdAsync(
             exercise.LessonId, cancellationToken);
@@ -488,7 +507,7 @@ internal sealed class ExerciseService(
             UserId = userId,
             LessonVersionId = lessonVersionId,
             ExerciseId = exerciseId,
-            SerializedAnswer = userAnswer.GetRawText(),
+            SerializedAnswer = userAnswer.ValueKind == JsonValueKind.Undefined ? "null" : userAnswer.GetRawText(),
             IsCorrect = evaluationResult.IsCorrect,
             Score = evaluationResult.Score,
             SerializedAiFeedback = evaluationResult.AiFeedback is not null

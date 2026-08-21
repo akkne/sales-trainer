@@ -149,7 +149,20 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
     }
 
     function handleSkip() {
-        advanceToNext();
+        if (!currentExercise || !currentQueued) {
+            advanceToNext();
+            return;
+        }
+        // X-4: "Пропустить" used to call no endpoint at all — the client advanced its own
+        // queue while the server never saw an attempt, so a lesson finished entirely by
+        // skipping showed "Урок завершён" for a lesson the backend's every-exercise-attempted
+        // gate never actually closed. Record a real (ungraded) attempt first, and only advance
+        // once the server has it, so the two sides agree and a failed skip stays retryable
+        // instead of silently advancing anyway.
+        submitExerciseMutation.mutate(
+            { exerciseId: currentExercise.exerciseId, answer: {}, skipped: true },
+            { onSuccess: () => advanceToNext() }
+        );
     }
 
     function handleContinueAfterResult() {
@@ -581,7 +594,7 @@ function SessionLoader() {
 
 /**
  * Theory lesson flow: swipe through story cards. Reaching the end submits every
- * card (each records a correct attempt) so the backend's all-exercises-passed gate
+ * card (each records an attempt) so the backend's all-exercises-attempted gate
  * marks the lesson complete — then shows the completion screen.
  */
 function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; exitHref: string }) {
@@ -601,9 +614,12 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
     async function handleComplete() {
         setCompleteError(null);
         try {
-            // The backend marks a lesson complete only when every exercise in it has a
-            // correct attempt. Theory cards always evaluate as correct, so we must submit
-            // ALL cards (not just the last one) or a multi-card lesson never completes.
+            // The backend marks a lesson complete only when every exercise in it has been
+            // attempted at least once, right or wrong (X-4's audit finding flagged this
+            // comment for previously claiming "a correct attempt" — it does not need to be
+            // correct). Theory cards always evaluate as correct anyway, so this distinction
+            // doesn't change theory's behavior, but we must still submit ALL cards (not just
+            // the last one) or a multi-card lesson never completes.
             for (const exercise of exercises) {
                 await submitExerciseMutation.mutateAsync({
                     exerciseId: exercise.exerciseId,

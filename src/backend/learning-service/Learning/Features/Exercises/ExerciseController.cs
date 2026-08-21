@@ -92,7 +92,7 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         try
         {
             var submissionResult = await exerciseService.SubmitExerciseAnswerAsync(
-                userId, exerciseId, submitRequest.Answer, cancellationToken);
+                userId, exerciseId, submitRequest.Answer, submitRequest.Skipped, cancellationToken);
             return Ok(submissionResult);
         }
         catch (ExerciseAnswerValidationException exception)
