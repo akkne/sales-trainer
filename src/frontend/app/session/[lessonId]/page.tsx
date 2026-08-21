@@ -131,6 +131,11 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
     // after the first pass, go to the mistakes-intro gate if any mistakes were made;
     // after the review round (or a clean first pass), show the completion screen.
     function advanceToNext() {
+        // R-4: `submitExerciseMutation.error` is sticky until the next `mutate()` or an explicit
+        // `reset()` — without this, an error raised on one exercise rode along onto every
+        // following exercise (skip, or the next unrelated submit) until a submit finally
+        // succeeded again.
+        submitExerciseMutation.reset();
         if (currentQueueIndex + 1 < activeQueue.length) {
             setCurrentQueueIndex((prev) => prev + 1);
             return;
