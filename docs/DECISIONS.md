@@ -6088,3 +6088,59 @@ data yet — blocks the table, same UX as before) separately from `isRefetchErro
 prior successful load — shown as its own banner *above* the still-visible stale table, saying the
 refresh failed and the numbers may be stale), includes the `ApiError` message in both banners, and
 disables the "Refresh" button with a "Refreshing…" label while `isFetching`.
+
+### R-19: `846c020`'s commit message never mentioned the `GET /admin/ai-quota/{organizationId}`
+### boundary carve-out it shipped — a concurrent-agent commit-attribution split, not a hidden change
+
+`docs/AUDIT_NIGHT_REVIEW.md` R-19: `846c020` ("apply `[TenantScoped]` consistently across
+org-facing controllers (T-6)") added `AdminAiQuotaController.GetQuotaForOrganization`, the first
+ai-service route to take an `organizationId` from the URL — a real exception to
+`docs/TENANCY/TENANCY.md` §1.3 ("the organization is never read from the ... route"). Nothing in
+`846c020`'s own commit message names this route, and the message's verification claim
+("tenancy-boundary-lint ... clean after each service") does not hold for the commit as it stands
+on `main`: checked out on its own, `python3 scripts/tenancy-boundary-lint.py` fails —
+
+```
+src/backend/ai-service/Ai/Features/Quotas/AdminAiQuotaController.cs:87: route template must not
+carry an organization id segment (TENANCY.md section 1.3)
+
+tenancy-boundary-lint: 1 violation(s) found.
+```
+
+**What actually happened, established from the commit graph rather than guessed:** `cccc8b9` (AD-5,
+authored 8 minutes after `846c020`, same author/session) is the commit that designed and intended
+this route — its own message describes the fix in full and says explicitly: *"AdminAiQuotaController.cs's
+own GetQuotaForOrganization endpoint and doc-comment updates landed earlier in 846c020
+([TenantScoped] consistency pass, T-6) rather than in this commit — both agents touched the file
+concurrently in the same working tree; the code itself is correct and verified, only the commit
+attribution is split across two commits." Two agents were editing the same shared working tree at
+nearly the same wall-clock time (T-6's `[TenantScoped]` sweep and AD-5's quota-screen fix); whichever
+agent committed first (`846c020`) picked up the other's not-yet-committed edit to
+`AdminAiQuotaController.cs` along with its own, and `cccc8b9` then committed the allow-list entry
+(`scripts/tenancy-boundary-lint.py`), the service/frontend wiring, and the docs, with an empty diff
+for the controller file it had already lost to the other commit.
+
+**Consequence, quantified:** for the 8 minutes `main`'s tip was `846c020` and not yet `cccc8b9`,
+`tenancy-boundary-lint` was red on `main` (reproduced above by checking out `846c020` in an isolated
+worktree and running the lint directly — not merely "requires verification" as the audit noted).
+No CI run or human is known to have observed that window; it is recorded here because a silent
+boundary change landing under an unrelated commit message is a process failure worth naming exactly,
+even when — as here — nothing downstream actually broke.
+
+**Judged on its merits, the carve-out itself is sound and is kept as shipped, not reverted:**
+`AdminAiQuotaController` requires `RequirePlatformAdministrator` on the whole controller, so every
+caller who can reach `GetQuotaForOrganization` already has `ITenantContext.IsPlatformWide = true`;
+`OrganizationQuota`'s EF query filter (`IsPlatformWide || OrganizationId == current`) already reads
+across every organization for such a caller regardless of the route. The route segment only narrows
+an already-cross-tenant-readable query to the one organization the platform panel's quota screen is
+showing, in place of defaulting to the caller's own — it grants no caller anything they could not
+already read. It is read-only: `PUT` still writes only the caller's own organization
+(`TenantSaveChangesInterceptor`/RLS `WITH CHECK` both still require a write's `OrganizationId` to
+match the caller's own `ITenantContext`, unchanged by this route).
+The exception is allow-listed by exact path in `scripts/tenancy-boundary-lint.py` (added by
+`cccc8b9`) with the same justification recorded in the allow-list comment itself, plus
+`docs/AUDIT_PROD.md` AD-5, `docs/NIGHT_AUDIT_QUESTIONS.md` Q-10, and `docs/TENANCY/ADMIN_UI_DESIGN.md`.
+
+No code change follows from this entry — the fix is documentary: the boundary widening now has one
+place (`cccc8b9`'s message, this entry, and the allow-list comment) that names it explicitly, and
+the commit-message omission in `846c020` is recorded rather than left silent.

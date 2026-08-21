@@ -424,7 +424,7 @@
   property not yet added) — confirmed via `git stash` that the failure exists independent of this
   fix, out of scope here per the run's file-ownership split.
 
-### [ ] R-19 В коммит «apply [TenantScoped]» въехало расширение tenancy-границы, не упомянутое в сообщении
+### [x] R-19 В коммит «apply [TenantScoped]» въехало расширение tenancy-границы, не упомянутое в сообщении
 - **Коммит/файл:** `846c020`;
   `src/backend/ai-service/Ai/Features/Quotas/AdminAiQuotaController.cs:80-89` — новый маршрут
   `GET /admin/ai-quota/{organizationId:guid}`; allow-list — `scripts/tenancy-boundary-lint.py:87,97`,
@@ -441,6 +441,21 @@
 - **Severity:** minor (гигиена и обозреваемость границы, не утечка)
 - **Уверенность:** точно по содержимому коммитов; что линт падал в интервале — требует проверки
   (я запускал его только на HEAD, где он чист)
+- **Resolved (docs, this commit):** подтверждено с доказательствами, а не только по
+  содержимому коммитов. `git show 846c020:scripts/tenancy-boundary-lint.py` не содержит
+  `AdminAiQuotaController.cs` в `ALLOWED_ROUTE_TEMPLATE_PATHS`; запуск линтера в изолированном
+  `git worktree` на `846c020` даёт ровно 1 нарушение на этой самой строке — окно красного линта
+  на `main` длиной 8 минут (`02:21:01` → `02:29:17`) подтверждён, а не предположен. Причина —
+  не скрытое изменение, а коллизия атрибуции коммитов между двумя параллельными агентами в одном
+  working tree: `cccc8b9` (AD-5) сам признаёт в своём сообщении, что код `GetQuotaForOrganization`
+  «landed earlier in 846c020 ... rather than in this commit — both agents touched the file
+  concurrently in the same working tree». Расширение границы разобрано по существу и оставлено
+  как есть (не откатывается): контроллер целиком под `RequirePlatformAdministrator`, поэтому любой
+  вызывающий уже имеет `IsPlatformWide=true`, и EF-фильтр `OrganizationQuota` уже читает через все
+  организации для такого вызывающего независимо от маршрута — сегмент маршрута лишь сужает уже
+  межтенантный read, `PUT` не тронут. Задокументировано честно и подробно в `docs/DECISIONS.md`
+  (новая запись «R-19: ...») с воспроизведённым выводом линтера. `tenancy-boundary-lint` на текущем
+  HEAD подтверждён чистым (`tenancy-boundary-lint: clean.`).
 
 ### [ ] R-20 `DialogModeKey = ""` безопасен только благодаря валидации на записи; для legacy-строк проверки нет
 - **Коммит/файл:** `e2f68df`;
