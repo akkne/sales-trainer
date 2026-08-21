@@ -6169,3 +6169,42 @@ silently re-lower the score.
 `Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s "correct line, no explanation" test previously
 asserted `Score == 50, IsCorrect == false` — i.e. it encoded the bug — and was updated to assert
 `Score == 100, IsCorrect == true` to match the corrected, intentional behaviour.
+
+## 2026-08-21 — Night audit review 2: `SkillCatalogCache` keyed by tenant (R2-11)
+
+### R2-11: the cache key is now tenant-qualified — chose not to rely on a "skills are global" proof
+
+`docs/AUDIT_NIGHT_REVIEW.md` R2-11. `SkillCatalogCache` (introduced `01de8624`, R-15 audit fix)
+cached learning-service's skill catalog under one fixed key, `"skill-catalog"`, shared by every
+caller. The review found this safe *today*, but only for a reason the cache itself does not enforce:
+the internal lookup it caches (`InternalSkillsController.Lookup`, `GET /internal/skills/lookup`)
+carries no `X-Organization-Id` header, so the ambient `ITenantContext` on the learning-service side
+always resolves to "no organization" and the EF query filter on `Skill`
+(`LearningDbContext.cs:189`, `IsPlatformWide || OrganizationId == null || OrganizationId ==
+_tenantContext.OrganizationId`) always reduces to "global skills only" — deterministically, but as a
+side effect of how the call happens to be wired, not as an invariant the cache checks. `Skill.
+OrganizationId` is a real, tenant-scoped column (`LearningTenancyModelTests.cs:111-112` seeds an
+organization-owned skill), so a tenant-scoped skill is a supported shape the schema already allows.
+
+**Decision: qualify the cache key by tenant rather than write down a "this can only ever be global"
+proof.** A documented proof would have been true on the day it was written and silently false the
+day either side of this internal contract changed to add an organization header or a platform-wide
+mode — exactly the kind of latent, undetectable tenant leak the rest of this audit run exists to
+close, for a fix that costs one extra parameter. `SkillCatalogCache.TryGet`/`Set` now take
+`(bool isPlatformWide, Guid? organizationId)` and key the `MemoryCache` entry on them (platform-wide
+and "no organization" share one `"skill-catalog:platform"` slot, matching the EF filter's own "either
+means global" rule; a real organization id gets `"skill-catalog:{id}"`). `SkillLookupClient` now
+takes `ITenantContext` (already scoped-safe to inject into a transient typed `HttpClient`, the same
+shape `AssignmentPracticeContextClient` already uses to read the tenant for its own outbound call)
+and passes `_tenantContext.IsPlatformWide` / `_tenantContext.OrganizationId` through on every read
+and write. `SkillCatalogCache` itself stays a singleton with no `ITenantContext` dependency of its
+own — a scoped service injected straight into a singleton's constructor is a DI captive-dependency
+bug, so the tenant identity is threaded through as call parameters instead of a constructor
+dependency.
+
+**What changed:**
+`src/backend/ai-service/Ai/Infrastructure/Learning/SkillCatalogCache.cs` (tenant-qualified cache
+key), `src/backend/ai-service/Ai/Infrastructure/Learning/SkillLookupClient.cs` (`ITenantContext`
+injected, tenant passed through `TryGet`/`Set`). No test previously exercised the cache key shape,
+so none needed correcting. Both tenancy lints (`scripts/tenancy-boundary-lint.sh`,
+`scripts/tenancy-pool-lint.sh`) and `Ai.Tests` (170 passed) stayed green.

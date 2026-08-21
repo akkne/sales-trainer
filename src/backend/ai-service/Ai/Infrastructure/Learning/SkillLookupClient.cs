@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.Ai.Infrastructure.Learning;
 
@@ -30,24 +31,31 @@ internal sealed class SkillLookupClient : ISkillLookupClient
     private readonly HttpClient _httpClient;
     private readonly LearningServiceConfiguration _configuration;
     private readonly SkillCatalogCache _cache;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<SkillLookupClient> _logger;
 
     public SkillLookupClient(
         HttpClient httpClient,
         IOptions<LearningServiceConfiguration> configurationOptions,
         SkillCatalogCache cache,
+        ITenantContext tenantContext,
         ILogger<SkillLookupClient> logger)
     {
         _httpClient = httpClient;
         _configuration = configurationOptions.Value;
         _cache = cache;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
     public async Task<IReadOnlyDictionary<Guid, SkillSummary>> GetSkillSummariesAsync(
         CancellationToken cancellationToken = default)
     {
-        if (_cache.TryGet(out var cached))
+        // R2-11: cached per caller tenant, not process-wide — see SkillCatalogCache.
+        var isPlatformWide = _tenantContext.IsPlatformWide;
+        var organizationId = _tenantContext.OrganizationId;
+
+        if (_cache.TryGet(isPlatformWide, organizationId, out var cached))
         {
             return cached;
         }
@@ -70,7 +78,7 @@ internal sealed class SkillLookupClient : ISkillLookupClient
                     skill => skill.Id,
                     skill => new SkillSummary(skill.IconicName ?? string.Empty, skill.Title ?? string.Empty));
 
-            _cache.Set(catalog);
+            _cache.Set(isPlatformWide, organizationId, catalog);
             return catalog;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

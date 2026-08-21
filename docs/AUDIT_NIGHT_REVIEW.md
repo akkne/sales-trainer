@@ -935,7 +935,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Severity:** minor
 - **Уверенность:** точно
 
-### [ ] R2-11 ключ `SkillCatalogCache` не квалифицирован тенантом, хотя `Skill.OrganizationId` — реальная колонка
+### [x] R2-11 ключ `SkillCatalogCache` не квалифицирован тенантом, хотя `Skill.OrganizationId` — реальная колонка
 - **Коммит/файл:** `01de8624`;
   `src/backend/ai-service/Ai/Infrastructure/Learning/SkillCatalogCache.cs:26-59`,
   `src/backend/learning-service/Learning/Infrastructure/Data/LearningDbContext.cs:189`
