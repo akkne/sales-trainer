@@ -57,10 +57,12 @@ export default function AdminTopicDetailPage({
 }) {
     const { id: skillId, topicId } = use(params);
 
+    // R-6 (Q-14): `isLoadingError`, not bare `isError`, on all three — a background refetch
+    // failing must not discard the already-rendered page/list.
     const {
         data: skills = [],
         isLoading: skillsLoading,
-        isError: skillsError,
+        isLoadingError: skillsError,
         refetch: refetchSkills,
     } = useAdminSkills();
     const skill = skills.find((s) => s.id === skillId);
@@ -68,7 +70,7 @@ export default function AdminTopicDetailPage({
     const {
         data: topics = [],
         isLoading: topicsLoading,
-        isError: topicsError,
+        isLoadingError: topicsError,
         refetch: refetchTopics,
     } = useAdminTopics(skill?.iconicName || "");
     const topic = topics.find((t) => t.id === topicId);
@@ -77,7 +79,7 @@ export default function AdminTopicDetailPage({
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState<Omit<AdminTopic, "id" | "skillId"> | null>(null);
 
-    const { data: lessons = [], isLoading: lessonsLoading, isError: lessonsError, refetch: refetchLessons } = useAdminLessons(topic?.iconicName || "");
+    const { data: lessons = [], isLoading: lessonsLoading, isLoadingError: lessonsError, refetch: refetchLessons } = useAdminLessons(topic?.iconicName || "");
     const createLesson = useCreateLesson(topic?.iconicName || "");
     const deleteLesson = useDeleteLesson(topicId);
     const importLessons = useImportLessons();

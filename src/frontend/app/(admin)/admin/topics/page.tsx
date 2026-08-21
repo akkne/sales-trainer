@@ -19,7 +19,9 @@ import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminTopicsPage() {
     const { data: skills = [] } = useAdminSkills();
-    const { data: topics = [], isLoading, isError, refetch } = useAdminAllTopics();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: topics = [], isLoading, isLoadingError: isError, refetch } = useAdminAllTopics();
     const importTopics = useImportTopics();
 
     const [filterSkillId, setFilterSkillId] = useState<string>("");

@@ -23,7 +23,9 @@ export default function AdminReferencePageWrapper({
 }
 
 function AdminReferencePage({ skillId }: { skillId: string }) {
-    const { data: materials = [], isLoading, isError, refetch } = useAdminReference(skillId);
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: materials = [], isLoading, isLoadingError: isError, refetch } = useAdminReference(skillId);
     const createMaterial = useCreateReference(skillId);
     const deleteMaterial = useDeleteReference();
 

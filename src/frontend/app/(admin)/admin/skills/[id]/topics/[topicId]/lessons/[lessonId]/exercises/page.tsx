@@ -139,7 +139,9 @@ export default function AdminTopicLessonExercisesPage({
     params: Promise<{ id: string; topicId: string; lessonId: string }>;
 }) {
     const { id: skillId, topicId, lessonId } = use(params);
-    const { data: exercises = [], isLoading, isError, refetch } = useAdminExercises(lessonId);
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: exercises = [], isLoading, isLoadingError: isError, refetch } = useAdminExercises(lessonId);
 
     const createMut = useCreateExercise(lessonId);
     const deleteMut = useDeleteExercise(lessonId);

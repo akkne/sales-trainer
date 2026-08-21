@@ -15,7 +15,9 @@ const roleBadgeClass: Record<string, string> = {
 
 export default function AdminUsersPage() {
     const { authenticatedUser } = useAuthStore();
-    const { data: users = [], isLoading, isError, refetch } = useAdminUsers();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: users = [], isLoading, isLoadingError: isError, refetch } = useAdminUsers();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     // Reading the roster is ordinary platform administration (RequirePlatformAdmin), so both

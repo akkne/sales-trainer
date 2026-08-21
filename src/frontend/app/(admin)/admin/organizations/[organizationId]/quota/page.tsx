@@ -543,10 +543,12 @@ export default function AdminOrganizationQuotaPage({
             )}
 
             <h2 className="text-base font-bold text-ink mb-3">This month</h2>
+            {/* R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing
+                must not discard an already-rendered spend report. */}
             <SpendPanel
                 report={spendReport.data}
                 isLoading={spendReport.isLoading}
-                isError={spendReport.isError}
+                isError={spendReport.isLoadingError}
                 scopeCaveat={scopeCaveat}
             />
         </div>

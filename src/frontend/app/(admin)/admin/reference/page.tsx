@@ -36,7 +36,9 @@ export default function AdminReferenceAllPage() {
 
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-    const { data: materials = [], isLoading, isError, refetch } = useAdminReferenceAll({
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: materials = [], isLoading, isLoadingError: isError, refetch } = useAdminReferenceAll({
         skillId: selectedSkillId || undefined,
         category: selectedCategory || undefined,
         search: search || undefined,

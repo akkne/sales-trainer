@@ -22,7 +22,9 @@ import {
 } from "@/features/admin/hooks/use-admin";
 
 export default function AdminDialogPage() {
-    const { data: bundles, isLoading, error } = useAdminDialogBundles();
+    // R-6 (Q-14): `isLoadingError`, not bare `error` — a background refetch failing must not
+    // discard the already-rendered page.
+    const { data: bundles, isLoading, error, isLoadingError } = useAdminDialogBundles();
     const { data: skills } = useAdminSkills();
     const createBundleMutation = useCreateBundle();
     const updateBundleMutation = useUpdateBundle();
@@ -127,11 +129,11 @@ export default function AdminDialogPage() {
         );
     }
 
-    if (error) {
+    if (isLoadingError) {
         return (
             <div className="p-6">
                 <h1 className="text-xl font-bold text-ink mb-6">Dialog Bundles</h1>
-                <p className="text-bad">Error: {error.message}</p>
+                <p className="text-bad">Error: {error?.message}</p>
             </div>
         );
     }

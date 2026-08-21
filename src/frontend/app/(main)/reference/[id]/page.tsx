@@ -25,14 +25,14 @@ export default function ReferencePage({ params }: ReferencePageProps) {
     const {
         data: allMaterials,
         isLoading: isLoadingHandbook,
-        isError: isHandbookError,
+        isLoadingError: isHandbookLoadingError,
         refetch: refetchHandbook,
     } = useHandbook();
     const skillId = allMaterials?.find((material) => material.materialId === materialId)?.skillId;
     const {
         data: referenceMaterials,
         isLoading: isLoadingSkillMaterials,
-        isError: isSkillMaterialsError,
+        isLoadingError: isSkillMaterialsLoadingError,
         refetch: refetchSkillMaterials,
     } = useReferenceMaterials(skillId ?? "");
     const [expandedMaterialId, setExpandedMaterialId] = useState<string | null>(materialId);
@@ -41,7 +41,9 @@ export default function ReferencePage({ params }: ReferencePageProps) {
     // E-1: when the handbook lookup itself fails, skillId never resolves, the materials query
     // stays disabled, and isLoading turns false straight away — the empty state used to be the
     // only thing that could render. Treat that as an error, not as "no materials".
-    const isError = isHandbookError || (!!skillId && isSkillMaterialsError);
+    // R-6 (Q-14): gate on `isLoadingError` rather than bare `isError` — a background refetch
+    // failing after the materials already rendered must not discard them.
+    const isError = isHandbookLoadingError || (!!skillId && isSkillMaterialsLoadingError);
 
     return (
         <div className="page">

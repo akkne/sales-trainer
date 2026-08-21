@@ -26,7 +26,9 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
 });
 
 export default function AdminSkillsPage() {
-    const { data: skills = [], isLoading, isError, refetch } = useAdminSkills();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: skills = [], isLoading, isLoadingError: isError, refetch } = useAdminSkills();
     const { stages } = useSkillStages();
     const createSkill = useCreateSkill();
     const deleteSkill = useDeleteSkill();

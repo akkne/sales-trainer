@@ -20,7 +20,9 @@ interface TierDraft {
 const emptyNewTier = { key: "", name: "", color: "#888888", order: 1 };
 
 export default function AdminLeagueTiersPage() {
-    const { data: tiers = [], isLoading, isError, refetch } = useAdminLeagueTiers();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: tiers = [], isLoading, isLoadingError: isError, refetch } = useAdminLeagueTiers();
     const createTier = useCreateLeagueTier();
     const updateTier = useUpdateLeagueTier();
     const deleteTier = useDeleteLeagueTier();

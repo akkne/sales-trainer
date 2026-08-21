@@ -11,9 +11,11 @@ import { AI_EXERCISE_TYPES, TYPE_LABELS } from "@/features/admin/components/exer
 import { ErrorState } from "@/shared/components/error-state";
 
 export default function AdminPromptsPage() {
-    const { data: prompts = [], isLoading, isError, refetch } = useExerciseTypePrompts();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard the already-rendered editors below.
+    const { data: prompts = [], isLoading, isLoadingError: isError, refetch } = useExerciseTypePrompts();
     const updatePrompt = useUpdateExerciseTypePrompt();
-    const { data: rewards = [], isError: isRewardsError, refetch: refetchRewards } = useExerciseTypeRewards();
+    const { data: rewards = [], isLoadingError: isRewardsError, refetch: refetchRewards } = useExerciseTypeRewards();
     const updateReward = useUpdateExerciseTypeReward();
 
     // Local edits for base XP: map of exerciseType -> current input value

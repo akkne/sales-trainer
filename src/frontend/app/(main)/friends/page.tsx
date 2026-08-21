@@ -33,7 +33,7 @@ function FriendsPageContent() {
     const {
         data: friends,
         isLoading: friendsLoading,
-        isError: friendsError,
+        isLoadingError: friendsError,
         refetch: refetchFriends,
     } = useFriends();
     const { data: requests, isError: requestsError, refetch: refetchRequests } = useFriendRequests();
@@ -155,6 +155,8 @@ function FriendsPageContent() {
                     ) : friendsError ? (
                         // E-10: a failed /friends used to fall through to "Найди своего первого
                         // напарника!" — the exact same screen as genuinely having no friends yet.
+                        // R-6 (Q-14): gated on `isLoadingError` rather than bare `isError` — a
+                        // background refetch failing must not discard an already-rendered grid.
                         <ErrorState title="Не удалось загрузить друзей" onRetry={() => refetchFriends()} />
                     ) : friends && friends.length > 0 ? (
                         <div className="frd-grid">

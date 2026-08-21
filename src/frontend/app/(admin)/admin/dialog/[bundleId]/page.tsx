@@ -18,7 +18,9 @@ export default function AdminBundleModesPage() {
     const bundleId = params.bundleId as string;
 
     const { data: bundles } = useAdminDialogBundles();
-    const { data: modes, isLoading, error } = useAdminDialogModes(bundleId);
+    // R-6 (Q-14): `isLoadingError`, not bare `error` — a background refetch failing must not
+    // discard the already-rendered page.
+    const { data: modes, isLoading, error, isLoadingError } = useAdminDialogModes(bundleId);
     const createModeMutation = useCreateMode();
     const updateModeMutation = useUpdateMode();
     const deleteModeMutation = useDeleteMode();
@@ -117,14 +119,14 @@ export default function AdminBundleModesPage() {
         );
     }
 
-    if (error) {
+    if (isLoadingError) {
         return (
             <div className="p-6">
                 <Link href="/admin/dialog" className="text-indigo-ink hover:underline mb-4 inline-block">
                     ← Back to Bundles
                 </Link>
                 <h1 className="text-xl font-bold text-ink mb-6">Modes</h1>
-                <p className="text-bad">Error: {error.message}</p>
+                <p className="text-bad">Error: {error?.message}</p>
             </div>
         );
     }

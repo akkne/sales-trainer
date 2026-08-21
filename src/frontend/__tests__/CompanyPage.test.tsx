@@ -114,6 +114,9 @@ describe("CompanyPage", () => {
             data: undefined,
             isLoading: false,
             error: new ApiError(404, {}),
+            // R-6 (Q-14): the page now gates on `isLoadingError` rather than bare `error` — this
+            // is a first-load failure (no data ever fetched), which is exactly what it means.
+            isLoadingError: true,
             refetch: vi.fn(),
         });
         render(<CompanyPage />);
@@ -127,6 +130,7 @@ describe("CompanyPage", () => {
             data: undefined,
             isLoading: false,
             error: new Error("boom"),
+            isLoadingError: true,
             refetch,
         });
         render(<CompanyPage />);

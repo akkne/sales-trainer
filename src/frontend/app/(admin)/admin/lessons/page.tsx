@@ -21,7 +21,9 @@ type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";
 
 export default function LessonsPage() {
-    const { data: lessons = [], isLoading, isError, refetch } = useAdminAllLessons();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: lessons = [], isLoading, isLoadingError: isError, refetch } = useAdminAllLessons();
     const { data: topics = [] } = useAdminAllTopics();
     const { data: skills = [] } = useAdminSkills();
     const importLessons = useImportLessons();

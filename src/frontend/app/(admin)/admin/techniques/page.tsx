@@ -56,7 +56,9 @@ export default function AdminTechniquesPage() {
     const [isExporting, setIsExporting] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
 
-    const { data: techniques = [], isLoading, isError, refetch } = useAdminTechniques({
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: techniques = [], isLoading, isLoadingError: isError, refetch } = useAdminTechniques({
         skill: selectedSkill || undefined,
         search: search || undefined,
     });

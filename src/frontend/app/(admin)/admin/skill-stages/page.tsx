@@ -21,7 +21,9 @@ interface StageDraft {
 const emptyNewStage = { key: "", label: "", accent: "#7C3AED", order: 1 };
 
 export default function AdminSkillStagesPage() {
-    const { data: stages = [], isLoading, isError, refetch } = useAdminSkillStages();
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard an already-rendered list.
+    const { data: stages = [], isLoading, isLoadingError: isError, refetch } = useAdminSkillStages();
     const createStage = useCreateSkillStage();
     const updateStage = useUpdateSkillStage();
     const deleteStage = useDeleteSkillStage();

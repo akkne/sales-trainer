@@ -22,10 +22,12 @@ export default function AdminSkillDetailPage({
 }) {
     const { id } = use(params);
 
+    // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
+    // discard the already-rendered page (or, below, the already-rendered topics list).
     const {
         data: skills = [],
         isLoading: skillsLoading,
-        isError: skillsError,
+        isLoadingError: skillsError,
         refetch: refetchSkills,
     } = useAdminSkills();
     const { stages } = useSkillStages();
@@ -38,7 +40,7 @@ export default function AdminSkillDetailPage({
     const {
         data: topics = [],
         isLoading: topicsLoading,
-        isError: topicsError,
+        isLoadingError: topicsError,
         refetch: refetchTopics,
     } = useAdminTopics(skill?.iconicName || "");
     const createTopic = useCreateTopic(skill?.iconicName || "");

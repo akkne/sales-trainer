@@ -39,10 +39,12 @@ export default function AdminOrganizationsPage() {
     // RequireSuperAdmin on the backend (docs/DECISIONS.md, 2026-08-16).
     const canManageUsers = canManagePlatformUsers(authenticatedUser?.role);
 
-    const { data: organizations = [], isLoading, isError, refetch } = usePlatformOrganizations();
+    // R-6 (Q-14): both gates use `isLoadingError` (first load failed, no data) rather than bare
+    // `isError` — a background refetch failing must not discard an already-rendered list.
+    const { data: organizations = [], isLoading, isLoadingError: isError, refetch } = usePlatformOrganizations();
     const {
         data: impersonations = [],
-        isError: isImpersonationsError,
+        isLoadingError: isImpersonationsError,
         refetch: refetchImpersonations,
     } = useImpersonationAudit();
     const createOrganization = useCreateOrganization();

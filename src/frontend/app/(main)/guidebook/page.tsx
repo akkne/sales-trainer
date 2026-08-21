@@ -131,11 +131,11 @@ export default function GuidebookPage() {
 
     const deferredSearch = useDeferredValue(searchInput);
 
-    const { data: meta, isError: isMetaError, refetch: refetchMeta } = useTechniquesMeta();
+    const { data: meta, isLoadingError: isMetaError, refetch: refetchMeta } = useTechniquesMeta();
     const {
         data: cards = [],
         isLoading,
-        isError: isCardsError,
+        isLoadingError: isCardsError,
         refetch: refetchCards,
     } = useTechniques({
         skill: selectedSkill ?? undefined,
@@ -178,6 +178,8 @@ export default function GuidebookPage() {
     const isFiltered = selectedSkill !== null || deferredSearch.trim() !== "" || activeTags.length > 0;
     // E-8: a failed /techniques/meta must not read as "the library has 0 techniques" — that's
     // indistinguishable from a real empty library, so it falls back to "—" instead of 0.
+    // R-6 (Q-14): `isMetaError` is really `isLoadingError` (first load failed, no data) — a
+    // background refetch failure leaves `meta` populated, so this fallback never engages then.
     const displayedTotalCount = isFiltered ? cards.length : meta?.totalCount ?? (isMetaError ? null : 0);
     const displayedMasteredCount = isFiltered
         ? cards.filter((c) => c.masteryLevel >= MASTERED_THRESHOLD_LEVEL).length

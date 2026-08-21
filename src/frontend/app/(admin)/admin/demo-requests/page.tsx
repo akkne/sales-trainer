@@ -60,7 +60,9 @@ interface ProvisionedDetails {
 }
 
 export default function AdminDemoRequestsPage() {
-    const { data: demoRequests = [], isLoading, error } = useAdminDemoRequests();
+    // R-6 (Q-14): the list gates below use `isLoadingError`, not bare `error` — a background
+    // refetch failing must not discard the already-rendered table.
+    const { data: demoRequests = [], isLoading, error, isLoadingError } = useAdminDemoRequests();
     const updateStatus = useUpdateDemoRequestStatus();
     const provisionDemoRequest = useProvisionDemoRequest();
 
@@ -224,11 +226,11 @@ export default function AdminDemoRequestsPage() {
             {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
             {error && <p className="text-sm text-bad">Error: {(error as Error).message}</p>}
 
-            {!isLoading && !error && demoRequests.length === 0 && (
+            {!isLoading && !isLoadingError && demoRequests.length === 0 && (
                 <p className="text-sm text-ink-3">No demo requests yet.</p>
             )}
 
-            {!isLoading && !error && demoRequests.length > 0 && (
+            {!isLoading && !isLoadingError && demoRequests.length > 0 && (
                 <div className="overflow-x-auto -mx-4 px-4">
                     <table className="w-full text-sm border-collapse min-w-[1350px]">
                         <thead>

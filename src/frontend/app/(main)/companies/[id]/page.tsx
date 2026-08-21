@@ -57,7 +57,7 @@ export default function CompanyPage() {
     const companyId = params.id;
     const router = useRouter();
 
-    const { data: company, isLoading, error, refetch } = useCompany(companyId);
+    const { data: company, isLoading, error, isLoadingError, refetch } = useCompany(companyId);
     const updateCompany = useUpdateCompany();
     const updateCompanyStatus = useUpdateCompanyStatus();
     const updateCompanyFollowUp = useUpdateCompanyFollowUp();
@@ -69,7 +69,12 @@ export default function CompanyPage() {
     const { data: readiness, isLoading: isReadinessLoading, error: readinessError } =
         useCompanyReadiness(companyId);
 
-    const { data: logs, error: logsError, refetch: refetchLogs } = useCompanyLogs(companyId);
+    const {
+        data: logs,
+        error: logsError,
+        isLoadingError: isLogsLoadingError,
+        refetch: refetchLogs,
+    } = useCompanyLogs(companyId);
     const addCallLog = useAddCallLog(companyId);
     const updateCallLog = useUpdateCallLog(companyId);
     const deleteCallLog = useDeleteCallLog(companyId);
@@ -77,11 +82,17 @@ export default function CompanyPage() {
     const {
         data: practiceCalls,
         error: practiceCallsError,
+        isLoadingError: isPracticeCallsLoadingError,
         refetch: refetchPracticeCalls,
     } = useCompanyPracticeCalls(companyId);
     const { data: recentGoals } = useRecentGoals(companyId);
 
-    const { data: contacts, error: contactsError, refetch: refetchContacts } = useCompanyContacts(companyId);
+    const {
+        data: contacts,
+        error: contactsError,
+        isLoadingError: isContactsLoadingError,
+        refetch: refetchContacts,
+    } = useCompanyContacts(companyId);
     const addContact = useAddCompanyContact(companyId);
     const updateContact = useUpdateCompanyContact(companyId);
     const deleteContact = useDeleteCompanyContact(companyId);
@@ -121,7 +132,10 @@ export default function CompanyPage() {
     }
 
     const isNotFound = error instanceof ApiError && error.status === 404;
-    if (error) {
+    // R-6 (Q-14): gate the full-page replacement on `isLoadingError` (first load failed, no
+    // data) rather than bare `error` — a background refetch failing while `company` is already
+    // loaded must not discard the page in favour of this error screen.
+    if (isLoadingError && error) {
         if (isNotFound) {
             return (
                 <div className="page" style={{ padding: "60px 24px" }}>
@@ -304,7 +318,9 @@ export default function CompanyPage() {
 
             <CompanyContactsCard
                 contacts={contacts ?? []}
-                errorMessage={contactsError ? contactsError.message : null}
+                // R-6 (Q-14): gate on `isLoadingError`, not bare `contactsError` — a background
+                // refetch failure must not replace the already-loaded contacts list with an error.
+                errorMessage={isContactsLoadingError && contactsError ? contactsError.message : null}
                 onRetry={() => refetchContacts()}
                 addingContact={isAddingContact}
                 addContactSubmitting={addContact.isPending}
@@ -324,10 +340,12 @@ export default function CompanyPage() {
                 practiceCalls={practiceCalls ?? []}
                 logs={logs ?? []}
                 contacts={contacts ?? []}
+                // R-6 (Q-14): gate on `isLoadingError`, not bare `logsError`/`practiceCallsError`
+                // — a background refetch failure must not replace the already-loaded timeline.
                 errorMessage={
-                    logsError
+                    isLogsLoadingError && logsError
                         ? logsError.message
-                        : practiceCallsError
+                        : isPracticeCallsLoadingError && practiceCallsError
                           ? practiceCallsError.message
                           : null
                 }
