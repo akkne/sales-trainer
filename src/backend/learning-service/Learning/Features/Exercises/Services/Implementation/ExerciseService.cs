@@ -70,6 +70,45 @@ internal sealed class ExerciseService(
         }
     }
 
+    /// <summary>
+    /// X-11 fix, centralized (R2-10). <c>locked</c>/<c>available</c> is derived on every read from
+    /// completion facts, not trusted from the stored row alone: <c>UnlockNextLessonInTopicAsync</c>
+    /// only ever writes an <c>Available</c> row on the one transition into <c>Completed</c>, so an
+    /// account whose progress predates that write (or a boundary it didn't yet cover) would otherwise
+    /// be stuck forever. Walking <paramref name="orderedLessonIds"/> — which must already be in play
+    /// order for one contiguous unlock chain (e.g. one skill's lessons, topic by topic) — and unlocking
+    /// any <c>Locked</c>-or-absent lesson right after a completed one makes the learner-visible state
+    /// self-heal on the next read. A stored status of <c>Available</c>, <c>InProgress</c> or
+    /// <c>Completed</c> always wins over the derived default, so this can only ever unlock, never lock
+    /// a lesson that was already reachable.
+    /// </summary>
+    private static List<string> DeriveLessonStatuses(
+        IReadOnlyList<Guid> orderedLessonIds,
+        Dictionary<Guid, UserLessonProgress> lessonProgressByLessonId)
+    {
+        var statuses = new List<string>(orderedLessonIds.Count);
+        var previousLessonCompleted = true; // the first lesson of the walk is always reachable
+
+        foreach (var lessonId in orderedLessonIds)
+        {
+            lessonProgressByLessonId.TryGetValue(lessonId, out var progressRecord);
+            var storedStatus = progressRecord?.Status;
+
+            var status = storedStatus switch
+            {
+                LessonProgressStatuses.Available => LessonProgressStatuses.Available,
+                LessonProgressStatuses.InProgress => LessonProgressStatuses.InProgress,
+                LessonProgressStatuses.Completed => LessonProgressStatuses.Completed,
+                _ => previousLessonCompleted ? LessonProgressStatuses.Available : LessonProgressStatuses.Locked,
+            };
+
+            previousLessonCompleted = storedStatus == LessonProgressStatuses.Completed;
+            statuses.Add(status);
+        }
+
+        return statuses;
+    }
+
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -80,8 +119,11 @@ internal sealed class ExerciseService(
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
-        var topicOrderById = await databaseContext.Topics
-            .ToDictionaryAsync(topic => topic.Id, topic => topic.OrderInSkill, cancellationToken);
+        var topics = await databaseContext.Topics
+            .Select(topic => new { topic.Id, topic.SkillId, topic.OrderInSkill })
+            .ToListAsync(cancellationToken);
+        var topicOrderById = topics.ToDictionary(topic => topic.Id, topic => topic.OrderInSkill);
+        var topicSkillById = topics.ToDictionary(topic => topic.Id, topic => topic.SkillId);
 
         var allLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .ToListAsync(cancellationToken))
@@ -89,6 +131,24 @@ internal sealed class ExerciseService(
             .ThenBy(lesson => lesson.OrderInTopic)
             .ThenBy(lesson => lesson.Id)
             .ToList();
+
+        // X-11 (R2-10): derived per skill, not across the whole cross-skill list — a skill's first
+        // lesson must stay reachable regardless of whether some other skill's last lesson is
+        // completed, so each skill gets its own independent walk (see DeriveLessonStatuses above).
+        var lessonStatusById = new Dictionary<Guid, string>();
+        foreach (var skillGroup in allLessons.GroupBy(lesson => topicSkillById.GetValueOrDefault(lesson.TopicId)))
+        {
+            var orderedLessonIds = skillGroup
+                .OrderBy(lesson => topicOrderById.GetValueOrDefault(lesson.TopicId))
+                .ThenBy(lesson => lesson.OrderInTopic)
+                .ThenBy(lesson => lesson.Id)
+                .Select(lesson => lesson.Id)
+                .ToList();
+
+            var statuses = DeriveLessonStatuses(orderedLessonIds, lessonProgressByLessonId);
+            for (var i = 0; i < orderedLessonIds.Count; i++)
+                lessonStatusById[orderedLessonIds[i]] = statuses[i];
+        }
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
@@ -103,7 +163,7 @@ internal sealed class ExerciseService(
                 OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById.GetValueOrDefault(lesson.TopicId),
-                progressRecord?.Status ?? LessonProgressStatuses.Locked,
+                lessonStatusById.GetValueOrDefault(lesson.Id, LessonProgressStatuses.Locked),
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
@@ -145,15 +205,56 @@ internal sealed class ExerciseService(
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
-        var topicOrder = await databaseContext.Topics
-            .Where(topic => topic.Id == topicId)
-            .Select(topic => (int?)topic.OrderInSkill)
-            .FirstOrDefaultAsync(cancellationToken) ?? 0;
+        var topic = await databaseContext.Topics
+            .Where(candidate => candidate.Id == topicId)
+            .Select(candidate => new { candidate.SkillId, candidate.OrderInSkill })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var allLessons = await databaseContext.Lessons.ResolveOverrides(databaseContext)
-            .Where(lesson => lesson.TopicId == topicId)
-            .OrderBy(lesson => lesson.OrderInTopic)
-            .ToListAsync(cancellationToken);
+        var topicOrder = topic?.OrderInSkill ?? 0;
+
+        // X-11 (R2-10): this topic's first lesson can only be correctly locked/unlocked by walking
+        // the *whole skill's* lessons in play order — it depends on whether the previous topic was
+        // completed, which this topic's own rows can never tell us — so the whole skill is loaded
+        // (same cost GetLessonsForSkillAsync already pays for the same reason) and only then
+        // filtered down to this topic.
+        List<Lesson> allLessons;
+        Dictionary<Guid, string> lessonStatusById;
+
+        if (topic is null)
+        {
+            allLessons = [];
+            lessonStatusById = new Dictionary<Guid, string>();
+        }
+        else
+        {
+            var siblingTopics = await databaseContext.Topics
+                .Where(candidate => candidate.SkillId == topic.SkillId)
+                .Select(candidate => new { candidate.Id, candidate.OrderInSkill })
+                .ToListAsync(cancellationToken);
+
+            var topicOrderById = siblingTopics.ToDictionary(candidate => candidate.Id, candidate => candidate.OrderInSkill);
+            var topicIds = topicOrderById.Keys.ToList();
+
+            var skillLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
+                .Where(lesson => topicIds.Contains(lesson.TopicId))
+                .ToListAsync(cancellationToken))
+                .OrderBy(lesson => topicOrderById[lesson.TopicId])
+                .ThenBy(lesson => lesson.OrderInTopic)
+                .ThenBy(lesson => lesson.Id)
+                .ToList();
+
+            var orderedLessonIds = skillLessons.Select(lesson => lesson.Id).ToList();
+            var statuses = DeriveLessonStatuses(orderedLessonIds, lessonProgressByLessonId);
+
+            lessonStatusById = new Dictionary<Guid, string>();
+            for (var i = 0; i < orderedLessonIds.Count; i++)
+                lessonStatusById[orderedLessonIds[i]] = statuses[i];
+
+            allLessons = skillLessons
+                .Where(lesson => lesson.TopicId == topicId)
+                .OrderBy(lesson => lesson.OrderInTopic)
+                .ToList();
+        }
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
@@ -168,7 +269,7 @@ internal sealed class ExerciseService(
                 OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrder,
-                progressRecord?.Status ?? LessonProgressStatuses.Locked,
+                lessonStatusById.GetValueOrDefault(lesson.Id, LessonProgressStatuses.Locked),
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
@@ -237,30 +338,21 @@ internal sealed class ExerciseService(
         var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
         var unresolved = new List<string>();
 
+        var statuses = DeriveLessonStatuses(allLessons.Select(lesson => lesson.Id).ToList(), lessonProgressByLessonId);
+
         var summaries = new List<LessonSummaryDto>(allLessons.Count);
-        var previousLessonCompleted = true; // the first lesson is always reachable
 
-        foreach (var lesson in allLessons)
+        for (var i = 0; i < allLessons.Count; i++)
         {
+            var lesson = allLessons[i];
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
-            var storedStatus = progressRecord?.Status;
-
-            var status = storedStatus switch
-            {
-                LessonProgressStatuses.Available => LessonProgressStatuses.Available,
-                LessonProgressStatuses.InProgress => LessonProgressStatuses.InProgress,
-                LessonProgressStatuses.Completed => LessonProgressStatuses.Completed,
-                _ => previousLessonCompleted ? LessonProgressStatuses.Available : LessonProgressStatuses.Locked,
-            };
-
-            previousLessonCompleted = storedStatus == LessonProgressStatuses.Completed;
 
             summaries.Add(new LessonSummaryDto(
                 lesson.Id,
                 OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById[lesson.TopicId],
-                status,
+                statuses[i],
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice)));
         }

@@ -735,10 +735,15 @@ only on the one transition from not-completed to `completed`; an account whose l
 row was already `completed` before that transition happened (or before this unlock chain
 covered a given topic boundary) gets no future transition to fire it, so trusting the stored
 row alone would leave every later lesson `locked` forever with no way to self-correct.
-`ExerciseService.GetLessonsForSkillAsync` (the `GET /skills/{slug}/lessons` read path) instead
-derives `locked`/`available` on every read by walking the skill's lessons in play order and
-unlocking any `locked`-or-absent lesson that immediately follows a lesson whose stored status
-is `completed`. A stored status of `available`, `in_progress` or `completed` always wins over
+`ExerciseService.DeriveLessonStatuses` instead derives `locked`/`available` on every read by
+walking a skill's lessons in play order and unlocking any `locked`-or-absent lesson that
+immediately follows a lesson whose stored status is `completed`. All three lesson-list read
+paths call it — `GetLessonsForSkillAsync` (`GET /skills/{slug}/lessons`), `GetLessonsForTopicAsync`
+(`GET /topics/{id}/lessons`, which loads its topic's whole skill so the topic's own first lesson
+can see whether the previous topic was completed) and `GetAllLessonsAsync` (`GET /lessons`, which
+runs the walk once per skill so one skill's lock state can never leak into another's) — so a
+caller can't end up on a read path that still trusts the stored row alone (R2-10, 2026-08-21).
+A stored status of `available`, `in_progress` or `completed` always wins over
 that derived default, so this can only unlock a lesson, never move one backwards. This makes
 the learner-visible state self-heal on the next tree read with no backfill migration needed —
 deploying the fix is sufficient for every already-stuck account.

@@ -39,13 +39,6 @@ export interface ExerciseSubmissionResult {
     correctAnswer: ExerciseCorrectAnswer | null;
 }
 
-export function useAllLessons() {
-    return useQuery({
-        queryKey: ["lessons", "all"],
-        queryFn: () => apiClient.get<LessonSummary[]>(`/lessons`),
-    });
-}
-
 export function useLessonsForSkill(skillSlug: string | undefined) {
     return useQuery({
         queryKey: ["lessons", skillSlug],
