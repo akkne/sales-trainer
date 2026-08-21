@@ -186,8 +186,9 @@ export default function AdminTopicLessonExercisesPage({
         }
         setValidationErrors((prev) => { const next = { ...prev }; delete next[row.id ?? "__new__"]; return next; });
 
+        let saved: AdminExercise;
         if (row.id) {
-            await updateExerciseMut.mutateAsync({
+            saved = await updateExerciseMut.mutateAsync({
                 exerciseId: row.id,
                 body: {
                     type: row.type,
@@ -197,17 +198,22 @@ export default function AdminTopicLessonExercisesPage({
                 },
             });
         } else {
-            await createMut.mutateAsync({
+            saved = await createMut.mutateAsync({
                 type: row.type,
                 orderInLesson: row.sortOrder,
                 content: row.content as unknown as Record<string, unknown>,
                 customAiPrompt: null,
             });
         }
-        // Wait for the refetch so the server's copy is in hand before we drop localRows,
-        // otherwise the list would flash back to the pre-save state for a moment.
         await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
-        setLocalRows(null);
+        // Only reconcile the row we just saved with the server's copy - other rows may still
+        // carry unsaved edits in the shadow copy and must not be discarded (R-11).
+        setRows((prev) => prev.map((r) => (r === row ? {
+            id: saved.id,
+            type: saved.type as ExerciseType,
+            sortOrder: saved.orderInLesson,
+            content: saved.content as unknown as ExerciseContent,
+        } : r)));
         setEditingId(null);
     }
 
@@ -267,18 +273,20 @@ export default function AdminTopicLessonExercisesPage({
     function deleteRow(id: string | null) {
         if (!id) return;
         if (!confirm("Delete this exercise?")) return;
-        const previousRows = rows;
+        const deletedRow = rows.find((r) => r.id === id);
         setRows(rows.filter((r) => r.id !== id));
         if (editingId === id) setEditingId(null);
         deleteMut.mutate(id, {
             onSuccess: async () => {
-                // Drop the local shadow now that the server agrees the row is gone -
-                // otherwise localRows keeps overriding every future refetch forever.
                 await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
-                setLocalRows(null);
             },
             onError: () => {
-                setRows(previousRows);
+                // Re-insert only the row this delete removed, not a whole-list snapshot that
+                // could resurrect a different row a concurrent delete already removed (R-12).
+                if (!deletedRow) return;
+                setRows((prev) => prev.some((r) => r.id === id)
+                    ? prev
+                    : [...prev, deletedRow].sort((a, b) => a.sortOrder - b.sortOrder));
             },
         });
     }
