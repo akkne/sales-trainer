@@ -74,7 +74,18 @@ export function useInitAuth() {
                 isOnboardingCompleted: boolean;
             }>("/auth/me")
             .then((user) => setAuthenticatedUser(user))
-            .catch(() => clearAuthSession());
+            .catch((error: unknown) => {
+                // R2-5: only an explicit auth rejection means this session is actually over — a
+                // transient failure (network error, timeout, 500) must not set the sticky
+                // `authSessionTerminated` marker, or a momentary blip disables silent token
+                // refresh for good. `fetchWithAuthToken` already throws `SessionExpiredError`
+                // when a 401 survives a refresh attempt; a plain `ApiError` with status 401 can
+                // also reach here if `/auth/me` itself rejects the token outright.
+                const isAuthRejection =
+                    error instanceof SessionExpiredError ||
+                    (error instanceof ApiError && error.status === 401);
+                clearAuthSession({ terminated: isAuthRejection });
+            });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken]);
 }
@@ -316,7 +327,10 @@ export function useLogout() {
             );
         },
         onSettled: (_data, error) => {
-            clearAuthSession();
+            // A logout is always a deliberate end of session, regardless of whether the
+            // server-side revoke call itself succeeded — see the sticky marker note on
+            // `clearAuthSession` / `SESSION_TERMINATED_KEY`.
+            clearAuthSession({ terminated: true });
             // R-3: match login's `queryClient.clear()` — otherwise the next person to sign in on
             // this browser (or a token silently restored, see R-1) can briefly render this user's
             // cached data.

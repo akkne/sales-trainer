@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { SESSION_TERMINATED_KEY } from "@/shared/api/api-client";
 
 // Two independent axes, per the owner's 2026-08-16 role split (docs/DECISIONS.md).
 //
@@ -53,7 +54,13 @@ interface AuthStoreState {
     accessToken: string | null;
     setAuthenticatedUser: (user: AuthenticatedUser) => void;
     setAccessToken: (token: string) => void;
-    clearAuthSession: () => void;
+    /**
+     * R2-5: `terminated` must be true only when the session is deliberately ending (logout, or
+     * an explicit auth rejection like a 401 from `/auth/me`) — never for a transient failure
+     * (network error, timeout, 500), which must leave silent token refresh available for the
+     * next request. Defaults to false so a careless call cannot accidentally re-introduce R-1.
+     */
+    clearAuthSession: (options?: { terminated?: boolean }) => void;
 }
 
 export const useAuthStore = create<AuthStoreState>((set) => ({
@@ -69,17 +76,20 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
         localStorage.setItem("accessToken", token);
         // R-1: a fresh access token means a new session legitimately began (login/register/
         // Google sign-in) — un-terminate so the next 401 is allowed to refresh normally again.
-        // Keep this key name in sync with `SESSION_TERMINATED_KEY` in shared/api/api-client.ts.
-        localStorage.removeItem("authSessionTerminated");
+        localStorage.removeItem(SESSION_TERMINATED_KEY);
         set({ accessToken: token });
     },
 
-    clearAuthSession: () => {
+    clearAuthSession: (options) => {
         localStorage.removeItem("accessToken");
-        // R-1: mark the session as deliberately ended so a leftover refresh-cookie (e.g. because
-        // the server-side POST /auth/logout revoke failed) cannot silently mint a new access
-        // token on the next 401 — see `attemptTokenRefresh` in shared/api/api-client.ts.
-        localStorage.setItem("authSessionTerminated", "1");
+        if (options?.terminated) {
+            // R-1: mark the session as deliberately ended so a leftover refresh-cookie (e.g.
+            // because the server-side POST /auth/logout revoke failed) cannot silently mint a
+            // new access token on the next 401 — see `attemptTokenRefresh` in
+            // shared/api/api-client.ts. R2-5: callers must pass this only for a genuine logout
+            // or an explicit auth rejection, never for a transient failure.
+            localStorage.setItem(SESSION_TERMINATED_KEY, "1");
+        }
         set({ authenticatedUser: null, accessToken: null });
     },
 }));

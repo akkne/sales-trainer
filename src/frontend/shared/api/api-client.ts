@@ -48,16 +48,21 @@ export class SessionExpiredError extends Error {
 }
 
 /**
- * R-1: set by `useAuthStore.clearAuthSession()` whenever the client deliberately ends a session
- * (logout, or `/auth/me` rejecting the stored token) — regardless of whether the server-side
- * revoke call itself succeeded. As long as this flag is set, `attemptTokenRefresh` below refuses
- * to mint a new access token from a leftover refresh-cookie, so a failed `POST /auth/logout`
- * cannot be silently undone by the very next request's 401. Cleared by `useAuthStore.setAccessToken`
- * on the next successful login, which is the only place a new session legitimately begins — the
- * ordinary "access token merely expired, refresh cookie is still good" refresh on a *live* session
- * never sets this flag, so that path is unaffected.
+ * R-1: set by `useAuthStore.clearAuthSession({ terminated: true })` whenever the client
+ * deliberately ends a session — a real logout, or `/auth/me` explicitly rejecting the stored
+ * token (401) — regardless of whether the server-side revoke call itself succeeded. As long as
+ * this flag is set, `attemptTokenRefresh` below refuses to mint a new access token from a
+ * leftover refresh-cookie, so a failed `POST /auth/logout` cannot be silently undone by the very
+ * next request's 401. Cleared by `useAuthStore.setAccessToken` on the next successful login,
+ * which is the only place a new session legitimately begins — the ordinary "access token merely
+ * expired, refresh cookie is still good" refresh on a *live* session never sets this flag, so
+ * that path is unaffected.
+ *
+ * R2-5: a *transient* failure (network error, timeout, 500) is not a deliberate end of session —
+ * callers must not set this flag for those, or a momentary blip permanently disables refresh.
+ * Exported so `useAuthStore` never has to duplicate the literal (R2-6).
  */
-const SESSION_TERMINATED_KEY = "authSessionTerminated";
+export const SESSION_TERMINATED_KEY = "authSessionTerminated";
 
 export interface ApiRequestOptions {
     /** Abort the request after this many milliseconds and throw `RequestTimeoutError`. */

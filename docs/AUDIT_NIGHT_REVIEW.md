@@ -816,7 +816,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
   а перемешивание — уехать на сервер (или сервер должен отдавать готовый `shuffledOrder`):
   клиент принципиально не может проверить свою перестановку против ответа, которого у него нет.
 
-### [ ] R2-5 разовый сбой `/auth/me` навсегда выключает молчаливое обновление токена
+### [x] R2-5 разовый сбой `/auth/me` навсегда выключает молчаливое обновление токена
 - **Коммит/файл:** `8f98116a`; `src/frontend/features/auth/hooks/use-auth.ts:77`,
   `src/frontend/shared/stores/auth-store.ts:82`, `src/frontend/shared/api/api-client.ts:60, 131`
 - **Что не так:** `useInitAuth` делает `.catch(() => clearAuthSession())` на **любой** отказ
@@ -833,7 +833,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Как править:** ставить маркер только на пути логаута и на явном отказе аутентификации
   (`SessionExpiredError` / `ApiError` со `status === 401`), а не на любом отказе `/auth/me`.
 
-### [ ] R2-6 ключ `authSessionTerminated` продублирован строковым литералом в двух файлах
+### [x] R2-6 ключ `authSessionTerminated` продублирован строковым литералом в двух файлах
 - **Коммит/файл:** `8f98116a`; `src/frontend/shared/api/api-client.ts:60`
   (`const SESSION_TERMINATED_KEY`, не экспортируется) против
   `src/frontend/shared/stores/auth-store.ts:73, 82` (литерал `"authSessionTerminated"`)
