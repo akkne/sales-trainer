@@ -414,19 +414,19 @@ A-1…A-11 выше) в этой секции не дублируются. В ч
 отсутствуют полностью (прогон по всем 21 уроку через `GET /admin/lessons/{id}/exercises`), поэтому
 проверить их через интерфейс невозможно — см. «Не проверено».
 
-### [ ] X-1 Подсказка в «Расставь по порядку» обещает управление стрелками ↑↓, которого нет
+### [x] X-1 Подсказка в «Расставь по порядку» обещает управление стрелками ↑↓, которого нет
 - **Где:** `/session/3e307adc-bc1f-426d-aa7d-f312c9fd09f8` (урок «Как устроено сопротивление: связки»), тип `reorder`; `features/exercise/components/reorder-exercise.tsx:223`
 - **Что делал:** переставил элементы кнопками «Выше»/«Ниже» (работают, крайние кнопки корректно `disabled`), затем нажал ↑ и ↓ реальными нажатиями клавиш при фокусе на строке и на body; проверил исходник.
 - **Что произошло:** порядок не меняется ни от одной стрелки. В компоненте нет ни одного обработчика клавиатуры: `grep -rn "ArrowUp\|ArrowDown" src/frontend/features/exercise/` находит только `theory-lesson-player.tsx` (ArrowLeft/ArrowRight для карточек). Строки — это `<div draggable>` без `tabIndex` и без `role`, то есть сфокусировать строку и подать ей событие вообще нельзя. Единственный способ переставить — кнопки. При этом футер печатает «↑↓ порядок · Enter — проверить». Enter в проде тоже не работает, но это уже закрыто локально (`features/exercise/hooks/use-enter-action.ts`), а вот стрелок нет и в текущем исходнике.
 - **Ожидалось:** либо ↑/↓ действительно переставляют выбранный элемент, либо подсказка не обещает того, чего нет.
 - **Слой:** frontend
 - **Severity:** minor
-- **Skipped (2026-08-21):** the fix (real fix or hint-copy fix) has to touch
-  `features/exercise/components/reorder-exercise.tsx`, which another agent is actively rewriting
-  in the same session (shuffle logic for X-2/X-3, plus the correct-answer reveal for X-6/X-8/etc.
-  already landed in `116704eb`). Left open rather than risk colliding on that file — see
-  `docs/NIGHT_AUDIT_QUESTIONS.md` for the coordination note if a decision is needed on which fix
-  (implement ↑/↓ vs. drop the hint copy) is preferred.
+- **Resolved (2026-08-21):** the file-owning agent finished, so this landed for real rather than
+  dropping the hint copy. Each row in `reorder-exercise.tsx` is now `tabIndex={0}` (while not yet
+  answered) with an `onKeyDown` that calls the same `moveItem` the ↑/↓ buttons already used;
+  because the moved item keeps its React `key`, focus stays on it across the reorder, so repeated
+  arrow presses keep walking it up/down. Enter already worked via the pre-existing
+  `use-enter-action.ts` wiring, so the hint text now describes real behavior end to end.
 
 ### [x] X-2 `reorder`: перемешивание может выдать элементы уже в правильном порядке — упражнение решается нажатием «Проверить» без единого действия
 - **Где:** `/session/3e307adc-bc1f-426d-aa7d-f312c9fd09f8`, круг «Работа над ошибками», упражнение `3ec6a5a2-63b7-4dab-a7d1-f6d62baee7c7`; `features/exercise/components/reorder-exercise.tsx:37-44`

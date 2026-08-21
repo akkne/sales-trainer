@@ -794,7 +794,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Как править:** сверять сохранённую строку по `id` (для create — по временному ключу), а не
   по ссылке, и вернуть сброс теневой копии там, где локальных несохранённых правок больше нет.
 
-### [ ] R2-4 X-2 закрыт не полностью: защита от «перемешали в правильный порядок» сравнивает с авторским порядком массива, а не с верным
+### [x] R2-4 X-2 закрыт не полностью: защита от «перемешали в правильный порядок» сравнивает с авторским порядком массива, а не с верным
 - **Коммит/файл:** `116704eb` (галочка X-2 — `bddf08ae`);
   `src/frontend/features/exercise/components/reorder-exercise.tsx:11, 39-46`
 - **Что не так:** тип объявляет `correct_position: number`, но `StripAnswerKeyFields` вырезает
@@ -815,6 +815,16 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Как править:** на ученической стороне тип должен запрещать поле (`correct_position?: never`),
   а перемешивание — уехать на сервер (или сервер должен отдавать готовый `shuffledOrder`):
   клиент принципиально не может проверить свою перестановку против ответа, которого у него нет.
+- **Resolved (2026-08-21):** contract intentionally kept as-is — the correct answer still only
+  ever arrives in the submit *result*, never in the exercise payload, so a server-side
+  `shuffledOrder` was out of scope here. Instead: `ReorderItem` in `reorder-exercise.tsx` no
+  longer declares `correct_position` at all (it is honestly absent from the learner payload), and
+  the guard now compares the shuffle against the array's own arrival order (`identityIndices`)
+  instead of a "guess" built from a field that is always `undefined` at runtime. This is the same
+  honest limit the review names: the client cannot check its shuffle against the real solved
+  order pre-submit, so the guard's only truthful job is refusing to hand back the exact order the
+  content arrived in (falling back to a rotation on the rare shuffle that lands there anyway).
+  `src/frontend/features/exercise/components/reorder-exercise.tsx`.
 
 ### [x] R2-5 разовый сбой `/auth/me` навсегда выключает молчаливое обновление токена
 - **Коммит/файл:** `8f98116a`; `src/frontend/features/auth/hooks/use-auth.ts:77`,

@@ -6,9 +6,10 @@ import { Icon } from "@/shared/components/icon";
 import { ExerciseResultBanner } from "./exercise-result-banner";
 import { ExerciseActionFooter } from "./exercise-action-footer";
 
+// The learner API strips `correct_position` from every item (docs/AUDIT_PROD.md X-3), so this
+// type must not promise a field the runtime value never has (docs/AUDIT_NIGHT_REVIEW.md R2-4).
 interface ReorderItem {
     text: string;
-    correct_position: number;
 }
 
 interface ReorderContent {
@@ -36,22 +37,20 @@ export function ReorderExercise({
     submittedResult,
     submitError,
 }: ReorderExerciseProps) {
-    // Best guess at the "solved" order before an answer exists: the learner content strips
-    // `correct_position` (docs/AUDIT_PROD.md X-3), so this is only ever the authored array order —
-    // used solely to guard the initial shuffle (X-2) against dealing that same order back out.
-    const preSubmitCorrectOrderGuess = useMemo(() => {
-        return content.items
-            .map((item, idx) => ({ idx, pos: item.correct_position }))
-            .sort((a, b) => a.pos - b.pos)
-            .map(x => x.idx);
-    }, [content.items]);
+    // The array order the exercise content arrives in — the only order the client actually has
+    // pre-submit. `correct_position` never reaches this component (see the `ReorderItem` comment
+    // above), so the client fundamentally cannot know the real solved order before submitting
+    // (docs/AUDIT_NIGHT_REVIEW.md R2-4): it has nothing trustworthy to check its shuffle against.
+    const identityIndices = useMemo(() => content.items.map((_, i) => i), [content.items]);
 
-    // X-2: a plain Fisher–Yates shuffle can deal the items back out already in the correct order,
-    // so "Проверить" would score 100% with no work done. Guarantee the starting arrangement differs
-    // from the (best guess at the) solved one, falling back to a rotation — which always differs
-    // from the original for 2+ distinct indices — if the shuffle happened to land on it anyway.
+    // X-2: a plain Fisher–Yates shuffle can deal the items back out in the same order they arrived
+    // in, so a learner who never touches anything still sees an arrangement that happens to match
+    // the input array. Since the real correct order is unknowable here (R2-4), the only thing this
+    // guard can honestly guarantee is that the starting arrangement differs from the arrival order —
+    // falling back to a rotation, which always differs from the original for 2+ distinct indices,
+    // if the shuffle happened to land on it anyway.
     const shuffledIndices = useMemo(() => {
-        const indices = content.items.map((_, i) => i);
+        const indices = [...identityIndices];
         if (indices.length <= 1) return indices; // degenerate: nothing to reorder
 
         for (let i = indices.length - 1; i > 0; i--) {
@@ -59,15 +58,15 @@ export function ReorderExercise({
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        const isAlreadySolved = indices.every(
-            (value, position) => value === preSubmitCorrectOrderGuess[position]
+        const isUnshuffled = indices.every(
+            (value, position) => value === identityIndices[position]
         );
-        if (isAlreadySolved) {
+        if (isUnshuffled) {
             return [...indices.slice(1), indices[0]];
         }
 
         return indices;
-    }, [content.items, preSubmitCorrectOrderGuess]);
+    }, [identityIndices]);
 
     const [orderedIndices, setOrderedIndices] = useState<number[]>(shuffledIndices);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -75,8 +74,10 @@ export function ReorderExercise({
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
     // X-3: the learner content strips `correct_position`, so row marking after answering must use
-    // the correct order the server hands back in the submission result, not this pre-submit guess.
-    const correctOrder = submittedResult?.correctAnswer?.order ?? preSubmitCorrectOrderGuess;
+    // the correct order the server hands back in the submission result. Pre-submit there is no
+    // correct order to mark rows against at all (R2-4) — the fallback below is only ever read
+    // while `isAnswered` is false, where `showCorrect`/`showWrong` are already gated off.
+    const correctOrder = submittedResult?.correctAnswer?.order ?? identityIndices;
 
     function handleDragStart(index: number) {
         if (isAnswered) return;
@@ -146,9 +147,21 @@ export function ReorderExercise({
                         <div
                             key={itemIdx}
                             draggable={!isAnswered}
+                            tabIndex={isAnswered ? undefined : 0}
+                            aria-label={isAnswered ? undefined : `${item.text}, позиция ${position + 1} из ${orderedIndices.length}. Стрелки вверх/вниз — переместить.`}
                             onDragStart={() => handleDragStart(position)}
                             onDragOver={(e) => handleDragOver(e, position)}
                             onDragEnd={handleDragEnd}
+                            onKeyDown={(e) => {
+                                if (isAnswered) return;
+                                if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    moveItem(position, "up");
+                                } else if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    moveItem(position, "down");
+                                }
+                            }}
                             style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -157,6 +170,7 @@ export function ReorderExercise({
                                 background: bgColor,
                                 border: `1px solid ${borderColor}`,
                                 borderRadius: 12,
+                                outlineOffset: 2,
                                 cursor: isAnswered ? "default" : "grab",
                             }}
                         >
