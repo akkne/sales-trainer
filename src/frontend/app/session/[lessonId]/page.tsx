@@ -243,6 +243,7 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
             <MistakesIntroScreen
                 mistakeCount={mistakeExercises.length}
                 onStart={handleStartMistakesReview}
+                exitHref={exitHref}
             />
         );
     }
@@ -546,9 +547,14 @@ function CompletionScreen({ accuracyPercent, durationSeconds, onBack, eyebrow = 
 interface MistakesIntroScreenProps {
     mistakeCount: number;
     onStart: () => void;
+    exitHref: string;
 }
 
-function MistakesIntroScreen({ mistakeCount, onStart }: MistakesIntroScreenProps) {
+// X-9: this used to be the only screen in the session flow with a single button and no
+// way out (no "✕", no back-to-tree link) — give it the same "✕" → exitHref every other
+// session screen (queue, empty-list guard, error state, completion) already has.
+function MistakesIntroScreen({ mistakeCount, onStart, exitHref }: MistakesIntroScreenProps) {
+    const router = useRouter();
     // Enter presses the primary CTA ("Начать работу над ошибками").
     useEnterAction(onStart);
 
@@ -558,27 +564,39 @@ function MistakesIntroScreen({ mistakeCount, onStart }: MistakesIntroScreenProps
             : "упражнениях";
 
     return (
-        <div className="complete">
-            <div className="complete-inner">
-                <div className="check-circle" style={{ background: "var(--amber)" }}>
-                    <Icon name="target" size={44} color="#fff" />
-                </div>
-
-                <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 8 }}>
-                    Работа над ошибками
-                </div>
-                <h1 className="h1" style={{ margin: "0 0 16px", fontSize: 26, letterSpacing: "-0.02em" }}>
-                    Теперь обработаем ошибки
-                </h1>
-                <p style={{ margin: "0 0 28px", color: "var(--ink-3)", lineHeight: 1.5 }}>
-                    Вы прошли все упражнения! В {mistakeCount} {exercisesWord} были ошибки — давайте
-                    разберём их ещё раз, чтобы закрепить материал.
-                </p>
-
-                <button className="btn btn-primary btn-lg btn-block" onClick={onStart}>
-                    Начать работу над ошибками
-                    <Icon name="arrow-right" size={18} />
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+            <div className="session-top">
+                <button
+                    className="icon-btn"
+                    onClick={() => router.push(exitHref)}
+                    aria-label="Выйти"
+                    style={{ flex: "none" }}
+                >
+                    <Icon name="close" size={20} />
                 </button>
+            </div>
+            <div className="complete" style={{ flex: 1, minHeight: 0 }}>
+                <div className="complete-inner">
+                    <div className="check-circle" style={{ background: "var(--amber)" }}>
+                        <Icon name="target" size={44} color="#fff" />
+                    </div>
+
+                    <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 8 }}>
+                        Работа над ошибками
+                    </div>
+                    <h1 className="h1" style={{ margin: "0 0 16px", fontSize: 26, letterSpacing: "-0.02em" }}>
+                        Теперь обработаем ошибки
+                    </h1>
+                    <p style={{ margin: "0 0 28px", color: "var(--ink-3)", lineHeight: 1.5 }}>
+                        Вы прошли все упражнения! В {mistakeCount} {exercisesWord} были ошибки — давайте
+                        разберём их ещё раз, чтобы закрепить материал.
+                    </p>
+
+                    <button className="btn btn-primary btn-lg btn-block" onClick={onStart}>
+                        Начать работу над ошибками
+                        <Icon name="arrow-right" size={18} />
+                    </button>
+                </div>
             </div>
         </div>
     );
