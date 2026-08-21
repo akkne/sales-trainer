@@ -370,7 +370,7 @@
   из репозитория не проверить — переменная не задана даже в локальном окружении, `docker compose
   config` предупредил «INTERNAL_SERVICE_SECRET is not set»)
 
-### [ ] R-18 `[TenantScoped]` на learner-контроллерах ломает demo-token
+### [x] R-18 `[TenantScoped]` на learner-контроллерах ломает demo-token
 - **Коммит/файл:** `846c020`;
   `src/backend/building-blocks/BuildingBlocks/Tenancy/TenantContextMiddleware.cs:51-57`,
   `src/backend/identity-service/Identity/Features/Auth/DemoTokenController.cs:36-48`
@@ -389,6 +389,23 @@
 - **Severity:** minor (dev-only, но инвариант в коде теперь ложный)
 - **Уверенность:** точно по коду; фронтенд `POST /demo/token` не вызывает, так что это ручной
   dev-инструмент
+- **Resolved (commit `3ce8b8f8`):** added `DemoCallers` (`BuildingBlocks/Tenancy/DemoCallers.cs`),
+  mirroring `PlatformRoles` — a single source for the `isDemo` claim and an
+  `IsDemoCaller(principal)` predicate. `TenantContextMiddleware` now treats a demo caller as a
+  third gate exemption alongside platform staff, but a narrower one: it passes `[TenantScoped]`
+  without entering platform-wide mode and without an organization, so `ITenantContext` stays in
+  the same "neither org nor platform-wide" state `TenantConnectionInterceptor` already treats as
+  fail-closed (RLS GUCs unset, EF query filters resolve to global-content-only or empty rows) —
+  the state a non-tenant-scoped route already left it in before `846c020`. No isolation guarantee
+  for real tenants widens; the exemption only lets the demo caller past the 403 gate.
+  `DemoTokenController` now mints the claim from `DemoCallers.IsDemoClaimType` instead of its own
+  private duplicate constant. Verified: `building-blocks/BuildingBlocks.Tests` 119/0 (4 skipped,
+  need live Postgres), `identity-service/Identity.Tests` 136/0, `learning-service/Learning.Tests`
+  90/0, `company-service/Company.Tests` 135/0, `route-parity/RouteParity.Tests` 5/0, both tenancy
+  lints clean. `ai-service` build is currently red from an unrelated concurrent agent's in-progress
+  work on the ai→learning skill lookup (untracked `SkillCatalogCache.cs` referencing a config
+  property not yet added) — confirmed via `git stash` that the failure exists independent of this
+  fix, out of scope here per the run's file-ownership split.
 
 ### [ ] R-19 В коммит «apply [TenantScoped]» въехало расширение tenancy-границы, не упомянутое в сообщении
 - **Коммит/файл:** `846c020`;
