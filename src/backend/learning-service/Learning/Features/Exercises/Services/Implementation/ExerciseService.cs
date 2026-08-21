@@ -185,10 +185,16 @@ internal sealed class ExerciseService(
     /// not the same fact and the controller reports them as a 404 and a 200 respectively.
     ///
     /// <para>
-    /// <b>The first lesson is offered even with no progress row; the rest start locked.</b> That is
-    /// what makes a freshly enrolled skill enterable at all. Any existing progress row wins over the
-    /// default, so the unlock chain written by <c>UnlockNextLessonInTopicAsync</c> is never overridden
-    /// here.
+    /// <b>Locked/Available is derived from completion facts on every read, not trusted from the stored
+    /// row alone (X-11).</b> <c>UnlockNextLessonInTopicAsync</c> still writes an <c>Available</c> row
+    /// eagerly when a lesson transitions to <c>Completed</c>, but that write only ever fires on that one
+    /// transition. An account whose progress row was already <c>Completed</c> before the unlock-on-
+    /// transition chain existed (or before it covered a given boundary) has no future transition left to
+    /// fire it, so trusting the stored row alone would leave it permanently stuck. Walking the lessons in
+    /// play order here and unlocking any <c>Locked</c>-or-absent lesson right after a completed one makes
+    /// the learner-visible state self-heal on the very next read, with no backfill required. A stored
+    /// status of <c>Available</c>, <c>InProgress</c> or <c>Completed</c> always wins over the derived
+    /// default, so this can only ever unlock — it never moves a lesson backwards.
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<LessonSummaryDto>?> GetLessonsForSkillAsync(
@@ -228,26 +234,36 @@ internal sealed class ExerciseService(
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
-        var isFirstLesson = true;
-
         var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
         var unresolved = new List<string>();
 
-        var summaries = allLessons.Select(lesson =>
+        var summaries = new List<LessonSummaryDto>(allLessons.Count);
+        var previousLessonCompleted = true; // the first lesson is always reachable
+
+        foreach (var lesson in allLessons)
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
-            var status = progressRecord?.Status
-                ?? (isFirstLesson ? LessonProgressStatuses.Available : LessonProgressStatuses.Locked);
-            isFirstLesson = false;
-            return new LessonSummaryDto(
+            var storedStatus = progressRecord?.Status;
+
+            var status = storedStatus switch
+            {
+                LessonProgressStatuses.Available => LessonProgressStatuses.Available,
+                LessonProgressStatuses.InProgress => LessonProgressStatuses.InProgress,
+                LessonProgressStatuses.Completed => LessonProgressStatuses.Completed,
+                _ => previousLessonCompleted ? LessonProgressStatuses.Available : LessonProgressStatuses.Locked,
+            };
+
+            previousLessonCompleted = storedStatus == LessonProgressStatuses.Completed;
+
+            summaries.Add(new LessonSummaryDto(
                 lesson.Id,
                 OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById[lesson.TopicId],
                 status,
                 progressRecord?.BestScore ?? 0,
-                lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
-        }).ToList();
+                lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice)));
+        }
 
         LogUnresolved(unresolved);
 

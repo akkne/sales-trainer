@@ -720,8 +720,8 @@ not run against anything either.
 ## Lesson progression / unlocking
 
 Lessons unlock sequentially. On the first correct/attempted submission that transitions a
-lesson to `completed`, `ExerciseService.UnlockNextLessonInTopicAsync` marks the **next**
-lesson `Available` (creating its `UserLessonProgress` row if missing).
+lesson to `completed`, `ExerciseService.UnlockNextLessonInTopicAsync` eagerly writes the
+**next** lesson's `UserLessonProgress` row as `Available` (creating it if missing).
 
 "Next" is resolved across the whole skill, not just the current topic
 (`ResolveNextLessonInSkillAsync`): the next lesson in the same topic by `OrderInTopic` wins
@@ -729,6 +729,19 @@ first; when a topic's last lesson is completed it **rolls over** to the first le
 (`OrderInTopic`) of the next topic by `Topic.OrderInSkill`. This is what lets the next topic
 open once the current one is finished. Regression covered by
 `ExerciseServiceEventEmissionTests.CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic`.
+
+**The write above is an optimization, not the source of truth (X-11, 2026-08-21).** It fires
+only on the one transition from not-completed to `completed`; an account whose last-lesson
+row was already `completed` before that transition happened (or before this unlock chain
+covered a given topic boundary) gets no future transition to fire it, so trusting the stored
+row alone would leave every later lesson `locked` forever with no way to self-correct.
+`ExerciseService.GetLessonsForSkillAsync` (the `GET /skills/{slug}/lessons` read path) instead
+derives `locked`/`available` on every read by walking the skill's lessons in play order and
+unlocking any `locked`-or-absent lesson that immediately follows a lesson whose stored status
+is `completed`. A stored status of `available`, `in_progress` or `completed` always wins over
+that derived default, so this can only unlock a lesson, never move one backwards. This makes
+the learner-visible state self-heal on the next tree read with no backfill migration needed —
+deploying the fix is sufficient for every already-stuck account.
 
 ## Events produced
 

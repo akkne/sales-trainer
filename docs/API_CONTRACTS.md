@@ -438,8 +438,8 @@ empty state, not its error state, is what should render for it.
 
 **Lesson unlock behavior:**
 - First call to `GET /skills/:slug/lessons` lazy-seeds `UserLessonProgress` rows: lesson 1 → `available`, rest → `locked`.
-- Submitting a correct answer marks the lesson `completed` and sets the next lesson (by `sortOrder`) to `available`.
-- See [LESSON_UNLOCK.md](LESSON_UNLOCK.md) for full details.
+- Submitting an answer that attempts a lesson's last remaining exercise marks the lesson `completed` and eagerly writes the next lesson (by order) to `available`.
+- `locked`/`available` in the `GET /skills/:slug/lessons` response is re-derived on every read from completed-lesson facts, not trusted from the stored row alone (docs/AUDIT_PROD.md X-11): any lesson immediately following a `completed` one is reported `available` even if its own row is still `locked` or missing, so an account whose eager unlock write never fired self-heals on the next read. See `docs/LEARNING_SERVICE.md#lesson-progression--unlocking` for full details.
 
 `ExerciseDto.content` shape by type:
 
