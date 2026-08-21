@@ -244,7 +244,7 @@
   failure), and removed the now-false "no way to reorder" note. Full evidence and correction
   appended to `docs/NIGHT_AUDIT_QUESTIONS.md` Q-8.
 
-### [ ] R-11 `saveExercise` на успехе сбрасывает `localRows` целиком и теряет несохранённые правки других строк
+### [x] R-11 `saveExercise` на успехе сбрасывает `localRows` целиком и теряет несохранённые правки других строк
 - **Коммит/файл:** `316da24`;
   `src/frontend/app/(admin)/admin/lessons/[lessonId]/exercises/page.tsx:204-212` (`await qc.invalidateQueries(...); setLocalRows(null);`),
   `:164-178` (`rows = localRows ?? server`, `setRows` пишет в `localRows`)
@@ -258,7 +258,7 @@
 - **Уверенность:** точно по коду, требует проверки в UI (зависит от того, разрешает ли экран
   оставить A изменённым и уйти на B)
 
-### [ ] R-12 Конкурентные удаления: `onError` одного восстанавливает строку, уже удалённую другим
+### [x] R-12 Конкурентные удаления: `onError` одного восстанавливает строку, уже удалённую другим
 - **Коммит/файл:** `316da24`; те же два файла, `deleteRow`, `:225-243`
   (`const previousRows = rows; … onError: () => setRows(previousRows)`)
 - **Что не так:** `previousRows` — снимок **всего** списка на момент клика. Откат одного
@@ -270,7 +270,7 @@
 - **Severity:** minor
 - **Уверенность:** точно
 
-### [ ] R-13 Composer держит уже «отправленный» текст на экране весь round-trip — реплика видна дважды
+### [x] R-13 Composer держит уже «отправленный» текст на экране весь round-trip — реплика видна дважды
 - **Коммит/файл:** `0ee865a`; `src/frontend/features/dialog/components/chat-input.tsx:18-25`
   (`const succeeded = await onSend(...); if (succeeded) setInputValue("")`),
   `src/frontend/app/dialog/[bundleId]/[modeId]/page.tsx:171` (оптимистичный бабл добавляется
@@ -288,7 +288,7 @@
   `npx tsc --noEmit` чист, «легаси-алиас» `export { RailChatInput as ChatInput }` никем не
   импортируется.
 
-### [ ] R-14 Откат оптимистичного бабла слепо срезает последний элемент, а не свой
+### [x] R-14 Откат оптимистичного бабла слепо срезает последний элемент, а не свой
 - **Коммит/файл:** `0ee865a`; `src/frontend/app/dialog/[bundleId]/[modeId]/page.tsx:188`
   (`setMessages((prev) => prev.slice(0, -1))`), конкурирующие писатели —
   `:298-321` (`handleVoiceTranscript` / `handleVoiceAiResponse`, оба добавляют сообщения и
@@ -492,7 +492,7 @@
   не покрыт юнит-тестами — только пропущенным integration-тестом, `docs/TESTING/PHASE_40_BACKLOG.md`
   строка 54), оба tenancy-линта чисты, `route-parity/RouteParity.Tests` 5/0 (маршруты не менялись).
 
-### [ ] R-21 Корневой `app/not-found.tsx` накрывает и англоязычную `/admin/*`, и формальную `/org/*`
+### [x] R-21 Корневой `app/not-found.tsx` накрывает и англоязычную `/admin/*`, и формальную `/org/*`
 - **Коммит/файл:** `953d598`; `src/frontend/app/not-found.tsx:1-32` (единственный `not-found.tsx`
   в проекте — проверено `find app -name not-found.tsx`)
 - **Что не так:** корневой `not-found` в App Router перехватывает все несовпавшие URL. Текст —
@@ -505,7 +505,7 @@
 - **Severity:** minor
 - **Уверенность:** точно
 
-### [ ] R-22 `aria-pressed` навешен на каждый кликабельный `Chip`, включая не-тогглы
+### [x] R-22 `aria-pressed` навешен на каждый кликабельный `Chip`, включая не-тогглы
 - **Коммит/файл:** `d06ae60`; `src/frontend/shared/components/chip.tsx:60-72`
 - **Что не так:** `aria-pressed={active}` выставляется всегда, когда передан `onClick`.
   `active` по умолчанию `false`, поэтому любой чип-действие (не переключатель) объявляется
