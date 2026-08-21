@@ -620,7 +620,7 @@ function TheoryLessonFlow({ exercises, exitHref }: { exercises: ExerciseData[]; 
 
 function SessionRouter({ lessonId }: { lessonId: string }) {
     const router = useRouter();
-    const { data: exercises, isLoading, isError, refetch } = useExercisesForLesson(lessonId);
+    const { data: exercises, isLoading, isLoadingError, refetch } = useExercisesForLesson(lessonId);
     const searchParams = useSearchParams();
     const exitHref = resolveExitHref(searchParams.get("exit"));
 
@@ -629,7 +629,10 @@ function SessionRouter({ lessonId }: { lessonId: string }) {
     // E-11: a failed exercises fetch used to leave isLoading===false and exercises===undefined,
     // which both loading gates in this file treat as "still loading" — the spinner then never
     // stops, and there is no way out of the screen. Show the error and a way back instead.
-    if (isError || !exercises) {
+    // R-5: gate on `isLoadingError` (first load failed, no data) rather than bare `isError` —
+    // a background refetch failing while the lesson is already loaded (isRefetchError) must not
+    // unmount the whole in-progress SessionFlow/TheoryLessonFlow and discard queue/timer state.
+    if (isLoadingError || !exercises) {
         return (
             <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
                 <div className="session-top">
