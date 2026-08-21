@@ -122,6 +122,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [ORGANIZATION_SERVICE.md](TESTING/ORGANIZATION_SERVICE.md) | Phase 40.5: organization-service unit tests (registry CRUD + Kafka event contracts, profile upsert/tenant-isolation, controller status-code mapping, tenancy-scope structural checks) + gateway route-flip |
 | [PHASE_40_BACKLOG.md](TESTING/PHASE_40_BACKLOG.md) | Build plan for the 57 Phase 40 items left untested under Rule #3: each mapped to a verified test project, class under test, file and case count (~620 cases), plus the harnesses to reuse, ten work packages, and six stale items in the source list |
 | [PROD_AUDIT_2026_08_20.md](TESTING/PROD_AUDIT_2026_08_20.md) | Browser-driven audit of the deployed app: the Performance-API probe that reliably reports failed requests, the two bugs it found (the `/org/program` 500 and the profile screen's hard-coded zeros) with their regression guards, and the four findings ruled out |
+| [NIGHT_RUN_SUMMARY.md](NIGHT_RUN_SUMMARY.md) | **Owner-facing summary (Russian)** of the autonomous night audit (2026-08-20 → 2026-08-21): production audit across learner/org/admin zones + regression review; 22 findings (E/W/R classes, E-18 blocker, O-1/O-3/W-5 major), ~70 commits, 4 open questions, what's fixed vs. deferred, manual actions before deploy |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
