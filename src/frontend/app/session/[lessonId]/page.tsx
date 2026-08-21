@@ -136,6 +136,11 @@ function SessionFlow({ lessonId, exitHref }: SessionFlowProps) {
         // following exercise (skip, or the next unrelated submit) until a submit finally
         // succeeded again.
         submitExerciseMutation.reset();
+        // R2-8: `lastSubmissionResult` carries the answer key (`correctAnswer`) for whichever
+        // exercise was just answered. Every current caller already clears it before advancing,
+        // but that's an invariant this function shouldn't rely on future callers to remember —
+        // clearing it here means the next exercise can never render as pre-answered.
+        setLastSubmissionResult(null);
         if (currentQueueIndex + 1 < activeQueue.length) {
             setCurrentQueueIndex((prev) => prev + 1);
             return;

@@ -864,7 +864,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Severity:** major
 - **Уверенность:** точно (механизм); продуктовое решение — за владельцем
 
-### [ ] R2-8 `advanceToNext()` не сбрасывает `lastSubmissionResult` — новый DTO с ответом в одном вызывающем от преждевременного раскрытия
+### [x] R2-8 `advanceToNext()` не сбрасывает `lastSubmissionResult` — новый DTO с ответом в одном вызывающем от преждевременного раскрытия
 - **Коммит/файл:** `472aba7b` + `d7b090d1` + `116704eb`;
   `src/frontend/app/session/[lessonId]/page.tsx:132-147`
 - **Что не так:** сегодня утечки нет, все пути проверены: `handleContinueAfterResult` (`:166`) и
