@@ -469,3 +469,36 @@ remaining sweep isn't lost: whoever picks this up next should grep for `isError`
 `app/(main)/reference`, `app/(main)/guidebook`, `app/(main)/companies`, `app/(main)/friends`, and
 the `app/(admin)/admin/**` content-list pages, and apply the same `isLoadingError` gate wherever
 `isError` currently discards an already-rendered region rather than only gating an empty state.
+
+### Q-15 — X-7: `spot_mistake`'s explanation field was scored as half the grade while labelled optional; resolved as "the line alone passes", not "make the field mandatory"
+
+**The conflict.** `spot_mistake`'s textarea is labelled «Объясни, почему это ошибка (необязательно)»
+and `docs/NEW_EXERCISE_TYPES.md`'s own description says the learner "optionally explains why." But
+`SpotMistakeEvaluationStrategy.EvaluateAnswerAsync` (ai-service) scored the correct line at only 50 of
+100 points and only added the rest by grading a written explanation through the AI — so a learner who
+selected the right line and left the (labelled-optional) field blank scored 50 and saw «Почти», and
+`isCorrect: false` (the strategy's own `score >= 75` gate). Reproduced live in the audit run
+(`docs/AUDIT_PROD.md` X-7): same exercise, right line, no explanation → `score: 50`; right line with a
+154-character explanation → `score: 90`, `isCorrect: true`.
+
+**The two ways to make the label and the grade agree, and why the line-alone option was chosen.**
+1. Grade the line alone as full credit — the explanation still runs through the AI grader when
+   written (for its own feedback), but never lowers the score the line already earned.
+2. Mark the field mandatory and block "Проверить" until it is filled — the opposite fix, which would
+   need a real frontend behaviour change (a new validation gate) and would contradict the exercise's
+   own authored label and the type's documented design ("optionally explains why").
+
+Option 1 was picked and shipped (this repo, `SpotMistakeEvaluationStrategy.cs`): it makes the code
+match the label and the documented design instead of changing product behaviour a learner already
+sees advertised as optional, and it is the smaller change. This is a product-intent call an audit
+agent should not make unilaterally by convention, so it is recorded here per that convention; the
+author of the label ("необязательно") already made the actual call — this fix only makes the scoring
+consistent with it. If the owner instead wants explanation graded as required content (option 2),
+that is a reversal of this decision, not a bug fix, and should update the label, add a submit-gate on
+the frontend, and record why in `docs/DECISIONS.md` next to this entry.
+
+**What shipped:** the mistake line alone now scores 100 and `isCorrect: true`; a written explanation
+is still sent to the AI grader and its feedback is still shown, but it can no longer reduce the score.
+`docs/DECISIONS.md` records the same call; `Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s
+existing "no explanation" test was updated to assert the new (100, correct) outcome instead of the old
+(50, incorrect) one it had been asserting — that assertion previously encoded the bug being fixed.

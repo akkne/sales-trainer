@@ -6144,3 +6144,28 @@ The exception is allow-listed by exact path in `scripts/tenancy-boundary-lint.py
 No code change follows from this entry — the fix is documentary: the boundary widening now has one
 place (`cccc8b9`'s message, this entry, and the allow-list comment) that names it explicitly, and
 the commit-message omission in `846c020` is recorded rather than left silent.
+
+### X-7: `spot_mistake` grades the mistake line alone as full credit; the explanation field stays optional
+
+`docs/AUDIT_PROD.md` X-7 / `docs/NIGHT_AUDIT_QUESTIONS.md` Q-15. `SpotMistakeEvaluationStrategy`
+(ai-service) scored a correctly selected mistake line at only 50 of 100 points, adding the rest only
+when the learner also wrote an explanation that the AI grader scored well — while both the textarea's
+own label («необязательно») and `docs/NEW_EXERCISE_TYPES.md`'s description of the type ("optionally
+explains why") say the explanation is not required. A learner who found the right line and left the
+field blank could score at most 50 and see «Почти», never a pass.
+
+**Decision: the label is the source of truth, not the scoring code.** The mistake line alone now
+scores 100 (`isCorrect: true`); a written explanation is still graded by the AI for its own feedback
+text, but that feedback can no longer pull the score below what the line already earned. The
+alternative — making the field mandatory and blocking submission without it — was rejected because it
+reverses a design already shipped and visible to every learner (the label, and the type's own docs),
+and would require a new frontend validation gate to match; fixing the scoring to match the existing
+label is the smaller, more defensible change and the one an audit fix should make without a product
+conversation. A future decision to require the explanation would need to reverse this entry, not
+silently re-lower the score.
+
+**What changed:** `src/backend/ai-service/Ai/Features/Evaluation/Services/Implementation/SpotMistakeEvaluationStrategy.cs`
+— `score = lineCorrect ? 100 : 0`, `isCorrect = lineCorrect`, no partial-credit AI addition.
+`Ai.Tests/Unit/SpotMistakeEvaluationStrategyTests.cs`'s "correct line, no explanation" test previously
+asserted `Score == 50, IsCorrect == false` — i.e. it encoded the bug — and was updated to assert
+`Score == 100, IsCorrect == true` to match the corrected, intentional behaviour.

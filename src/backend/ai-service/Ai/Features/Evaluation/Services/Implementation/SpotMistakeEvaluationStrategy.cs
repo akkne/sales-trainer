@@ -42,7 +42,15 @@ internal sealed class SpotMistakeEvaluationStrategy(
 
         var selectedLineIndex = userAnswer.GetProperty("selectedLineIndex").GetInt32();
         var lineCorrect = selectedLineIndex == mistakeIndex;
-        var score = lineCorrect ? 50 : 0;
+
+        // X-7: finding the mistake line *is* the exercise the "необязательно" label promises — an
+        // explanation is authored as optional colour, not as half the grade. Scoring it as half the
+        // credit meant a correct, unexplained line topped out at 50 and "Почти", so a learner who did
+        // exactly what was asked could never pass. The line alone now earns full credit; a written
+        // explanation is still graded for its own feedback, it just never lowers the score the line
+        // already earned. docs/DECISIONS.md records this as the chosen resolution over the other
+        // option (making the field mandatory).
+        var score = lineCorrect ? 100 : 0;
         var feedback = new StringBuilder();
 
         if (!lineCorrect)
@@ -68,9 +76,6 @@ internal sealed class SpotMistakeEvaluationStrategy(
                 globalSystemPrompt,
                 cancellationToken);
 
-            var aiScore = (int)Math.Round(aiResult.Score / 100.0 * 50);
-            score += aiScore;
-
             if (!string.IsNullOrEmpty(aiResult.AiFeedback))
                 feedback.AppendLine(aiResult.AiFeedback);
         }
@@ -79,7 +84,7 @@ internal sealed class SpotMistakeEvaluationStrategy(
         if (exerciseContent.TryGetProperty("explanation", out var explanationElement))
             explanation = explanationElement.GetString();
 
-        var isCorrect = score >= 75;
+        var isCorrect = lineCorrect;
 
         return new ExerciseEvaluationResult(
             IsCorrect: isCorrect,

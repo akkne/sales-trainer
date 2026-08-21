@@ -47,8 +47,12 @@ public class SpotMistakeEvaluationStrategyTests
         result.IsCorrect.Should().BeFalse();
     }
 
+    // X-7 (docs/AUDIT_PROD.md, docs/DECISIONS.md): the explanation field is labelled optional, so the
+    // mistake line alone must earn full credit — it used to score only 50 and read as "Почти", which
+    // meant a learner who found the right line and left the (truly optional) field blank could never
+    // pass the exercise.
     [Test]
-    public async Task EvaluateAnswer_CorrectLine_NoExplanation_ScoresHalf_WithoutCallingAi()
+    public async Task EvaluateAnswer_CorrectLine_NoExplanation_ScoresFull_WithoutCallingAi()
     {
         var strategy = CreateStrategy();
         var content = JsonDocument.Parse(Dialogue).RootElement;
@@ -56,7 +60,7 @@ public class SpotMistakeEvaluationStrategyTests
 
         var result = await strategy.EvaluateAnswerAsync(content, answer, null);
 
-        result.Score.Should().Be(50);
-        result.IsCorrect.Should().BeFalse();
+        result.Score.Should().Be(100);
+        result.IsCorrect.Should().BeTrue();
     }
 }
