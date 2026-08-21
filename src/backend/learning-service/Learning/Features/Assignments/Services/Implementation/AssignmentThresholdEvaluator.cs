@@ -223,6 +223,18 @@ internal sealed class AssignmentThresholdEvaluator(
     /// also why <c>failed_threshold</c> is reachable here — three tries that never cleared the bar
     /// is a finished, failed attempt at the assignment, not an unfinished one.
     /// </para>
+    ///
+    /// <para>
+    /// The blank-reference filter below is load-bearing, not defensive filler.
+    /// <see cref="AssignmentDocumentSerializer.SerializeContent"/> refuses an empty reference only on
+    /// write; <see cref="AssignmentDocumentSerializer.DeserializeContent"/> does not re-check it on
+    /// read, so a row written before that validation existed (or inserted directly) could carry a
+    /// <c>dialog_scenario</c> item with an empty <c>Reference</c>. <c>UserDialogScores.DialogModeKey</c>
+    /// is <c>""</c> for every mode-key-less conversation (<see cref="AssignmentThresholdConsumer"/>,
+    /// 40.22 — kept for the team dialog heat map, docs/AUDIT_NIGHT_REVIEW.md R-20/O-3), so without this
+    /// filter <c>modeKeys.Contains(score.DialogModeKey)</c> would match every one of them and credit
+    /// them all towards this assignment.
+    /// </para>
     /// </summary>
     private async Task<ThresholdMeasurement?> MeasureDialoguesAsync(
         Guid userId,
@@ -234,6 +246,7 @@ internal sealed class AssignmentThresholdEvaluator(
         var modeKeys = content
             .Where(item => item.Kind == AssignmentContentItemKinds.DialogScenario)
             .Select(item => item.Reference)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
