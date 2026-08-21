@@ -274,9 +274,14 @@ export default function AdminLessonExercisesPage({
             await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
             setLocalRows(null);
         } catch {
-            // updateExerciseMut's own onError already toasted; roll the reorder back so the
-            // screen doesn't show an order that never made it to the server.
-            setRows(previousRows);
+            // updateExerciseMut's own onError already toasted. The loop sends one PUT per row in
+            // sequence, so a failure partway through can leave the server with some rows already
+            // renumbered — rolling back to `previousRows` would show an order the server no longer
+            // agrees with, and the next reorder would then compute `changedRows` from that wrong
+            // base (R2-2). Drop the shadow copy and refetch instead, so the screen reflects
+            // whatever state the server actually ended up in rather than an invented rollback.
+            setLocalRows(null);
+            await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         }
     }
 

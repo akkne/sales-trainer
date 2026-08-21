@@ -755,7 +755,7 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
   `previousRows.find(p => p.id === row.id)?.sortOrder !== row.sortOrder`. Тот же фикс нужен и в
   org-редакторе (вне диапазона, но это первоисточник).
 
-### [ ] R2-2 при частично прошедшем реордере экран и сервер расходятся молча
+### [x] R2-2 при частично прошедшем реордере экран и сервер расходятся молча
 - **Коммит/файл:** `ad47210b`; `.../admin/lessons/[lessonId]/exercises/page.tsx:249-259`
   (`moveExercise`, блок `catch`)
 - **Что не так:** цикл делает по одному `PUT /admin/exercises/{id}` на строку последовательно.
@@ -772,6 +772,13 @@ keep("<svg onload=alert(1)></svg><iframe src=x></iframe>") → ""
 - **Как править:** в `catch` — `setLocalRows(null)` + `invalidateQueries`, чтобы экран показал
   фактическое состояние сервера, а не выдуманный откат. Правильнее — bulk-эндпоинт реордера в
   одной транзакции.
+- **Resolved (2026-08-21):** waited for R2-1/R2-3 to land (`3a7a4567`) before touching this file
+  to avoid colliding with that in-flight rewrite. `moveExercise`'s `catch` in
+  `.../admin/lessons/[lessonId]/exercises/page.tsx` now does `setLocalRows(null)` +
+  `invalidateQueries` instead of `setRows(previousRows)`, so a mid-loop failure shows whatever
+  order the server actually ended up with rather than an invented rollback. Scoped to exactly this
+  file/finding — the sibling topics/ duplicate and the org content-override editor were not
+  re-audited for the same catch-block gap and are left as-is.
 
 ### [x] R2-3 `setLocalRows(null)` убран из `saveExercise` и `deleteRow.onSuccess`: теневая копия навсегда перекрывает рефетч
 - **Коммит/файл:** `5a1a4572`; `.../admin/lessons/[lessonId]/exercises/page.tsx:207-217, 277-292`
