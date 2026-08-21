@@ -801,6 +801,77 @@ export function useImportTechniques() {
     });
 }
 
+export interface BulkTechniqueSkillAssignmentFailure {
+    id: string;
+    name: string;
+    error: string;
+}
+
+export interface BulkTechniqueSkillAssignmentResult {
+    succeededIds: string[];
+    failed: BulkTechniqueSkillAssignmentFailure[];
+}
+
+/**
+ * AD-3 (docs/AUDIT_PROD.md): bulk-links several techniques to a skill in one action. There is no
+ * bulk endpoint — this reuses the existing per-technique `PUT /admin/techniques/:id` (the same
+ * write `useUpdateTechnique` uses) and settles every request independently with
+ * `Promise.allSettled`, so one failing row never hides behind the others' success (docs/
+ * AUDIT_NIGHT_REVIEW.md W-series: a failed write must never look like success).
+ */
+export function useBulkAssignTechniqueSkill() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (
+            items: { id: string; name: string; body: AdminTechniqueWriteBody }[]
+        ): Promise<BulkTechniqueSkillAssignmentResult> => {
+            const outcomes = await Promise.allSettled(
+                items.map((item) => apiClient.put<AdminTechnique>(`/admin/techniques/${item.id}`, item.body))
+            );
+
+            const succeededIds: string[] = [];
+            const failed: BulkTechniqueSkillAssignmentFailure[] = [];
+            outcomes.forEach((outcome, index) => {
+                const item = items[index];
+                if (outcome.status === "fulfilled") {
+                    succeededIds.push(item.id);
+                } else {
+                    failed.push({ id: item.id, name: item.name, error: (outcome.reason as Error).message });
+                }
+            });
+
+            return { succeededIds, failed };
+        },
+        onSuccess: (result) => {
+            if (result.succeededIds.length > 0) {
+                queryClient.invalidateQueries({ queryKey: ["admin", "techniques"] });
+            }
+            if (result.failed.length > 0) {
+                clientLogger.error("Bulk technique skill assignment partially failed", {
+                    succeeded: result.succeededIds.length,
+                    failed: result.failed,
+                });
+                toast.error(
+                    `Saved ${result.succeededIds.length}, failed ${result.failed.length}: ${result.failed
+                        .map((failure) => failure.name)
+                        .join(", ")}`
+                );
+            } else {
+                clientLogger.info("Bulk technique skill assignment complete", {
+                    count: result.succeededIds.length,
+                });
+                toast.success(
+                    `Assigned skill to ${result.succeededIds.length} technique${result.succeededIds.length === 1 ? "" : "s"}.`
+                );
+            }
+        },
+        onError: (error) => {
+            clientLogger.error("Bulk technique skill assignment failed", { error: (error as Error).message });
+            toast.error(`Bulk skill assignment failed: ${(error as Error).message}`);
+        },
+    });
+}
+
 // --- Daily Quotes ---
 
 export interface AdminDailyQuote {

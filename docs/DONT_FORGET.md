@@ -4450,3 +4450,21 @@ secret is empty (Phase 40.34, see `learning-service/Learning/Common/Security/Int
    in code — this just makes prod actually be outside Development).
 3. Confirm Swagger UI is no longer reachable on any service in prod after redeploy.
 None of this can be checked from the repo alone; it requires the real server and `.env`.
+
+## AD-3 (2026-08-21): ни одна из 45 техник в проде не привязана к навыку — теперь есть удобный UI, но саму разметку должен сделать человек
+
+`docs/AUDIT_PROD.md` AD-3: у всех 45 техник в проде `primarySkillId: null`, поэтому фильтр по навыку
+на `/admin/techniques` и facet-фильтр в справочнике (`/guidebook`) всегда пустые. Это дефект данных,
+не кода — построен удобный UI для привязки (карточка → `<select>` навыка сохраняет сразу; чекбоксы +
+«Select all visible» + тулбар «выбрать навык → Assign primary skill to N» для массовой привязки),
+подробности — `docs/DECISIONS.md` (AD-3) и `docs/API_CONTRACTS.md`.
+
+**Backfill-скрипт не написан осознанно**: детерминированного соответствия техника→навык не
+существует (проверено — единственный файл с такими подсказками, `.claude/local-seed/techniques.json`,
+это 10 демо-техник для локальной разработки, не прод-45; slug/tags ненадёжны как замена). Каждой из
+45 техник нужно назначить навык осмысленно — то есть кто-то должен зайти на `/admin/techniques` и
+пройти по всем 45 карточкам (или сгруппировать чекбоксами по смыслу и жать «Assign… to N» пачками).
+Это не может быть сделано агентом автономно (нет источника правды «какая техника к какому навыку»,
+владелец явно просил UI, а не угадывание) и не проверяется из репозитория — нужен человек с доменным
+знанием (какая техника относится к «Холодным звонкам», какая к «Квалификации лида» и т.д.), сидящий
+перед реальным `/admin/techniques` на реальных данных.

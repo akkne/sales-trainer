@@ -6252,3 +6252,56 @@ learning anything, and nothing downstream currently treats that differently from
 **What changed:** no code. `docs/LEARNING_SERVICE.md`'s "Lesson progression / unlocking" section
 gained one clarifying paragraph — completion means *attempted*, not *passed*, and a skip counts as
 attempted — so the next person reading the unlock chain does not rediscover this as a bug.
+
+## 2026-08-21 — AD-3: skill-level linking, not lesson-level — no technique↔lesson relation exists
+
+`docs/AUDIT_PROD.md` AD-3: the `/admin/techniques` skill filter (and the public guidebook's) always
+returned 0 techniques because none of the 45 production techniques carries `primarySkillId` or
+`additionalSkillIds` — missing data, not a code bug (the union of both fields for the filter/facet
+was already fixed for `TechniqueService` in `9b3080a`). The owner's instruction: build a convenient
+admin UI to attach a technique "to lessons".
+
+**Checked the schema first.** `Technique` (`src/backend/learning-service/Learning/Features/
+Techniques/Models/Technique.cs`) carries `PrimarySkillId` (nullable `Guid`) and `AdditionalSkills`
+(a `TechniqueSkill` join table to `Skill`) — there is no `LessonId`/`TechniqueLesson` column or table
+anywhere in the schema, and nothing in `LearningDbContext`'s model wires a technique to a lesson.
+"To lessons" in the owner's phrasing is not a literal schema reference; it is the informal name for
+"the content technique's home in the curriculum," which today is expressed at the **skill** level —
+the same level the guidebook filter and `/admin/techniques`' `?skill=` param already read.
+
+**Decision: implement skill-level linking (what the filter actually consumes), do not invent a
+lesson↔technique table this pass.** Built:
+- `TechniqueSkillQuickEditor` on `/admin/techniques` — a per-row primary-skill `<select>` next to a
+  "No skill" (bad-tone) / current-skill-title badge, so one click sets `primarySkillId` without
+  opening the full edit form (which also has body/dialog/case/coach fields irrelevant to this task).
+- A bulk toolbar: checkbox per row + "select all visible", pick one skill, "Assign primary skill to
+  N" — for sweeping all 45 techniques in one sitting. `useBulkAssignTechniqueSkill`
+  (`src/frontend/features/admin/hooks/use-admin.ts`) fires one `PUT /admin/techniques/:id` per
+  selected technique via `Promise.allSettled` (there is no bulk endpoint) and reports success/failure
+  per row — a partial failure never gets swallowed into a blanket "done" toast (the W-series lesson).
+- No new backend endpoint: `PUT /admin/techniques/:id` already accepted `primarySkillId` and
+  `additionalSkillIds` and persisted both (`AdminTechniquesController.ApplyPayload`/
+  `SyncAdditionalSkills`) — confirmed with a before/after run (see AD-3 entry in
+  `docs/AUDIT_PROD.md` for the pasted output) rather than assumed from reading the code.
+
+**What a lesson-level relation would need, if the owner asks for it after seeing this:** a new join
+table (e.g. `TechniqueLesson(TechniqueId, LessonId)`, mirroring `TechniqueSkill`'s shape) plus an EF
+migration, an `AdminTechniqueDto`/`AdminTechniqueWriteRequestDto` field, a lesson-picker control (the
+admin lessons list is already grouped by topic — `/admin/lessons` — so the picker has a natural
+source), and a decision on what a technique linked to a lesson actually *does* at runtime (does a
+lesson surface its technique to the learner? does the guidebook filter gain a `?lesson=` facet?) —
+none of which exists today, so it is new product surface, not a data-completeness fix, and was
+intentionally left for a follow-up request rather than built speculatively here.
+
+**Also found, left alone:** `additionalSkillIds` has no UI control anywhere (not even in the full
+edit form) despite the backend fully supporting it — only `primarySkillId` got a UI in this pass,
+because `primarySkillId` alone already satisfies both consumers (`/admin/techniques`'s own
+`?skill=` filter checks only `PrimarySkillId`, not the union; the public guidebook unions both).
+Filed as a known gap here rather than built, to keep this change scoped to the AD-3 defect.
+
+**No backfill script.** A script could set `primarySkillId` en masse only with a deterministic
+technique→skill mapping; no such mapping exists (checked the only skill-tagged seed data,
+`.claude/local-seed/techniques.json`, which is 10 sample techniques for local dev, not the 45 in
+prod, and tags/slugs are not a reliable proxy for the correct skill). Assigning each technique its
+skill is exactly the judgment call the new admin UI exists to make convenient; a script would either
+guess wrong silently or need the same human review the UI already provides, so none was written.

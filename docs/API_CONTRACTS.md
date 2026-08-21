@@ -1469,8 +1469,10 @@ All progress-point economy knobs are DB-driven and admin-editable (no hardcoded 
 | POST | /admin/techniques/import | `AdminTechniqueWriteRequestDto[]` | `AdminTechniqueImportResultDto` — upserts by `slug` |
 | GET | /admin/techniques/export | — | `AdminTechniqueWriteRequestDto[]` — all techniques, re-importable verbatim |
 
-`skill` query param filters by `Skills.IconicName` (same convention as the public route).
+`skill` query param filters by `Skills.IconicName` (same convention as the public route), and matches only `PrimarySkillId` — unlike the public `GET /techniques`/`GET /techniques/meta`, it does **not** also match `AdditionalSkills` (docs/DECISIONS.md, AD-3).
 `GET /admin/techniques/export` returns every technique (ignores `skill`/`search` filters) shaped exactly like the `import` request body, so an export file feeds straight back into `POST /admin/techniques/import`. UI: "Export JSON" button on `/admin/techniques`.
+
+**AD-3 skill linking (2026-08-21):** no new endpoint. `/admin/techniques`' per-row skill quick-editor and its "select rows → assign primary skill to N" bulk toolbar both reuse `PUT /admin/techniques/:id` — the quick-editor sends the technique's current full write body with only `primarySkillId` overridden; the bulk toolbar does the same, once per selected technique, via `Promise.allSettled` (`useBulkAssignTechniqueSkill` in `features/admin/hooks/use-admin.ts`) so one failing row is reported as a failure rather than hidden by the others' success. `additionalSkillIds` still has no UI control anywhere (docs/DECISIONS.md).
 
 On update and on re-import the child rows (`TechniqueSkills`, `TechniqueCoaches`) are **synced in place**: links missing from the payload are deleted, new ones inserted, and an existing coach row is updated rather than replaced. Deleting and re-inserting them inside one `SaveChanges` used to fail with an EF concurrency error (`expected to affect 1 row(s), but actually affected 0 row(s)`) for every technique that had a coach. `AdminTechniqueImportResultDto` counters are incremented only after the row is persisted, so a failed item is never counted as both updated and failed.
 

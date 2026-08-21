@@ -470,6 +470,9 @@ app/(admin)/
       page.tsx         ← all lessons view
     reference/
       page.tsx         ← global reference materials view
+    techniques/
+      page.tsx         ← technique CRUD + JSON import/export + skill linking (quick per-row
+                          editor and select-many bulk toolbar, AD-3)
     prompts/
       page.tsx         ← exercise type AI prompts management
     quotes/
@@ -568,7 +571,21 @@ The **Techniques** page exposes the same trio in its header — **Download templ
 **Export JSON**, and **Import JSON** — sourced from `TECHNIQUES_TEMPLATE` in
 `features/admin/lib/import-templates.ts`. Import upserts by `slug`; leave
 `primarySkillId` / `additionalSkillIds` `null` / `[]` in the template and set the
-real skill after import.
+real skill after import, using the skill linking described next.
+
+#### Skill linking (AD-3, 2026-08-21)
+
+Every technique's card on `/admin/techniques` carries a "No skill" / current-skill-title badge
+next to a `<select>` — pick a skill and it saves immediately (`PUT /admin/techniques/:id` with
+only `primarySkillId` changed), no need to open the full "Edit" form. To link many techniques at
+once (the situation AD-3 was found in: all 45 production techniques had no skill at all), check
+their row checkboxes — or "Select all visible" to grab everything the current search/skill filter
+shows — pick a skill in the toolbar that appears, and click "Assign primary skill to N"; each
+selected technique is saved independently, and a failure on one row is reported by name rather than
+silently absorbed into the others' success. See `docs/DECISIONS.md` (AD-3) for why this is
+skill-level rather than lesson-level, and `docs/API_CONTRACTS.md` for the endpoint reuse. There is
+still no UI for `additionalSkillIds` — only `primarySkillId`, which is what both the admin `?skill=`
+filter and the public guidebook's skill facet key off.
 
 
 ### Lessons Template (with all 10 exercise types)

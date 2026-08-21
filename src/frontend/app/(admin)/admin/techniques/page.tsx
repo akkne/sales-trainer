@@ -8,6 +8,7 @@ import {
     useUpdateTechnique,
     useDeleteTechnique,
     useImportTechniques,
+    useBulkAssignTechniqueSkill,
     fetchTechniquesExport,
     type AdminTechnique,
     type AdminTechniqueWriteBody,
@@ -39,6 +40,31 @@ const EMPTY_FORM: AdminTechniqueWriteBody = {
     coach: null,
 };
 
+/** Full write body for a technique, with any fields (e.g. `primarySkillId`) overridden — used by
+ * the quick skill editor and the bulk-assign toolbar so a skill-only change round-trips every
+ * other field unchanged through the full `PUT /admin/techniques/:id` (there is no partial-update
+ * endpoint; see docs/DECISIONS.md, AD-3). */
+function toWriteBody(
+    technique: AdminTechnique,
+    overrides: Partial<AdminTechniqueWriteBody> = {}
+): AdminTechniqueWriteBody {
+    return {
+        slug: technique.slug,
+        name: technique.name,
+        summary: technique.summary,
+        body: technique.body,
+        tags: technique.tags,
+        primarySkillId: technique.primarySkillId,
+        additionalSkillIds: technique.additionalSkillIds,
+        difficulty: technique.difficulty,
+        sortOrder: technique.sortOrder,
+        dialog: technique.dialog,
+        case: technique.case,
+        coach: technique.coach,
+        ...overrides,
+    };
+}
+
 export default function AdminTechniquesPage() {
     const [rawSearch, setRawSearch] = useState("");
     const search = useDeferredValue(rawSearch);
@@ -56,6 +82,11 @@ export default function AdminTechniquesPage() {
     const [isExporting, setIsExporting] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
 
+    // AD-3: bulk skill linking — a Set of technique ids checked in the current view, plus the
+    // skill chosen in the bulk toolbar.
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkSkillId, setBulkSkillId] = useState("");
+
     // R-6 (Q-14): `isLoadingError`, not bare `isError` — a background refetch failing must not
     // discard an already-rendered list.
     const { data: techniques = [], isLoading, isLoadingError: isError, refetch } = useAdminTechniques({
@@ -68,11 +99,48 @@ export default function AdminTechniquesPage() {
     const updateTechnique = useUpdateTechnique(editingId ?? "");
     const deleteTechnique = useDeleteTechnique();
     const importTechniques = useImportTechniques();
+    const bulkAssignSkill = useBulkAssignTechniqueSkill();
 
     const skillOptions = useMemo(
         () => skills.map((s) => ({ value: s.id, label: `${s.title} (${s.iconicName})`, iconicName: s.iconicName })),
         [skills]
     );
+
+    // Scoped to the currently loaded/filtered list, not raw checked ids — so a stale selection
+    // left over from a previous filter (a technique no longer in `techniques`) can never inflate
+    // the "N selected" count or be sent to the bulk endpoint (docs/AUDIT_NIGHT_REVIEW.md R2-1: a
+    // control whose target set silently disagrees with what it displays).
+    const selectedVisible = useMemo(
+        () => techniques.filter((technique) => selectedIds.has(technique.id)),
+        [techniques, selectedIds]
+    );
+    const allVisibleSelected = techniques.length > 0 && selectedVisible.length === techniques.length;
+
+    function toggleSelected(id: string) {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    function toggleSelectAllVisible() {
+        setSelectedIds(allVisibleSelected ? new Set() : new Set(techniques.map((technique) => technique.id)));
+    }
+
+    async function handleBulkAssign() {
+        if (!bulkSkillId || selectedVisible.length === 0) return;
+        await bulkAssignSkill.mutateAsync(
+            selectedVisible.map((technique) => ({
+                id: technique.id,
+                name: technique.name,
+                body: toWriteBody(technique, { primarySkillId: bulkSkillId }),
+            }))
+        );
+        setSelectedIds(new Set());
+        setBulkSkillId("");
+    }
 
     function startEdit(technique: AdminTechnique) {
         setEditingId(technique.id);
@@ -235,6 +303,51 @@ export default function AdminTechniquesPage() {
                 </select>
             </div>
 
+            {!isLoading && !isError && techniques.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
+                    <label className="inline-flex items-center gap-2 text-ink-3">
+                        <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={toggleSelectAllVisible}
+                        />
+                        Select all visible ({techniques.length})
+                    </label>
+                    {selectedVisible.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 bg-bg-2 rounded-md px-3 py-1.5">
+                            <span className="text-ink-3">{selectedVisible.length} selected</span>
+                            <select
+                                value={bulkSkillId}
+                                onChange={(e) => setBulkSkillId(e.target.value)}
+                                className="border border-line rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
+                            >
+                                <option value="">Choose a skill…</option>
+                                {skillOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleBulkAssign}
+                                disabled={!bulkSkillId || bulkAssignSkill.isPending}
+                                className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
+                            >
+                                {bulkAssignSkill.isPending
+                                    ? "Assigning..."
+                                    : `Assign primary skill to ${selectedVisible.length}`}
+                            </button>
+                            <button
+                                onClick={() => setSelectedIds(new Set())}
+                                className="text-sm text-ink-3 hover:text-ink transition-colors"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
             ) : isError ? (
@@ -274,35 +387,40 @@ export default function AdminTechniquesPage() {
                             ) : (
                                 <div>
                                     <div className="flex items-start justify-between mb-2">
-                                        <div>
-                                            <h3 className="font-medium text-ink">
-                                                {technique.name}{" "}
-                                                <span className="text-xs text-ink-3 font-mono">({technique.slug})</span>
-                                            </h3>
-                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">
-                                                    {technique.difficultyName}
-                                                </span>
-                                                {technique.primarySkillTitle && (
-                                                    <span className="text-xs bg-bg-2 text-ink-3 rounded px-2 py-0.5">
-                                                        {technique.primarySkillTitle}
+                                        <div className="flex items-start gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(technique.id)}
+                                                onChange={() => toggleSelected(technique.id)}
+                                                className="mt-1.5"
+                                                aria-label={`Select ${technique.name}`}
+                                            />
+                                            <div>
+                                                <h3 className="font-medium text-ink">
+                                                    {technique.name}{" "}
+                                                    <span className="text-xs text-ink-3 font-mono">({technique.slug})</span>
+                                                </h3>
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">
+                                                        {technique.difficultyName}
                                                     </span>
-                                                )}
-                                                {technique.tags.map((tag) => (
-                                                    <span key={tag} className="text-xs bg-accent-soft text-accent-ink rounded px-2 py-0.5">
-                                                        {tag}
-                                                    </span>
-                                                ))}
-                                                <span className="text-xs text-ink-3">order: {technique.sortOrder}</span>
-                                                {technique.dialog ? (
-                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">dialog</span>
-                                                ) : null}
-                                                {technique.case ? (
-                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">case</span>
-                                                ) : null}
-                                                {technique.coach && (
-                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">coach</span>
-                                                )}
+                                                    <TechniqueSkillQuickEditor technique={technique} skillOptions={skillOptions} />
+                                                    {technique.tags.map((tag) => (
+                                                        <span key={tag} className="text-xs bg-accent-soft text-accent-ink rounded px-2 py-0.5">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                    <span className="text-xs text-ink-3">order: {technique.sortOrder}</span>
+                                                    {technique.dialog ? (
+                                                        <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">dialog</span>
+                                                    ) : null}
+                                                    {technique.case ? (
+                                                        <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">case</span>
+                                                    ) : null}
+                                                    {technique.coach && (
+                                                        <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">coach</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex gap-3 shrink-0 ml-4">
@@ -355,6 +473,51 @@ interface SkillOption {
     value: string;
     iconicName: string;
     label: string;
+}
+
+/**
+ * AD-3: the one-field change an admin makes over and over while sweeping all 45 techniques —
+ * separate from "Edit", which opens the full form (body, dialog, case, coach). Always shows the
+ * current state ("No skill" in the bad tone vs. the linked skill) so a scan down the list answers
+ * "which have none" without opening anything.
+ */
+function TechniqueSkillQuickEditor({
+    technique,
+    skillOptions,
+}: {
+    technique: AdminTechnique;
+    skillOptions: SkillOption[];
+}) {
+    const updateTechnique = useUpdateTechnique(technique.id);
+    const hasSkill = Boolean(technique.primarySkillId);
+
+    return (
+        <label className="inline-flex items-center gap-1.5">
+            <span
+                className={`text-xs rounded px-2 py-0.5 ${
+                    hasSkill ? "bg-bg-2 text-ink-3" : "bg-bad-soft text-bad"
+                }`}
+            >
+                {hasSkill ? technique.primarySkillTitle : "No skill"}
+            </span>
+            <select
+                value={technique.primarySkillId ?? ""}
+                onChange={(e) =>
+                    updateTechnique.mutate(toWriteBody(technique, { primarySkillId: e.target.value || null }))
+                }
+                disabled={updateTechnique.isPending}
+                aria-label={`Primary skill for ${technique.name}`}
+                className="text-xs border border-line rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo/30 disabled:opacity-50"
+            >
+                <option value="">— none —</option>
+                {skillOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                        {option.label}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
 }
 
 function TechniqueFormFields({
