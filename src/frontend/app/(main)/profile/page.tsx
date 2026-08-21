@@ -33,7 +33,12 @@ function initials(name: string): string {
 
 export default function ProfilePage() {
     const { data: profileStats, isLoading: profileLoading, refetch: refetchProfile } = useProfile();
-    const { data: allSkills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
+    const {
+        data: allSkills,
+        isLoading: skillsLoading,
+        isLoadingError: skillsLoadingError,
+        refetch: refetchSkills,
+    } = useSkills();
     // Accuracy and mastered-skill counts come from learning-service; the same-named fields on
     // identity-service's /profile are hard-coded zeros left over from the microservices split.
     const {
@@ -255,7 +260,7 @@ export default function ProfilePage() {
                         </div>
                         <div>
                             <div className="pv2-stat-label">Уроки</div>
-                            <div className="pv2-stat-value">{skillsError ? "—" : totalLessonsDone}</div>
+                            <div className="pv2-stat-value">{skillsLoadingError ? "—" : totalLessonsDone}</div>
                         </div>
                     </div>
                 </div>
@@ -297,7 +302,10 @@ export default function ProfilePage() {
                                     <div key={i} className="pv2-skeleton" style={{ height: 52, borderRadius: 8 }} />
                                 ))}
                             </div>
-                        ) : skillsError ? (
+                        ) : skillsLoadingError ? (
+                            // R-6: isLoadingError (no data at all), not bare isError — a
+                            // background refetch failure must not blank out an already-rendered
+                            // enrolled-skills list.
                             <ErrorState
                                 compact
                                 title="Не удалось загрузить навыки"

@@ -75,10 +75,15 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
     const {
         data: lessonSummaries,
         isLoading: lessonsLoading,
-        isError: lessonsError,
+        isLoadingError: lessonsLoadingError,
         refetch: refetchLessons,
     } = useLessonsForSkill(skillSlug);
-    const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
+    const {
+        data: skills,
+        isLoading: skillsLoading,
+        isLoadingError: skillsLoadingError,
+        refetch: refetchSkills,
+    } = useSkills();
 
     const isLoading = lessonsLoading || skillsLoading;
 
@@ -92,7 +97,9 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
 
     // E-7: a failed lessons or skills fetch used to render the same 0% ring and "0 из 0 уроков
     // завершено" as a skill with no lessons at all — indistinguishable from progress resetting.
-    if (lessonsError || skillsError) {
+    // R-6: gated on isLoadingError (no data at all), not bare isError — a background refetch
+    // failure on an already-loaded skill must not replace the whole page with the error state.
+    if (lessonsLoadingError || skillsLoadingError) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <ErrorState

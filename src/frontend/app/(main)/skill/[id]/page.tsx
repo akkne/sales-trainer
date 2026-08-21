@@ -75,10 +75,15 @@ export default function SkillPage({ params }: SkillPageProps) {
     const {
         data: lessonSummaries,
         isLoading: lessonsLoading,
-        isError: lessonsError,
+        isLoadingError: lessonsLoadingError,
         refetch: refetchLessons,
     } = useLessonsForSkill(skillSlug);
-    const { data: skills, isLoading: skillsLoading, isError: skillsError, refetch: refetchSkills } = useSkills();
+    const {
+        data: skills,
+        isLoading: skillsLoading,
+        isLoadingError: skillsLoadingError,
+        refetch: refetchSkills,
+    } = useSkills();
 
     const isLoading = lessonsLoading || skillsLoading;
 
@@ -93,7 +98,9 @@ export default function SkillPage({ params }: SkillPageProps) {
     // E-6: a failed lessons or skills fetch used to fall through to the same zeroed header
     // and "no lessons" copy as a skill with no content — including the title falling back to
     // the raw slug. Neither request failing is the same as the skill genuinely being empty.
-    if (lessonsError || skillsError) {
+    // R-6: gated on isLoadingError (no data at all), not bare isError — a background refetch
+    // failure on an already-loaded skill must not replace the whole page with the error state.
+    if (lessonsLoadingError || skillsLoadingError) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <ErrorState

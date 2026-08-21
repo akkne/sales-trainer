@@ -148,7 +148,7 @@ function PathStageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen,
 
 // ─── Skill accordion list (shared: desktop sidebar + mobile bottom sheet) ───
 function PathSkillList({ onSelected }: { onSelected?: () => void }) {
-    const { data: allSkills, isLoading, isError, refetch } = useSkills();
+    const { data: allSkills, isLoading, isLoadingError, refetch } = useSkills();
     const { stages } = useSkillStages();
     const { selectedSkill, setSelectedSkill } = useSelectedSkillStore();
 
@@ -198,7 +198,10 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
         );
     }
 
-    if (isError) {
+    // R-6: gate on isLoadingError (first load, no data at all) rather than bare isError — a
+    // failed background refetch of an already-populated skill list must not blank out the
+    // already-rendered accordion.
+    if (isLoadingError) {
         return (
             <ErrorState
                 compact
@@ -246,14 +249,16 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
 
 // ─── Overall path progress (skills mastered across the whole path) ──────────
 function PathOverallProgress() {
-    const { data: allSkills, isError } = useSkills();
+    const { data: allSkills, isLoadingError } = useSkills();
     const enrolled = (allSkills ?? []).filter((s) => s.status !== "locked");
 
     // E-5/E-12: this used to just disappear (`return null`) on a failed /skills fetch, same as
     // "no enrolled skills" — the skill list right below already explains the failure with a
     // retry, so here a narrow note is enough to stop the progress bar's disappearance from
     // reading as "progress was reset".
-    if (isError) {
+    // R-6: gated on isLoadingError, not bare isError — a background refetch failure must not
+    // hide an already-computed, still-valid progress bar behind this note.
+    if (isLoadingError) {
         return (
             <p style={{ fontSize: 12, color: "var(--ink-4)", padding: "0 2px 10px" }}>
                 Общий прогресс не загрузился.
@@ -406,7 +411,7 @@ function PathCenterColumn({
     stageLabel: string;
     allSkills: SkillTreeNode[];
 }) {
-    const { data: lessons, isLoading, isError, refetch } = useLessonsForSkill(skillSlug);
+    const { data: lessons, isLoading, isLoadingError, refetch } = useLessonsForSkill(skillSlug);
 
     const sorted = (lessons ?? [])
         .slice()
@@ -472,7 +477,10 @@ function PathCenterColumn({
     return (
         <div className="path-center">
             <div className="path-center-scroll" ref={scrollRef}>
-                {isError ? (
+                {/* R-6: isLoadingError (no data yet), not bare isError — a background refetch
+                    failure here used to blank out the whole center column, including an
+                    already-rendered lesson timeline and stats, over a transient failure. */}
+                {isLoadingError ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
                         <ErrorState
                             title="Не удалось загрузить уроки навыка"
@@ -750,7 +758,7 @@ function lastActivityText(isoDate: string) {
 
 // ─── Page root ───────────────────────────────────────────────────────────────
 export default function SkillTreePage() {
-    const { data: skillTreeData, isLoading, isError, refetch } = useSkillTree();
+    const { data: skillTreeData, isLoading, isLoadingError, refetch } = useSkillTree();
     const { data: allSkillsData } = useSkills();
     const { stages } = useSkillStages();
     const { selectedSkill } = useSelectedSkillStore();
@@ -763,7 +771,9 @@ export default function SkillTreePage() {
         );
     }
 
-    if (isError || !skillTreeData) {
+    // R-6: isLoadingError, not bare isError — a failed background refetch of the whole tree
+    // must not replace an already-rendered page with the full-screen error state.
+    if (isLoadingError || !skillTreeData) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <ErrorState
