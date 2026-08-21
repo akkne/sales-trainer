@@ -596,3 +596,12 @@ rediscover this as a bug. Option 2 or 3 should not be taken by an audit agent wi
 both change what "completed" means for data already in the database.
 
 Raised from `docs/AUDIT_NIGHT_REVIEW.md` R2-7 (second review, commits `7870d60f..90d5e491`).
+
+**Owner's answer (2026-08-21): option 1 — leave it, no code change.** Skipping every exercise in a
+lesson still completes it at `BestScore = 0` and unlocks the next lesson. Maximum learner freedom —
+nobody gets permanently stuck on an exercise they cannot or will not do — at the accepted cost that
+the whole skill tree can be flipped through by pressing «Пропустить» without learning anything;
+`BestScore = 0` stays the honest record of that for anyone looking (admin panel, team analytics).
+Recorded as a deliberate decision in `docs/DECISIONS.md`, with the one-line clarification the
+original finding recommended added to `docs/LEARNING_SERVICE.md`'s "Lesson progression / unlocking"
+section: completion means *attempted*, not *passed*, and skipping counts as attempted.

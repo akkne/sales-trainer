@@ -723,6 +723,16 @@ Lessons unlock sequentially. On the first correct/attempted submission that tran
 lesson to `completed`, `ExerciseService.UnlockNextLessonInTopicAsync` eagerly writes the
 **next** lesson's `UserLessonProgress` row as `Available` (creating it if missing).
 
+**"Completed" means *attempted*, not *passed* (Q-16, `docs/NIGHT_AUDIT_QUESTIONS.md`,
+`docs/DECISIONS.md`).** `UpdateLessonProgressAsync` computes `attemptedExercises` as "distinct
+exercises of this lesson with any attempt row" — a skip (`POST .../submit` with
+`skipped: true`) is indistinguishable from a real answer there, so a lesson finished entirely by
+pressing «Пропустить» completes at `BestScore = 0` and unlocks the next lesson exactly as a
+lesson finished by answering does. This is a deliberate product decision, not a gap: nothing in
+this chain gates on score, by design. `PASSING_SCORE_THRESHOLD`
+(`app/session/[lessonId]/page.tsx`) only decides whether an exercise goes into the end-of-lesson
+mistakes-review round, never whether the lesson counts as done.
+
 "Next" is resolved across the whole skill, not just the current topic
 (`ResolveNextLessonInSkillAsync`): the next lesson in the same topic by `OrderInTopic` wins
 first; when a topic's last lesson is completed it **rolls over** to the first lesson

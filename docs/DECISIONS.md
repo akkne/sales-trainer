@@ -6226,3 +6226,29 @@ key), `src/backend/ai-service/Ai/Infrastructure/Learning/SkillLookupClient.cs` (
 injected, tenant passed through `TryGet`/`Set`). No test previously exercised the cache key shape,
 so none needed correcting. Both tenancy lints (`scripts/tenancy-boundary-lint.sh`,
 `scripts/tenancy-pool-lint.sh`) and `Ai.Tests` (170 passed) stayed green.
+
+## 2026-08-21 — Q-16: skipping every exercise still completes a lesson at score 0 and unlocks the next — kept, on purpose
+
+`docs/AUDIT_NIGHT_REVIEW.md` R2-7 / `docs/NIGHT_AUDIT_QUESTIONS.md` Q-16. X-4 (`d7b090d1`) made
+"Skip" record a real, ungraded `UserExerciseAttempt` instead of silently advancing the client queue,
+which fixed a lesson that stayed open forever because the backend never saw anything. The side
+effect nobody had decided on: `ExerciseService.UpdateLessonProgressAsync` counts "distinct exercises
+with any attempt row" — a skip counts the same as an answer — so a lesson finished entirely by
+pressing «Пропустить» completes at `BestScore = 0` and `UnlockNextLessonInTopicAsync` opens the next
+one exactly as if the learner had passed. A learner can walk the entire skill tree this way.
+
+**Decision: leave it — option 1 of the three the finding laid out.** Skipping is a legitimate "I
+don't want to do this one" affordance; progress is the learner's own business; `BestScore = 0`
+already records the truth for anyone looking (admin panel, team analytics). The other two options
+were rejected for cost, not for being wrong in principle: counting only non-skipped attempts toward
+completion (option 2) reopens X-4's dead end for a lesson finished entirely by skipping, and would
+need a new way out of that (e.g. a per-lesson skip budget) that nobody has designed; requiring a
+passing score to complete a lesson (option 3) reverses the current, documented completion gate
+("attempted", not "passed") for every existing learner and forces a backfill decision for accounts
+already marked complete at low scores — too large a change to make as a side answer to this
+question. The accepted cost of option 1: the skill tree can be flipped through end-to-end without
+learning anything, and nothing downstream currently treats that differently from genuine progress.
+
+**What changed:** no code. `docs/LEARNING_SERVICE.md`'s "Lesson progression / unlocking" section
+gained one clarifying paragraph — completion means *attempted*, not *passed*, and a skip counts as
+attempted — so the next person reading the unlock chain does not rediscover this as a bug.
