@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { SKILL_STAGES, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
+import { useOnboardingSkillSelectionStore } from "@/shared/stores/onboarding-skill-selection-store";
 
 export interface SkillTreeNode {
     skillId: string;
@@ -64,6 +65,7 @@ const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
 export function useUpdateEnrolledSkills() {
     const queryClient = useQueryClient();
+    const { clearSkillSelectionUnsaved } = useOnboardingSkillSelectionStore();
     return useMutation({
         mutationFn: (skillSlugs: string[]) =>
             apiClient.put<void>("/skills/enrolled", { skillSlugs }),
@@ -91,6 +93,14 @@ export function useUpdateEnrolledSkills() {
             if (context?.previous) {
                 queryClient.setQueryData(["skills"], context.previous);
             }
+        },
+        // This is the same `PUT /skills/enrolled` onboarding's best-effort second write calls, so
+        // a success here is exactly what makes the "your onboarding choice did not save" banner on
+        // /tree untrue — whether the user redid the choice in their profile or simply toggled a
+        // skill (Q-6, docs/NIGHT_AUDIT_QUESTIONS.md). Clearing it anywhere else would either leave
+        // a stale banner up or dismiss it before the fact it reports stopped being true.
+        onSuccess: () => {
+            clearSkillSelectionUnsaved();
         },
         onSettled: () => {
             // Re-fetch so server-truth statuses replace the optimistic guess.

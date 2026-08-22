@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSkillTree, useSkills, useSkillStages, type SkillTreeNode } from "@/features/skills/hooks/use-skill-tree";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSelectedSkillStore } from "@/shared/stores/selected-skill-store";
+import { useOnboardingSkillSelectionStore } from "@/shared/stores/onboarding-skill-selection-store";
 import { Icon } from "@/shared/components/icon";
 import { ErrorState } from "@/shared/components/error-state";
 import { ActiveAssignmentCard } from "@/features/assignments/components/active-assignment-card";
@@ -757,6 +758,49 @@ function lastActivityText(isoDate: string) {
 }
 
 // ─── Page root ───────────────────────────────────────────────────────────────
+/**
+ * Q-6 (`docs/NIGHT_AUDIT_QUESTIONS.md`). Onboarding's `PUT /skills/enrolled` is best-effort, so a
+ * failure there lets the user through to here with only the core skill enrolled instead of the
+ * skills they picked. This is the one line that says so, instead of leaving them to wonder why the
+ * tree looks nothing like their choice. It renders only after the failure actually happened, and
+ * disappears for good as soon as any successful enrollment makes it untrue.
+ */
+function UnsavedSkillSelectionBanner() {
+    const { isSkillSelectionUnsaved, hydrateFromStorage, clearSkillSelectionUnsaved } =
+        useOnboardingSkillSelectionStore();
+
+    // Read localStorage after mount, never during render: this value decides whether the banner
+    // exists at all, so reading it while rendering would make the server's HTML disagree with the
+    // client's first pass.
+    useEffect(() => {
+        hydrateFromStorage();
+    }, [hydrateFromStorage]);
+
+    if (!isSkillSelectionUnsaved) return null;
+
+    return (
+        <div className="path-notice" role="status">
+            <Icon name="warning" size="sm" />
+            <span className="path-notice-text">
+                Не удалось сохранить выбор навыков из онбординга — сейчас открыт только базовый
+                навык.{" "}
+                <Link href="/profile" className="path-notice-link">
+                    Выбери навыки в профиле
+                </Link>
+                .
+            </span>
+            <button
+                type="button"
+                className="path-notice-dismiss"
+                onClick={clearSkillSelectionUnsaved}
+                aria-label="Скрыть сообщение"
+            >
+                <Icon name="close" size="sm" />
+            </button>
+        </div>
+    );
+}
+
 export default function SkillTreePage() {
     const { data: skillTreeData, isLoading, isLoadingError, refetch } = useSkillTree();
     const { data: allSkillsData } = useSkills();
@@ -806,6 +850,7 @@ export default function SkillTreePage() {
         // no assignments lands on exactly the screen they landed on before — the roadmap is
         // explicit that the tree must not be replaced by an empty assignment screen.
         <div className="path-shell">
+            <UnsavedSkillSelectionBanner />
             <ActiveAssignmentCard />
 
             <div className="path-grid">
