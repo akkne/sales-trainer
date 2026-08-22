@@ -29,6 +29,18 @@ public static class RedisKeys
     /// </summary>
     public static string UserProfile(Guid userId) => $"notifications:user:{userId:N}";
 
+    /// <summary>
+    /// Q-4 (<c>docs/NIGHT_AUDIT_QUESTIONS.md</c>). Un-prefixed for the same reason as
+    /// <see cref="UserProfile"/>, and it is a deliberate product decision rather than an omission:
+    /// "do not send me practice reminders" is a statement a person makes about their own inbox, not
+    /// about their seat in one customer's organization. An identity here is cross-organization
+    /// (docs/TENANCY/TENANCY.md §4.2), so an org-prefixed key would mean a salesperson who belongs
+    /// to two organizations has to switch off reminders twice and could silently keep receiving them
+    /// from the organization they were not looking at. Holds nothing org-scoped: two booleans and
+    /// the timestamp they were last written.
+    /// </summary>
+    public static string NotificationPreferences(Guid userId) => $"notifications:preferences:{userId:N}";
+
     public static string Inbox(Guid organizationId, Guid recipientUserId) =>
         $"{OrganizationPrefix(organizationId)}notifications:inbox:{recipientUserId:N}";
 

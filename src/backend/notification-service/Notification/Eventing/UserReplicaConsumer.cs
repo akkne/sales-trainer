@@ -86,6 +86,13 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
                 }
 
                 await directory.RemoveAsync(payload.UserId, cancellationToken);
+
+                // Q-4: the preference row is keyed by user id and carries no TTL, exactly like the
+                // replica above, so it has to be dropped on the same event. Left behind it would
+                // outlive the identity and then silently apply to whoever the id is reused for.
+                await scopedServices
+                    .GetRequiredService<INotificationPreferencesStore>()
+                    .RemoveAsync(payload.UserId, cancellationToken);
                 break;
             }
         }

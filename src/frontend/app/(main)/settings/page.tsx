@@ -4,11 +4,19 @@ import Link from "next/link";
 import { useLogout } from "@/features/auth/hooks/use-auth";
 import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { useThemeStore } from "@/shared/stores/theme-store";
-import { useNotificationPreferencesStore } from "@/shared/stores/notification-preferences-store";
+import {
+    useMigrateLegacyNotificationPreferences,
+    useNotificationPreferences,
+    useUpdateNotificationPreferences,
+} from "@/features/notifications/hooks/use-notification-preferences";
 
 // NOTE: No email-change or password-change flow exists in this frontend.
 // Those rows are rendered as read-only / display-only accordingly.
-// NOTE: Notification preferences are persisted to localStorage via notification-preferences-store.
+// NOTE: Notification preferences are stored per-user on the backend
+// (GET/PUT /notifications/preferences, Q-4 in docs/NIGHT_AUDIT_QUESTIONS.md). They used to live only
+// in this browser's localStorage, which meant they did not follow the user to another device and —
+// the reason it was worth changing — nothing on the server could read them, so a future "product
+// updates" mailer would have gone out to people who had explicitly switched it off.
 
 type Theme = "light" | "dark";
 
@@ -39,12 +47,33 @@ export default function SettingsPage() {
     const { authenticatedUser } = useAuthStore();
     const { theme, setTheme } = useThemeStore();
 
-    const {
-        isPracticeRemindersEnabled,
-        isProductUpdatesEnabled,
-        setPracticeRemindersEnabled,
-        setProductUpdatesEnabled,
-    } = useNotificationPreferencesStore();
+    const { data: notificationPreferences, isLoading: areNotificationPreferencesLoading } =
+        useNotificationPreferences();
+    const updateNotificationPreferences = useUpdateNotificationPreferences();
+    useMigrateLegacyNotificationPreferences(notificationPreferences);
+
+    // Until the first read lands, the switches render at the documented defaults — the same pair the
+    // server holds — rather than at `false`, which would flash "reminders off" at everyone on every
+    // load. They are disabled while loading or saving, so a click cannot be sent against a value
+    // that is not on screen yet.
+    const isPracticeRemindersEnabled = notificationPreferences?.practiceReminders ?? true;
+    const isProductUpdatesEnabled = notificationPreferences?.productUpdates ?? false;
+    const areNotificationSwitchesDisabled =
+        areNotificationPreferencesLoading || updateNotificationPreferences.isPending;
+
+    // Both switches are sent on every change: the endpoint replaces the pair rather than patching one
+    // field, so "leave the other one alone" has to be said explicitly by resending its current value.
+    const setPracticeRemindersEnabled = (value: boolean) =>
+        updateNotificationPreferences.mutate({
+            practiceReminders: value,
+            productUpdates: isProductUpdatesEnabled,
+        });
+
+    const setProductUpdatesEnabled = (value: boolean) =>
+        updateNotificationPreferences.mutate({
+            practiceReminders: isPracticeRemindersEnabled,
+            productUpdates: value,
+        });
 
     // The platform admin panel is open to both Sellevate staff roles (docs/DECISIONS.md,
     // 2026-08-16). The organization-scoped admin panel is a separate screen still to come
@@ -98,6 +127,7 @@ export default function SettingsPage() {
                             role="switch"
                             aria-checked={isPracticeRemindersEnabled}
                             className="stg-switch"
+                            disabled={areNotificationSwitchesDisabled}
                             onClick={() => setPracticeRemindersEnabled(!isPracticeRemindersEnabled)}
                             aria-label="Напоминания о практике"
                         />
@@ -113,6 +143,7 @@ export default function SettingsPage() {
                             role="switch"
                             aria-checked={isProductUpdatesEnabled}
                             className="stg-switch"
+                            disabled={areNotificationSwitchesDisabled}
                             onClick={() => setProductUpdatesEnabled(!isProductUpdatesEnabled)}
                             aria-label="Обновления продукта"
                         />

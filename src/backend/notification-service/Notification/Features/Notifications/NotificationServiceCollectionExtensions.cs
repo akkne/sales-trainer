@@ -29,6 +29,10 @@ public static class NotificationServiceCollectionExtensions
             configuration.GetSection(NotificationEmailConfiguration.SectionName));
 
         services.AddSingleton<INotificationStore, RedisNotificationStore>();
+        // Q-4: stateless and organization-free (a preference belongs to the identity, not to a seat
+        // in one organization), so a singleton like the store above rather than scoped like the
+        // services that resolve the ambient ITenantContext.
+        services.AddSingleton<INotificationPreferencesStore, RedisNotificationPreferencesStore>();
         services.AddScoped<INotificationService, Services.Implementation.NotificationService>();
         services.AddSingleton<INotificationEventMapper, NotificationEventMapper>();
 

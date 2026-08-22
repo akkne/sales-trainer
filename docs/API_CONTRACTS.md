@@ -2016,6 +2016,41 @@ unread-message email for that conversation (see [EMAIL_NOTIFICATIONS.md](EMAIL_N
 | GET | /notifications/unread-count | — | `UnreadNotificationCountDto` |
 | PUT | /notifications/{notificationId}/read | — | 204 |
 | PUT | /notifications/read-all | — | 204 |
+| GET | /notifications/preferences | — | `NotificationPreferencesDto` |
+| PUT | /notifications/preferences | `{practiceReminders, productUpdates}` | `NotificationPreferencesDto` (the saved state) |
+
+`NotificationPreferencesDto`: `{practiceReminders, productUpdates, isDefault}`
+
+**Preferences (Q-4, `docs/NIGHT_AUDIT_QUESTIONS.md`)** — the two switches on `/settings`. Before this
+they existed only in the browser's `localStorage`, so they did not follow a user to another device
+and, more importantly, no backend code could read them: a future "product updates" mailer would have
+gone out to everyone including the people who had explicitly switched it off.
+
+- **Defaults:** `practiceReminders: true`, `productUpdates: false` — the same pair the old browser
+  store used, so no one's effective settings changed on the deploy that introduced this. Declared
+  once on the server (`NotificationPreferences.Default`); the client reads them rather than
+  re-deriving them.
+- **`isDefault`** is true only while nobody has ever saved — i.e. the server is answering with its
+  defaults rather than a stored choice. It exists so the client can tell "new user" from "user who
+  chose the defaults", which is what makes the one-shot migration of the old `localStorage` values
+  safe: the client uploads a legacy value only while `isDefault` is true, so a stale
+  `localStorage` on one machine can never overwrite a preference saved from another. A `GET` never
+  writes a row, so reading the screen does not itself retire the migration path.
+- **`PUT` replaces both switches**, it does not patch one: with an absent-means-unchanged body,
+  "switch this off" would be indistinguishable from "leave it alone". The client resends the other
+  switch's current value on every change.
+- **Storage:** one small Redis hash per user, keyed `notifications:preferences:{userId}` —
+  deliberately **without** the `org:{orgId}:` prefix every inbox key carries, and the route is
+  deliberately not `[TenantScoped]`. A preference is a statement a person makes about their own
+  inbox, and an identity here is cross-organization (`docs/TENANCY/TENANCY.md` §4.2), so an
+  org-scoped preference would make a salesperson in two organizations switch reminders off twice.
+  **No TTL** (unlike the 30-day inbox): an expiring preference would quietly switch product updates
+  back on. Dropped on `user.deleted`, alongside the user replica, so it cannot outlive its identity.
+- **Not yet enforced anywhere**, and this is the honest state of it: `notification-service` still has
+  no "product updates" or "practice reminders" dispatcher to gate — `DelayedChatEmailDispatcherService`
+  only emails about unread chats. The switches are now *readable* by whatever mailer is built next,
+  which is the whole point; wiring an existing dispatcher to them was not in scope because there is
+  no such dispatcher.
 
 `NotificationDto`: `{id, notificationType, title, body, actionUrl?, relatedEntityId?, isRead, createdAt, readAt?}`
 - `notificationType`: `"FriendRequestReceived"` | `"FriendRequestAccepted"` | `"ChatMessageReceived"` | `"AchievementUnlocked"` | `"StreakMilestone"`

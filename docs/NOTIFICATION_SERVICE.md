@@ -49,6 +49,7 @@ src/backend/notification-service/
 | Redis string `org:{orgId}:notifications:chat-email:read:{userId}:{conversationId}` | Chat read watermark | Suppresses a pending unread-chat email once the recipient has actually read the conversation; namespaced per organization since 40.13 — a conversation belongs to one organization, matching social-service's chat isolation in this same block. |
 | Redis sorted set `notifications:chat-email:pending` | Delayed unread-chat email queue | **Stays un-prefixed on purpose.** One due-time-ordered work list shaped like an outbox; the organization travels inside each queued item instead (`PendingChatEmail`), the same way it rides in a Kafka envelope. Items queued before 40.13 carry no organization and are dropped with a warning rather than dispatched under a guessed tenant. |
 | Redis hash `notifications:user:{userId}` | Cross-org user directory replica | **Deliberately not namespaced** — projects Identity's cross-organization user directory (TENANCY.md §4.2), the same call learning/ai/gamification/social made for their `UserReplicas` tables. |
+| Redis hash `notifications:preferences:{userId}` | The two `/settings` switches (practice reminders, product updates) | **Deliberately not namespaced**, same reason as the user replica above: a preference is a statement about one person's own inbox, and an identity here is cross-organization — an org-prefixed key would make a salesperson in two organizations switch reminders off twice. **No TTL**, unlike the inbox: an expiring preference would quietly switch product updates back on. Fields `practiceReminders`, `productUpdates`, `updatedAt`; a missing or unreadable `updatedAt` reads as "never set" (`isDefault`). Deleted on `user.deleted`. Added by Q-4. |
 | Redis (shared) | Kafka idempotency store | `idem:notification-service:{eventId}` via the shared `RedisIdempotencyStore`. |
 
 No Postgres, no Mongo, no EF migrations, no `DatabaseBootstrapper`.
@@ -175,9 +176,18 @@ Flipped to the `notification` cluster:
 | GET | `/notifications/unread-count` | `{ count }` |
 | PUT | `/notifications/{notificationId}/read` | mark one read (idempotent) |
 | PUT | `/notifications/read-all` | mark all read |
+| GET | `/notifications/preferences` | the caller's own two switches (+ `isDefault`) |
+| PUT | `/notifications/preferences` | replace both switches |
 
 The contracts are identical to [API_CONTRACTS.md](API_CONTRACTS.md#notifications), so
 the frontend bell/panel is unaffected by the flip.
+
+`/notifications/preferences` is the one route here that is **not** `[TenantScoped]`, and its Redis
+key is the one notification key besides the user replica that carries no `org:` prefix — see
+"Data ownership" above and Q-4 in [NIGHT_AUDIT_QUESTIONS.md](NIGHT_AUDIT_QUESTIONS.md). Nothing in
+this service reads the switches yet: there is no practice-reminder or product-update dispatcher to
+gate (the only mailer is the delayed unread-chat one). Whatever mailer is built next is expected to
+read them — that they were *unreadable* is why they moved out of the browser.
 
 ## Running locally
 
