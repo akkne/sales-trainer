@@ -171,6 +171,98 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         return Ok(new ExercisesImportResultDto(created, updated, errors));
     }
 
+    /// <summary>
+    /// Q-8 (<c>docs/NIGHT_AUDIT_QUESTIONS.md</c>). Rewrites the position of every exercise in one
+    /// lesson in a single request, so that a reorder either lands whole or does not land at all.
+    ///
+    /// <para>
+    /// Both exercise editors used to move a row by issuing one <c>PUT /admin/exercises/{id}</c> per
+    /// changed position. That works when every call succeeds; when the third of four fails, the
+    /// lesson is left with two exercises claiming the same position and nothing recording what the
+    /// operator actually asked for. <c>[TenantTransaction]</c> already wraps this whole action in one
+    /// write transaction, so the single <c>SaveChangesAsync</c> below is the atomicity the per-row
+    /// version could not have.
+    /// </para>
+    ///
+    /// <para>
+    /// The request must name <em>every</em> exercise of the lesson, and no id from another lesson.
+    /// A subset cannot be checked for collisions against the rows it leaves out, so accepting one
+    /// would reintroduce by validation gap exactly the duplicate positions this endpoint exists to
+    /// prevent. Positions must be distinct but need not be contiguous — see
+    /// <see cref="ExerciseOrderDto"/>.
+    /// </para>
+    /// </summary>
+    [HttpPut("admin/lessons/{lessonId:guid}/exercises/reorder")]
+    public async Task<ActionResult<IReadOnlyList<AdminExerciseDto>>> Reorder(
+        Guid lessonId, [FromBody] ReorderExercisesRequestDto requestDto, CancellationToken cancellationToken = default)
+    {
+        var owningLesson = await database.Lessons
+            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
+        if (owningLesson is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, owningLesson.OrganizationId)) return Forbid();
+
+        var requestedOrders = requestDto?.Exercises;
+        if (requestedOrders is null || requestedOrders.Count == 0)
+            return BadRequest(new { message = "Request must name at least one exercise." });
+
+        if (requestedOrders.Select(item => item.ExerciseId).Distinct().Count() != requestedOrders.Count)
+            return BadRequest(new { message = "The same exercise is named more than once." });
+
+        if (requestedOrders.Select(item => item.OrderInLesson).Distinct().Count() != requestedOrders.Count)
+            return BadRequest(new { message = "Two exercises were given the same position." });
+
+        var exercises = await database.Exercises
+            .Where(exercise => exercise.LessonId == lessonId)
+            .ToListAsync(cancellationToken);
+
+        var exercisesById = exercises.ToDictionary(exercise => exercise.Id);
+
+        var unknownIds = requestedOrders
+            .Select(item => item.ExerciseId)
+            .Where(exerciseId => !exercisesById.ContainsKey(exerciseId))
+            .ToList();
+        if (unknownIds.Count > 0)
+            return BadRequest(new { message = $"{unknownIds.Count} of the named exercises do not belong to this lesson." });
+
+        if (requestedOrders.Count != exercises.Count)
+            return BadRequest(new
+            {
+                message = "A reorder must name every exercise of the lesson " +
+                          $"({exercises.Count} expected, {requestedOrders.Count} given)."
+            });
+
+        var now = DateTime.UtcNow;
+        var movedCount = 0;
+
+        foreach (var requestedOrder in requestedOrders)
+        {
+            var exercise = exercisesById[requestedOrder.ExerciseId];
+            if (exercise.OrderInLesson == requestedOrder.OrderInLesson) continue;
+
+            exercise.OrderInLesson = requestedOrder.OrderInLesson;
+            exercise.UpdatedAt = now;
+            movedCount++;
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Exercises reordered LessonId={LessonId} Moved={MovedCount} Of={TotalCount} by ActorId={ActorId}",
+            lessonId, movedCount, exercises.Count, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        var result = exercises
+            .OrderBy(exercise => exercise.OrderInLesson)
+            .Select(exercise => new AdminExerciseDto(
+                exercise.Id,
+                exercise.LessonId,
+                exercise.Type,
+                exercise.OrderInLesson,
+                JsonSerializer.Deserialize<JsonElement>(exercise.SerializedContent),
+                exercise.CustomAiPrompt))
+            .ToList();
+
+        return Ok(result);
+    }
+
     [HttpPut("admin/exercises/{id:guid}")]
     public async Task<ActionResult<AdminExerciseDto>> Update(
         Guid id, [FromBody] CreateExerciseRequestDto requestDto, CancellationToken cancellationToken = default)

@@ -8,6 +8,7 @@ import {
     useCreateExercise,
     useDeleteExercise,
     useImportExercises,
+    useReorderExercises,
     AdminExercise,
 } from "@/features/admin/hooks/use-admin";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -146,6 +147,7 @@ export default function AdminLessonExercisesPage({
     const createMut = useCreateExercise(lessonId);
     const deleteMut = useDeleteExercise(lessonId);
     const importMut = useImportExercises(lessonId);
+    const reorderMut = useReorderExercises(lessonId);
     const qc = useQueryClient();
     const updateExerciseMut = useMutation({
         mutationFn: ({ exerciseId, body }: { exerciseId: string; body: Omit<AdminExercise, "id" | "lessonId"> }) =>
@@ -233,11 +235,16 @@ export default function AdminLessonExercisesPage({
     }
 
     /**
-     * Reordering is a swap persisted through the same `PUT /admin/exercises/{id}` used by
-     * `saveExercise` above — there is no bulk-reorder endpoint, but none is needed for moving one
-     * row past its neighbor. This mirrors the sibling org editor's `moveExercise`
-     * (app/(org)/org/content/lessons/[lessonId]/page.tsx), which persists a reorder the same way:
-     * one PUT per row whose `orderInLesson` actually changed.
+     * Reordering is persisted through `PUT /admin/lessons/{lessonId}/exercises/reorder` — one
+     * request carrying the whole new order, applied inside a single write transaction (Q-8,
+     * `docs/NIGHT_AUDIT_QUESTIONS.md`).
+     *
+     * This replaces the loop of per-row `PUT /admin/exercises/{id}` calls this screen used to run.
+     * That loop could fail partway through and leave the server with some rows renumbered and
+     * others not — two exercises claiming one position, and nothing recording what was asked for,
+     * so the only honest recovery was to drop local state and show whatever half-applied order came
+     * back (R2-2). With one atomic request, a failure changes nothing, so rolling the local order
+     * back is now correct rather than an invented state.
      */
     async function moveExercise(fromIndex: number, toIndex: number) {
         if (toIndex < 0 || toIndex >= rows.length) return;
@@ -249,39 +256,22 @@ export default function AdminLessonExercisesPage({
         const renumbered = reordered.map((row, i) => ({ ...row, sortOrder: i + 1 }));
         setRows(renumbered);
 
-        // R2-1: compare each row's new `sortOrder` against its *own* previous value (by id), not
-        // against whichever row used to sit at the same array position — a positional comparison
-        // is always a no-op for a contiguously-numbered `1..n` list, which is the common case
-        // (new rows, seeded content, generator output all number this way), so no PUT ever went
-        // out and the reorder silently failed to persist.
-        const changedRows = renumbered.filter((row) => {
-            const previous = previousRows.find((candidate) => candidate.id === row.id);
-            return row.id && row.sortOrder !== previous?.sortOrder;
-        });
+        // A row with no id yet is a brand-new exercise the operator has not saved: the server has
+        // never heard of it, so it cannot carry a position there. Its slot in the local numbering
+        // simply leaves a gap, which the route accepts — positions must be distinct, not contiguous.
+        const persistedOrder = renumbered
+            .filter((row) => row.id)
+            .map((row) => ({ exerciseId: row.id as string, orderInLesson: row.sortOrder }));
+
+        if (persistedOrder.length === 0) return;
 
         try {
-            for (const row of changedRows) {
-                await updateExerciseMut.mutateAsync({
-                    exerciseId: row.id as string,
-                    body: {
-                        type: row.type,
-                        orderInLesson: row.sortOrder,
-                        content: row.content as unknown as Record<string, unknown>,
-                        customAiPrompt: null,
-                    },
-                });
-            }
-            await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            await reorderMut.mutateAsync(persistedOrder);
             setLocalRows(null);
         } catch {
-            // updateExerciseMut's own onError already toasted. The loop sends one PUT per row in
-            // sequence, so a failure partway through can leave the server with some rows already
-            // renumbered — rolling back to `previousRows` would show an order the server no longer
-            // agrees with, and the next reorder would then compute `changedRows` from that wrong
-            // base (R2-2). Drop the shadow copy and refetch instead, so the screen reflects
-            // whatever state the server actually ended up in rather than an invented rollback.
-            setLocalRows(null);
-            await qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            // reorderMut's own onError already toasted. The request is atomic, so nothing moved on
+            // the server and the pre-move order is the truth again.
+            setRows(previousRows);
         }
     }
 

@@ -125,6 +125,30 @@ export function useDeleteExercise(lessonId: string) {
     });
 }
 
+export interface ExerciseOrderEntry {
+    exerciseId: string;
+    orderInLesson: number;
+}
+
+/**
+ * Q-8 (`docs/NIGHT_AUDIT_QUESTIONS.md`). Persists a whole new exercise order in one request instead
+ * of one `PUT /admin/exercises/{id}` per moved row, so a reorder cannot land half-applied and leave
+ * two exercises claiming the same position. The route requires the full list of the lesson's
+ * exercises, not just the moved ones — see its own doc comment for why a subset is unverifiable.
+ */
+export function useReorderExercises(lessonId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation<AdminExercise[], Error, ExerciseOrderEntry[]>({
+        mutationFn: (exercises) =>
+            apiClient.put<AdminExercise[]>(
+                `/admin/lessons/${encodeURIComponent(lessonId)}/exercises/reorder`,
+                { exercises }
+            ),
+        onSuccess: () => invalidateLessonBody(queryClient, lessonId),
+    });
+}
+
 /**
  * Opens the one mutable version. Idempotent by contract — a lesson may have at most one draft, and
  * asking twice returns the same row.

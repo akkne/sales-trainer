@@ -1400,7 +1400,23 @@ was global and would have put an override's exercises into the shared library th
 | POST | /admin/lessons/:lessonId/exercises | `{type, orderInLesson, content: <jsonb>, customAiPrompt?}` | `AdminExerciseDto` (400 if content invalid per type) |
 | POST | /admin/lessons/:lessonId/exercises/import | `[{type, orderInLesson, content, customAiPrompt?}, …]` (array) | `ExercisesImportResultDto` (per-item validation; bad items skipped, reported in errors) |
 | PUT | /admin/exercises/:id | same | `AdminExerciseDto` (400 if content invalid per type) |
+| PUT | /admin/lessons/:lessonId/exercises/reorder | `{exercises: [{exerciseId, orderInLesson}, …]}` | `AdminExerciseDto[]` in the new order (400 on any validation failure, 404 unknown lesson) |
 | DELETE | /admin/exercises/:id | — | 204 |
+
+**Reorder (Q-8, `docs/NIGHT_AUDIT_QUESTIONS.md`):** rewrites the position of every exercise in one
+lesson in a single request, inside one write transaction — so a reorder lands whole or not at all.
+It replaced a loop of per-row `PUT /admin/exercises/:id` calls in all three exercise editors (both
+`/admin/**` screens and the org content-override editor), which could fail partway through and leave
+two exercises claiming the same position.
+
+The request must name **every** exercise of the lesson, not just the moved ones: a subset cannot be
+checked for collisions against the rows it omits, so accepting one would reintroduce the duplicate
+positions the route exists to prevent. Refused with 400: an empty list, the same `exerciseId` twice,
+two entries sharing an `orderInLesson`, any id not belonging to this lesson, or a count that does not
+match the lesson's exercise count. Positions must be **distinct** but need not be contiguous or
+zero-based — reads order by the column rather than index into it, and existing lessons carry whatever
+numbering their import used. `PUT /admin/exercises/:id` still accepts `orderInLesson` and is
+unchanged; it remains the way a single exercise's body is edited.
 
 **Content validation:** The `content` field is validated server-side per exercise type. Single create/update return 400 with joined error messages on invalid content. Import validates each exercise; bad ones are skipped and reported in the `errors` array with per-item messages. See [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md) for per-type content schema.
 

@@ -19,9 +19,11 @@ interface ExerciseListProps {
  * The body of a lesson is its exercises — the lesson row itself carries only a title
  * (docs/TENANCY/CONTENT_MODEL.md §0), so this list is what «редактировать урок» actually means.
  *
- * Reordering is two buttons rather than a drag surface: `PUT /admin/exercises/{id}` takes one
- * exercise at a time and there is no batch reorder route, so every move is a pair of writes and
- * making it feel continuous would misrepresent what is happening.
+ * Reordering is two buttons rather than a drag surface. It is now one atomic write per move
+ * (`PUT /admin/lessons/{lessonId}/exercises/reorder`, Q-8), so the original reason — every move
+ * being a fan of separate writes that a drag surface would misrepresent — no longer applies; the
+ * buttons stay because a discrete "move one step, see it saved" is honest about a round trip
+ * happening, which a drag that snaps back on failure is not.
  */
 export function ExerciseList({
     exercises,

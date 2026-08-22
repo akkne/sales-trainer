@@ -35,6 +35,7 @@ import {
     useLessonExercises,
     useLessonVersions,
     usePublishLessonVersion,
+    useReorderExercises,
     useUpdateExercise,
     useUpdateLessonTitle,
 } from "@/features/org-content-overrides/hooks/use-lesson-editor";
@@ -79,6 +80,7 @@ export default function OrganizationLessonEditorPage() {
     const createExercise = useCreateExercise(lessonId);
     const updateExercise = useUpdateExercise(lessonId);
     const deleteExercise = useDeleteExercise(lessonId);
+    const reorderExercises = useReorderExercises(lessonId);
     const updateLessonTitle = useUpdateLessonTitle(lessonId);
     const createOverride = useCreateContentOverride();
 
@@ -178,30 +180,25 @@ export default function OrganizationLessonEditorPage() {
         }
     };
 
+    /**
+     * Q-8 (`docs/NIGHT_AUDIT_QUESTIONS.md`). One request carrying the whole new order, applied in a
+     * single write transaction, replacing the loop of one `PUT /admin/exercises/{id}` per moved row.
+     * The loop persisted correctly when every call succeeded; when one failed partway through it
+     * left the lesson with duplicated positions and this screen with no way to say what the
+     * administrator had actually asked for. The route also wants every exercise of the lesson, not
+     * only the moved ones, which is why nothing is filtered down to "changed" rows here any more.
+     */
     const moveExercise = async (fromIndex: number, toIndex: number) => {
         const reordered = moveExerciseInList(exercises, fromIndex, toIndex);
-        // R2-1: compare each row's new `orderInLesson` against its *own* previous value (by id),
-        // not against whichever row used to sit at the same array position — a positional
-        // comparison is always a no-op for a contiguously-numbered `1..n` list, which is the
-        // common case, so no PUT ever went out and the reorder silently failed to persist.
-        const moved = reordered.filter((exercise) => {
-            const previous = exercises.find((candidate) => candidate.id === exercise.id);
-            return exercise.orderInLesson !== previous?.orderInLesson;
-        });
 
-        await withDraft(async () => {
-            for (const exercise of moved) {
-                await updateExercise.mutateAsync({
+        await withDraft(() =>
+            reorderExercises.mutateAsync(
+                reordered.map((exercise) => ({
                     exerciseId: exercise.id,
-                    body: {
-                        type: exercise.type as WriteExerciseRequest["type"],
-                        orderInLesson: exercise.orderInLesson,
-                        content: exercise.content,
-                        customAiPrompt: exercise.customAiPrompt,
-                    },
-                });
-            }
-        });
+                    orderInLesson: exercise.orderInLesson,
+                }))
+            )
+        );
     };
 
     const publish = (isBreaking: boolean) => {

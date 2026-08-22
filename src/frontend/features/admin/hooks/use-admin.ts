@@ -320,6 +320,43 @@ export function useUpdateExercise(lessonId: string, exerciseId: string) {
     });
 }
 
+export interface ExerciseOrder {
+    exerciseId: string;
+    orderInLesson: number;
+}
+
+/**
+ * Q-8 (`docs/NIGHT_AUDIT_QUESTIONS.md`). Persists a whole new exercise order in one request.
+ *
+ * Replaces the loop of `PUT /admin/exercises/{id}` calls all three exercise editors used to run,
+ * one per row whose position changed. That loop persisted correctly when every call succeeded, but
+ * a failure partway through left the lesson with two exercises claiming the same position and the
+ * screen unable to say what the operator had asked for — the editors could only drop their local
+ * state and refetch whatever half-applied order the server ended up with. The backend route runs
+ * inside a single write transaction, so the reorder now either lands whole or does not land.
+ *
+ * The request must name *every* server-side exercise of the lesson, not just the moved ones — see
+ * the route's own doc comment for why a subset cannot be validated. Callers therefore send the full
+ * list and skip rows that have no id yet (a brand-new row the operator has not saved).
+ */
+export function useReorderExercises(lessonId: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (exercises: ExerciseOrder[]) =>
+            apiClient.put<AdminExercise[]>(`/admin/lessons/${lessonId}/exercises/reorder`, {
+                exercises,
+            }),
+        onSuccess: (data) => {
+            clientLogger.info("Exercises reordered", { lessonId, count: data.length });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to reorder exercises", { lessonId, error: (error as Error).message });
+            toast.error(`Failed to reorder exercises: ${(error as Error).message}`);
+        },
+    });
+}
+
 export function useDeleteExercise(lessonId: string) {
     const queryClient = useQueryClient();
     return useMutation({
