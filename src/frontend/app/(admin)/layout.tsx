@@ -6,27 +6,8 @@ import { useEffect, useState } from "react";
 import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { Icon } from "@/shared/components/icon";
-import type { IconName } from "@/shared/components/icon";
 import { resolveLegacyAdminRedirect } from "@/features/org-shell/lib/legacy-admin-redirects";
-
-const NAV_ICONS: Record<string, IconName> = {
-    "/admin/import": "grid",
-    "/admin/skills": "target",
-    "/admin/topics": "folder",
-    "/admin/lessons": "book",
-    "/admin/reference": "layers",
-    "/admin/techniques": "sparkle",
-    "/admin/quotes": "message",
-    "/admin/dialog": "message",
-    "/admin/discuss": "forum",
-    "/admin/prompts": "sparkle",
-    "/admin/voice/usage": "mic",
-    "/admin/leagues": "trophy",
-    "/admin/gamification": "star",
-    "/admin/users": "users",
-    "/admin/organizations": "briefcase",
-    "/admin/demo-requests": "send",
-};
+import { PLATFORM_NAVIGATION_ITEMS } from "@/features/admin/constants/navigation";
 
 export default function AdminLayout({
     children,
@@ -105,32 +86,11 @@ export default function AdminLayout({
         return null;
     }
 
-    // Every screen below is the *platform* admin panel: Sellevate-staff-only, and open to
-    // both `Admin` and `SuperAdmin` (RequirePlatformAdmin on the backend). Reaching this point
-    // already implies platform staff, so no nav item needs a gate of its own — the
-    // superadmin-only affordances are gated inside the screens that own them.
-    //
-    // The separate organization-scoped admin panel (for TenancyAdmin/TenancySuperAdmin) is
-    // roadmap block 40.20 and is waiting on the owner's design.
-    const navItems = [
-        { href: "/admin/organizations", label: "Organizations" },
-        { href: "/admin/demo-requests", label: "Demo requests" },
-        { href: "/admin/import", label: "Bundle Import" },
-        { href: "/admin/skills", label: "Skills" },
-        { href: "/admin/skill-stages", label: "Skill Stages" },
-        { href: "/admin/topics", label: "Topics" },
-        { href: "/admin/lessons", label: "Lessons" },
-        { href: "/admin/reference", label: "Reference" },
-        { href: "/admin/techniques", label: "Techniques" },
-        { href: "/admin/quotes", label: "Daily Quotes" },
-        { href: "/admin/dialog", label: "Dialog" },
-        { href: "/admin/discuss", label: "Discuss" },
-        { href: "/admin/prompts", label: "AI Prompts" },
-        { href: "/admin/voice/usage", label: "Voice Usage" },
-        { href: "/admin/leagues", label: "Leagues" },
-        { href: "/admin/gamification", label: "Gamification" },
-        { href: "/admin/users", label: "Users" },
-    ];
+    // The nav list itself lives in `features/admin/constants/navigation` — module level, so it is
+    // one testable value instead of an array literal buried in a client component, and so the
+    // reason "Leagues"/"Gamification" are absent (Q-5) is written where the list is. The separate
+    // organization-scoped admin panel (for TenancyAdmin/TenancySuperAdmin) is roadmap block 40.20.
+    const navItems = PLATFORM_NAVIGATION_ITEMS;
 
     return (
         <div className="min-h-screen md:flex bg-surface">
@@ -194,10 +154,7 @@ export default function AdminLayout({
                                         : "text-ink-3 hover:text-ink hover:bg-bg-2"
                                 }`}
                             >
-                                <Icon
-                                    name={NAV_ICONS[item.href] ?? "folder"}
-                                    size="sm"
-                                />
+                                <Icon name={item.icon} size="sm" />
                                 {item.label}
                             </Link>
                         );
