@@ -6305,3 +6305,65 @@ technique→skill mapping; no such mapping exists (checked the only skill-tagged
 prod, and tags/slugs are not a reliable proxy for the correct skill). Assigning each technique its
 skill is exactly the judgment call the new admin UI exists to make convenient; a script would either
 guess wrong silently or need the same human review the UI already provides, so none was written.
+
+---
+
+## 2026-08-22 — owner's answers to the open `NIGHT_AUDIT_QUESTIONS.md` blocks (Q-3 … Q-13)
+
+All twelve still-open questions from `docs/NIGHT_AUDIT_QUESTIONS.md` were put to the owner in one
+sitting and answered. The full answers, with the reasoning and what shipped, live in that file next
+to each question. Recorded here because four of them are decisions to **not** build something, and a
+decision not to build is the kind that gets silently re-litigated by the next person who notices the
+gap.
+
+### Built
+
+- **Q-4 — notification preferences get a real backend.** `GET/PUT /notifications/preferences` in
+  notification-service, one un-prefixed Redis hash per user, no TTL, dropped on `user.deleted`. The
+  switches were unreadable by any server code, so a future "product updates" mailer would have gone
+  out to people who had explicitly switched it off. Nothing reads them yet — there is no such mailer
+  to gate — which is stated in `API_CONTRACTS.md` rather than papered over.
+- **Q-5 — the retired gamification screens leave the admin nav.** Chosen over fixing the five silent
+  mutations (W-15) on screens that administer a mechanic no learner can see, and it removes the risk
+  of somebody pressing the irreversible "close week" on it. Routes untouched.
+- **Q-6 — onboarding's skill write stays best-effort but stops being silent.** The user reaches
+  `/tree` and is told there, with a link to their profile. Chosen over the stricter "fail the whole
+  onboarding", so a flapping backend cannot trap a new user on the onboarding screen. This
+  deliberately *replaces* the earlier fix that let the failure sink the mutation.
+- **Q-8 — a real bulk-reorder endpoint.** `PUT /admin/lessons/{lessonId}/exercises/reorder`, one
+  write transaction. Chosen over keeping the per-row `PUT` loop, which could leave two exercises
+  claiming one position when it failed partway through.
+
+### Deliberately not built
+
+- **Q-3 — no backfill of historical `UserDialogScores`.** History before phase 40.22 stays
+  incomplete. The `dialog.evaluated` events are long past Kafka retention, so the only route would be
+  a cross-service read of ai-service's Mongo written straight into learning-service's Postgres — a
+  data migration touching production, for a handful of pre-production accounts. Not worth it. The
+  code fix that stopped further loss is already in.
+- **Q-7 (T-1) — RLS stays off.** Services keep connecting as the schema owner, so `FORCE ROW LEVEL
+  SECURITY` does not apply and isolation rests on the EF query-filter layer alone. Step 12 of
+  `docs/TENANCY/RUNBOOK.md` remains deliberately unperformed; the seven background jobs using
+  `IgnoreQueryFilters()` would each need a `BYPASSRLS` decision first. Nothing was changed, including
+  the comments that describe RLS as active — the owner's answer was explicitly "do nothing", and
+  editing them was not authorised.
+- **Q-10 — the AI-quota screen stays read-only for other organizations.** Platform staff can read any
+  organization's quota (fixed earlier) but cannot save one. Neither making impersonation reach the
+  endpoint nor giving platform staff a direct cross-tenant write is worth the security surface for
+  this screen; a quota change for a customer is a support-ticket operation. The screen already
+  refuses to save into the wrong organization, so nothing is unsafe about leaving it here.
+- **Q-11 — `pipeline-management` keeps `stage: "general"`.** The frontend already renders an unknown
+  stage as «Другое» and offers an explicit «— не назначена (general) —» in the edit form, so nothing
+  lies to the operator. No sixth stage row, no data correction: a skill without a funnel stage is an
+  acceptable state, and this is the policy for any future one too.
+
+### Already resolved before the answers came in
+
+- **Q-13 part 1 — no progress backfill needed.** `6893c2ad` + R2-10 already derive lesson
+  availability from completion facts on every read (`ExerciseService.GetLessonsForSkillAsync`,
+  `GetLessonsForTopicAsync`), so an account whose topic was completed before the unlock-on-transition
+  chain existed self-heals on its next read. Part 2 (unlocking one account by hand on prod) is
+  therefore moot rather than declined.
+- **Q-2, Q-14, Q-15, Q-16** were already answered and closed in earlier runs.
+- **Q-1, Q-9, Q-12** need a person, not code: push/redeploy and a post-deploy re-test (Q-1, Q-9), and
+  assigning each of the 45 real techniques its skill through the admin UI built for AD-3 (Q-12).
