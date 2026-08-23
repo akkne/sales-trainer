@@ -224,10 +224,28 @@ scripts/dev-organization.sh # Organization microservice on host, port 5010 (own 
 > on Kafka (no consumer yet) — the shared local Kafka broker must be running
 > (`scripts/dev-infra.sh`) for events to be delivered; a broker outage is logged and tolerated,
 > not fatal. With the gateway running, `/organizations` and `/organizations/*` are proxied to it.
-> `GET/PUT /organizations/profile` require a valid `X-Organization-Id` header — since
-> identity-service does not yet issue the `org_id` JWT claim (Phase 40.6), those two routes
-> return `403` through the gateway today; call them directly against `localhost:5010` with a
-> manually-set header for local testing. Since 2026-08-20, `POST
+> `GET/PUT /organizations/profile` require a valid `X-Organization-Id` header. That header is set
+> by the gateway (`IdentityForwarding.cs`) from the token's `org_id` claim, which identity-service
+> **does** now issue — but only for a user who holds an active `Memberships` row; sign-up creates
+> no membership, so a fresh account still reaches those routes with no organization. The
+> practical rule for local testing is therefore about *membership*, not about a missing claim:
+> a user with a membership reaches these routes normally, and a user without one does not.
+>
+> On an empty local database nobody has a membership yet, and nothing in the product's own UI
+> creates the first one (an invite is the only supported path, and `bootstrap-admin` issues an
+> invite rather than a membership). To get a working tenant locally: create the organization with
+> `POST /organizations` as platform staff, then insert the `Memberships` row — and, because a
+> Kafka outage means `organization.created` never reaches identity's replica consumer, the
+> matching `identity.OrganizationReplicas` row too. Re-login afterwards; the claim is minted at
+> token-issue time, so a token obtained before the membership existed still carries no `org_id`.
+>
+> A user with no organization is not merely limited: tenant-scoped services that read the
+> organization unconditionally fail on them. `GET /notifications` returns **500**
+> (`InvalidOperationException: Organization context is not set`) rather than an empty list, so an
+> orgless account looks broken rather than empty. `GET /organizations/profile` returning `404` is
+> by contrast correct and expected — creating an organization does not create its profile row.
+>
+> Since 2026-08-20, `POST
 > /admin/demo-requests/{id}/provision` also calls identity-service's `internal/organizations/*`
 > route; `export_organization_env` in `lib-local-env.sh` points `IdentityService__BaseUrl` at
 > `localhost:${LOCAL_IDENTITY_PORT}` for this profile (the committed default is a Docker-network
