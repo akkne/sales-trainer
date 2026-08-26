@@ -718,7 +718,9 @@ NOTIFICATION_TEMPLATES = [
     (12, "Напоминание от руководителя", "Задание «{assignment}» всё ещё не начато.", "/assignments"),
     (13, "Комментарий к вашему диалогу", "{author} оставил заметку к разбору звонка.", "/dialog"),
     (14, "Спор по оценке рассмотрен", "Оценка за диалог пересмотрена и повышена.", "/dialog"),
-    (6, "Ответ в обсуждении", "{author} ответил в теме «{thread}».", "/discuss"),
+    # No DiscussReplyReceived (6) here on purpose: Discuss is hidden from the product's
+    # navigation, and a bell entry that opens a section nobody can reach is worse than a
+    # shorter inbox. The threads themselves are still seeded — hidden, not deleted.
     (9, "Пора вернуться к компании", "По карточке «{company}» запланировано следующее касание.", "/companies"),
     (1, "Заявка в друзья", "{author} хочет добавить вас в друзья.", "/friends"),
     (2, "Заявка принята", "{author} теперь у вас в друзьях.", "/friends"),

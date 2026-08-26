@@ -1,5 +1,16 @@
 # Discuss (Community Forum)
 
+> **Hidden from the product's navigation (2026-08-26, owner request «скрой обсуждения»).**
+> `/discuss` no longer appears in the desktop rail (`features/layout/components/nav-rail.tsx`)
+> or in the mobile top bar (`features/layout/components/mobile-topbar.tsx`), and the demo-data
+> seeder no longer writes `DiscussReplyReceived` notifications, because a bell entry opening a
+> section nobody can reach is worse than a shorter inbox.
+>
+> **Hidden, not removed.** The pages, the social-service endpoints, the database tables and the
+> admin panel's moderation section (`/admin/discuss`) are all untouched and still work; a direct
+> visit to `/discuss` still renders. Restoring the feature is one line in each of the two
+> navigation components. Everything below this note still describes live behaviour.
+
 A community Q&A forum where salespeople create threads, post replies, upvote, and tag
 topics. Mirrors the design in `.design/new-design/js/screens-discuss.jsx`. Implemented as a
 vertical slice under `src/backend/api/Features/Discuss` and `src/frontend/features/discuss`.

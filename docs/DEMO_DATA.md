@@ -21,7 +21,7 @@ empty state:
 | `/org/assignments` | «Заданий пока нет» |
 | `/org/dialogs` | no sessions to review |
 | `/companies` | «Пока нет ни одной компании» |
-| `/discuss` | «Пока нет обсуждений», «Пока нет тегов», «Пока нет данных» |
+| `/discuss` | «Пока нет обсуждений», «Пока нет тегов», «Пока нет данных» — the forum is now hidden from the navigation ([DISCUSS.md](DISCUSS.md)), so this one is reachable by address only, and the seeder writes no `DiscussReplyReceived` notifications |
 | `/profile`, `/tree`, `/skill/[id]` | «Нет данных» in every accuracy tile |
 | notification bell | «Пока нет уведомлений» |
 | dialog history sidebar | «Истории диалогов пока нет» |

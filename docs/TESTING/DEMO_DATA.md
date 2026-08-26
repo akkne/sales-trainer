@@ -121,7 +121,9 @@ account) and confirm none of these shows its empty state:
 - `/org/assignments` — three active, one draft, two closed; funnel bars populated
 - `/org/dialogs` — sessions listed, coaching notes and at least one score dispute
 - `/companies` and a company card — contacts, call log, briefing, readiness score, follow-up
-- `/discuss` — threads, replies, popular tags, top authors of the week
+- `/discuss` — threads, replies, popular tags, top authors of the week. Hidden from the
+  navigation, so open it by address; the notification bell must contain **no** «Ответ в
+  обсуждении» entry
 - `/tree`, `/skill/[id]`, `/profile` — accuracy tiles show percentages, stage groups carry labels and colours
 - notification bell — populated inbox, a mix of read and unread
 - dialog history sidebar — past conversations with feedback

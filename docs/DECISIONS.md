@@ -6367,3 +6367,23 @@ gap.
 - **Q-2, Q-14, Q-15, Q-16** were already answered and closed in earlier runs.
 - **Q-1, Q-9, Q-12** need a person, not code: push/redeploy and a post-deploy re-test (Q-1, Q-9), and
   assigning each of the 45 real techniques its skill through the admin UI built for AD-3 (Q-12).
+
+## 2026-08-26 — Discuss is hidden from navigation, not removed
+
+The owner asked to hide the community forum («скрой обсуждения»). Two ways to do that:
+delete the feature, or drop it out of the navigation and leave everything standing.
+
+**Chosen: drop the two navigation entries.** `/discuss` disappears from the desktop rail and
+the mobile top bar; the routes, the social-service endpoints, the `Discuss*` tables and the
+`/admin/discuss` moderation screen are untouched. This is the same shape the gamification
+removal took — the UI stops showing it, the backend keeps answering — and it makes the change
+one line in each of two files to undo.
+
+Deleting would have been the wrong trade. The forum is a working vertical slice with photo
+attachments, a tag catalog, voting and an admin moderation surface; throwing that away for a
+visibility request would be unrecoverable without a revert, and "hide" is not "delete".
+
+One consequence worth stating: `scripts/seed-demo-data.py` stopped writing
+`DiscussReplyReceived` notifications. A bell entry whose action URL opens a section with no way
+back into the app is worse than a shorter inbox. The seeded threads themselves stay — they cost
+nothing and come back the moment the navigation entry does.

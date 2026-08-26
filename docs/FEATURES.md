@@ -264,6 +264,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - "Sellevate Product Metrics" Grafana dashboard — see [MONITORING.md](MONITORING.md)
 
 ### Discuss (Community Forum)
+- **Hidden from navigation since 2026-08-26** — no rail or mobile-topbar entry; pages, endpoints, tables and `/admin/discuss` moderation all still work. See [DISCUSS.md](DISCUSS.md)
 - Threads with title/body and one or more tags; replies; upvote-only voting on threads and replies
 - Author or admin marks an accepted reply → thread shows "Решено"; admin pin/hot flags
 - Hybrid tags: admin-curated catalog + user free-form tags created on the fly; dynamic popular-tag counts

@@ -14,13 +14,17 @@ interface RailItem {
     label: string;
 }
 
+/// Discuss is deliberately absent here and from <c>MobileTopbar</c>: the forum is hidden
+/// from the product's navigation, the same way gamification was. Nothing about it was
+/// deleted — the `/discuss` routes, the social-service endpoints and the admin panel's
+/// moderation section all still work — so restoring it is one line in each of the two
+/// navigation components. Do not re-add it without being asked.
 const RAIL_ITEMS: RailItem[] = [
     { href: "/tree",      icon: "compass",   label: "Путь" },
     { href: "/dialog",    icon: "message",   label: "Практика" },
     { href: "/companies", icon: "briefcase", label: "Компании" },
     { href: "/guidebook", icon: "book",      label: "Справочник" },
     { href: "/friends",   icon: "users",     label: "Друзья" },
-    { href: "/discuss",   icon: "forum",     label: "Обсуждения" },
 ];
 
 function getInitials(name: string): string {
