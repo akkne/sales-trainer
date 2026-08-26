@@ -1,138 +1,185 @@
-# Sellevate — Full Interface Redesign (Claude Design Prompt)
+# Redesign brief for Claude Design (V4)
 
-> Ready-to-paste prompt for Claude Design / Google Stitch.
-> Goal: redesign the entire user interface of Sellevate while preserving every existing feature. Handbook and AI Dialogs may be reimagined more freely (see section 5).
+> Готовый к вставке промпт. Пишется с нуля 2026-08-26 и заменяет предыдущий бриф целиком:
+> тот описывал продукт, которого больше нет (лига, сердечки, XP, зелёный Duolingo-стиль).
+> Всё ниже — актуальное состояние: лайм `#96F500`, Hanken Grotesk, левый nav rail,
+> мультитенантность, три зоны интерфейса, отсутствие геймификации.
+>
+> Скриншоты всех экранов прикладываются к промпту как факт-база: они показывают, **что есть**,
+> а не то, что нужно повторить.
 
 ---
 
-## 1. Product overview
+## Контекст
 
-Sellevate is a B2B sales-skills trainer used primarily in Russian by SDRs, Account Executives, Account Managers and founders. Users complete bite-size exercises, practice live conversations with AI, and see their team's progress in weekly cohorts. The whole UI is in Russian — keep Russian labels verbatim. Target platforms: responsive web (mobile-first + desktop shell), Next.js 15 App Router, Tailwind.
+**Sellevate** — B2B SaaS-платформа тренировки продаж. Её покупает компания, а не человек:
+руководитель отдела продаж (РОП) заводит организацию, приводит команду, раскатывает на неё
+программу обучения и задания, а потом смотрит, кто как разговаривает с клиентами. Внутри
+организации сотрудники (SDR, Account Executive, Account Manager, основатель) проходят короткие
+упражнения, разговаривают с ИИ-клиентом текстом и **живым голосом в реальном времени**, ведут
+список своих компаний-проспектов и репетируют конкретный звонок перед тем, как позвонить
+по-настоящему.
 
-Current look is a consumer-app clone (green #58CC02, 3D buttons with bottom shadow, cartoon mascot, Manrope). **Throw that away.** You have full brand freedom — new palette, type, motion language, illustration style. The ask is a fresh, premium, distinctive look that keeps the disciplined, consistent-practice spirit of daily learning without the consumer-app trappings. Surprise me.
+Три зоны интерфейса, у каждой свой пользователь:
 
-## 2. Required screens (design every one)
+| Зона | Кто | Язык |
+|---|---|---|
+| Обучение (`/tree`, `/dialog`, `/companies`, `/guidebook`, `/friends`, `/profile`, `/settings`) | сотрудник | русский |
+| Панель организации (`/org/*`) | РОП и менеджеры | русский |
+| Платформенная админка (`/admin/*`) | наша команда | английский |
 
-### Auth & onboarding
-1. **Landing `/`** — hero, value props, two CTAs ("Начать бесплатно", "Попробовать без регистрации"), feature grid (realistic scenarios, AI evaluation, activity consistency & team progress, handbook).
-2. **Login `/login`** — email+password, Google OAuth, link to register.
-3. **Register `/register`** — symmetric to login.
-4. **Onboarding (4 steps)** — persona picker (SDR / AE / Account Manager / Founder / Other) → sales type → experience → skill selection. Progress dots + "Пропустить".
+Ключевое про тон: это **рабочий инструмент для взрослых людей, которые зарабатывают деньги
+разговорами**. Не детская обучалка, не игра. Никаких очков, стриков, лиг, сердечек, мишек и
+конфетти-как-смысла — весь этот слой из продукта убран сознательно и не должен вернуться
+(бэкенд его всё ещё считает, но в интерфейсе его нет). Награда за тренировку — разбор
+разговора, а не циферка.
 
-### Main shell (authenticated)
-Design both shells:
-- **Mobile:** bottom nav with 6 items — `Путь`, `Лига`, `Справочник`, `Диалог`, `Друзья`, `Профиль`. Notification bell + profile chip in a compact top area.
-- **Desktop:** top app bar with brand lock-up, horizontal nav (same 6 items), activity-consistency indicator, notification bell with unread badge, profile chip showing "Уровень N" and avatar initial.
+---
 
-### Core learning flow
-5. **Home `/tree`** — main hub. Two modes:
-   - No skill selected → full all-skills "lesson path" (a scrollable vertical path of lesson nodes in zigzag layout).
-   - Skill selected → same path scoped to one skill, with "Сменить навык →" link.
-   Each node has 3 states: **completed** (milestone badge), **active** (prominent, pulsing ring, tap opens popover), **locked** (subdued, lock icon). Active-node popover: lesson title, "Урок X из N", primary CTA "Приступить к прохождению", secondary link "Посмотреть карту курса →". Side widget with: activity-consistency indicator, weekly progress points, total progress points, plus a short motivational tip.
-6. **Skill course map `/skill/[id]/map`** — rich per-skill overview. Header with skill title, icon, completion %, circular progress. Grid/list of lesson cards (step number/lock/check badge, title, 1-line description, estimated minutes, progress-point reward, status chip like "Далее"). CTAs: "Начать", "Продолжить", "Повторить", or locked state with "Пройди предыдущий урок".
-7. **Lesson session `/session/[lessonId]`** — full-screen, no global nav. Header: ✕ close, animated progress bar, hearts counter (starts at 4, lose one per wrong answer). Body: character speech bubble for context, then one of 11 exercise types (see section 4). Footer: "ПРОПУСТИТЬ" + primary action ("ПРОВЕРИТЬ" / "ПРОДОЛЖИТЬ" / "ОТПРАВИТЬ ОЦЕНКУ" / "ЗАВЕРШИТЬ ДИАЛОГ"), plus keyboard hint ("1–4 выбрать · Enter — проверить"), hidden on touch. Result banner slides up from bottom — green for correct, red for wrong, with explanation and progress points earned. Completion screen: clear confirmation, 2×2 stat grid (progress points earned / accuracy % / time / hearts remaining), primary "Следующий урок →" button when available, secondary "Вернуться к пути". Hearts=0 → failure screen with "Попробовать снова". Milestone-unlock toasts slide in during the session.
+## Что нельзя ломать
 
-### Team progress & social
-8. **League `/league`** — weekly team progress view. Top banner with tier name (Бронза / Серебро / Золото / Алмаз) and tier artwork. Countdown "До конца недели Xд Xч". Top-3 recognition (icon for 1st, badges for 2nd/3rd). Progress list with clearly marked **advancement band** (top 10, positive highlight) and **needs-improvement band** (bottom 5, warning tint). Current user's row is pinned-prominent regardless of position. Advancement/needs-improvement outcome banner at top when a week just closed.
-9. **Friends `/friends`** — tabbed: **Друзья** (search bar, activity feed "Активность друзей", friend cards with "Написать"), **Запросы** (incoming + outgoing, unread badge on tab), **Рейтинг** (friend-only progress-points view), **Чаты** (conversation list).
-10. **Public profile `/friends/[userId]`** — avatar, display name, persona badge, stats grid (activity consistency, progress points, milestones count, avg score), action buttons (add friend / cancel / remove / message).
-11. **Chat `/friends/chat` and `/friends/chat/[conversationId]`** — 1-to-1 chat. Conversation list on the left (last message preview, unread badge, avatar), chat window on the right (message bubbles user-right / friend-left, timestamps, input with send button). On mobile: list and chat are two screens.
-12. **Notifications dropdown** — anchored to bell. Header "Уведомления" + "Прочитать всё". Notification cards with type icon, title, body, relative time, unread tint. Types: friend request received, friend request accepted, chat message received, milestone unlocked, activity-consistency reminder. On mobile render as a full-screen sheet.
+- **Марка.** Логотип — лаймовая плашка `#96F500` с тёмной «S», слово «Sellevate.» с точкой.
+  Лайм остаётся брендом.
+- **Физика лайма.** Относительная яркость ~0.71 — это светлый цвет. Белый текст на нём даёт
+  1.38:1 и не существует. Лайм — **только заливка**; всё, что лежит поверх, почти чёрное; лаймовый
+  «текстовый» вариант — отдельный тёмный оттенок. Три роли, которые нельзя путать: заливка / текст
+  брендом на светлом / текст поверх заливки.
+- **«Готово» — не лайм.** Успех живёт в изумрудно-бирюзовом (~164°), чтобы «выполнено» и «бренд»
+  различались на размере бейджа. Опасность — красный, предупреждение — янтарный, информация —
+  синий; фиолетовый оставлен как категориальный акцент.
+- **Две темы.** Светлая и тёмная равноправны, обе живут на CSS-переменных, переключаются
+  атрибутом на `html`. Есть ещё компактная плотность.
+- **Русские подписи.** Навигация: `Путь`, `Практика`, `Компании`, `Справочник`, `Друзья`,
+  `Профиль`, `Настройки`, `Управление`. Панель организации: `Команда`, `Задания`, `Разговоры`,
+  `Спорные оценки`, `Контент`, `Профиль компании`, `Программа`, `Люди`, `Расход ИИ`.
+- **Форум `Discuss` спрятан** из навигации — не рисуй ему вход.
 
-### Practice (AI)
-13. **Dialog bundles `/dialog`** — grid of bundle cards (each card: icon, title, description, mode count). Empty state if OpenAI not configured.
-14. **Dialog modes `/dialog/[bundleId]`** — mode cards for the chosen bundle. Each mode may support text, voice, or both — show badges.
-15. **Dialog chat `/dialog/[bundleId]/[modeId]`** — REIMAGINE heavily (see section 5). Current baseline: collapsible history sidebar grouped by date, chat bubbles, text input, "Завершить диалог" button, feedback modal with progress points + feedback text + "Новый диалог".
-16. **Voice dialog** — same screen, but a big mic button with states: idle / listening (pulse) / processing (spinner) / AI speaking / error. Status text below ("Нажмите для голоса", "Слушаю…", "AI отвечает…").
+## Что свободно
 
-### Reference
-17. **Handbook `/guidebook`** — REIMAGINE (see section 5). Baseline: category chips (Возражения / Холодные звонки / Закрытие / Квалификация / Rapport / Переговоры) with "Все" default, search input, expandable technique cards (category badge, tags, title, excerpt → full markdown + "Связанный навык →" link).
+Всё остальное. Типографика (сейчас Hanken Grotesk — можно менять), нейтральная шкала, форма и
+глубина поверхностей, радиусы, сетки, иконки, аватары, язык движения, illustration style,
+структура каждого экрана. Сейчас интерфейс — «широкая светлая бумага + узкий вертикальный рельс
+слева + моно-капслок подписи секций + большой заголовок с точкой»; этот приём повторён на всех
+страницах и его можно выбросить целиком, если предложишь что-то сильнее.
 
-### Profile
-18. **Profile `/profile`** — avatar + display name + email + persona badge. 2×2 or 4-up stat grid: current activity consistency, total progress points, longest activity streak, average score %. "Навыки пройдено" progress bar. **Milestones grid** (5-col on desktop, 3-col on mobile): locked = grayscale + opacity, unlocked = branded color; counter "X из 10 разблокировано". **Мои навыки** enrollment section: per-skill card with toggle — base skill labelled "Базовый — всегда включён", others toggleable. Admin panel link visible only to admins. Logout button.
+Хочется премиальности инструмента, а не лендинга: плотность без тесноты, ощутимая иерархия,
+спокойный фон и одна яркая точка внимания на экран. Удиви.
 
-## 3. Features that MUST stay functional (don't redesign them away)
+---
 
-- 11 exercise types — every interaction pattern below must have a clear UI
-- Progress points, daily activity consistency with reset, 10 milestones with unlock toasts, team progress tiers with advancement/needs-improvement movement
-- Sequential lesson unlock, retry queue (failed exercises re-queued at end, max 2 attempts)
-- Hearts system (4 hearts per session)
-- Skill enrollment (subscribe / unsubscribe to skills)
-- Skip button in exercises
-- Keyboard shortcuts (1–4 select, Enter submit) — show hints on non-touch
-- Post-session stats (progress points, accuracy, time, hearts remaining)
-- Voice roleplay states (idle / listening / processing / playing)
-- Notifications bell with unread badge and 5 notification types
-- Friend request flow with pending badge on nav
-- 1-to-1 chat with polling (keep a live-feeling chat UX)
-- Demo mode (no registration) — mention in landing and auth screens
-- Admin role indicator on profile (link to admin panel — don't need to redesign admin itself)
+## Экраны
 
-## 4. The 11 exercise types — design each as a distinct UI pattern
+### Вход
+1. **Лендинг** `/landing` — публичный. Герой, ценность, CTA «Начать бесплатно» и «Запросить демо».
+2. **`/demo`** — форма заявки на демо + экран «Отлично, мы с вами свяжемся».
+3. **Логин / регистрация / подтверждение email кодом / инвайт по ссылке.**
+4. **Онбординг** — 4 шага: должность → тип продаж → опыт → выбор навыков. Плюс состояние
+   «ты зарегистрирован, но ещё не в организации».
 
-1. **multiple_choice** — numbered option buttons (1-4), single select, explanation on result
-2. **fill_blank** — sentence with `???` placeholder + numbered option buttons that fill the blank
-3. **free_text** — textarea with character counter ("Минимум 20 символов"), mic button for voice-to-text, AI score 0-10
-4. **ordering** — shuffled list, reorderable via drag OR up/down arrow buttons
-5. **matching** — two columns, tap-to-connect pairs, connection visual, reset button
-6. **categorizing** — items pool at top, 2–3 category buckets below, drag-or-tap to assign
-7. **find_error** — a dialogue with clickable lines, user taps the wrong line and optionally types explanation (10+ chars)
-8. **rewrite_better** — read-only original sales phrase + textarea for improved version + criteria list
-9. **ai_dialog** — mini chat with a customer persona (avatar + scenario), user types replies, minimum N turns before "Завершить диалог", AI score at end
-10. **rate_call** — collapsible call transcript + 1–5 star rating on each evaluation axis + optional comment textarea
-11. **written_answer** — prompt bubble + long-form textarea, AI-evaluated
+### Обучение
+5. **`/tree` — «Путь», главный экран.** Три зоны: слева список навыков, сгруппированных по
+   этапам воронки (у этапа своя подпись, цвет и порядок, они приходят из БД); в центре —
+   вертикальная цепочка уроков выбранного навыка с прогрессом; справа — контекст дня
+   (совет дня, что дальше). Состояния узла: пройден / доступен / заблокирован / теория (книжная
+   метка). Нужен и вариант «навык не выбран».
+6. **`/skill/[id]` и `/skill/[id]/map`** — карта навыка: заголовок с процентом, карточки уроков
+   (номер, название, строка описания, минуты, статус «Далее» / «Повторить» / замок).
+7. **`/session/[lessonId]` — прохождение урока.** Полный экран без навигации. Сверху крестик и
+   прогресс-полоса, снизу основное действие и подсказка о горячих клавишах. **Одиннадцать типов
+   упражнений, каждому нужен свой внятный паттерн:** выбор варианта; пропуск в реплике; свободный
+   текст с оценкой ИИ; упорядочивание; сопоставление пар; раскладка по категориям; найди ошибку в
+   диалоге; перепиши фразу лучше; мини-диалог с персонажем; оцени звонок по осям (звёзды +
+   комментарий); развёрнутый письменный ответ. Плюс **теоретические карточки** — сторисы, которые
+   листают перед практикой (текст / диалог / список / цитата).
+   Результат ответа — плашка «верно/неверно» с объяснением и разбором от ИИ. После первого прохода —
+   экран «Работа над ошибками» и один круг повтора только ошибочных заданий. Финал урока — сводка
+   (точность, время), переход к следующему уроку.
+8. **`/guidebook` и `/reference/[id]` — «Справочник».** Коллекция техник продаж: фильтр по навыку
+   и тегам, поиск, карточка техники с уровнем освоения (Новичок → Практик → Эксперт → Мастер),
+   внутри — разбор, пример диалога с аннотациями к репликам, кейс, врезка от коуча-персонажа.
 
-All exercises share: character speech bubble for context/situation, result banner (green/red), explanation card, "Продолжить" action.
+### Практика с ИИ
+9. **`/dialog` — «Практика».** Каталог сценариев-бандлов, внутри бандла — режимы (текст, голос
+   или оба). Отдельно: **свой сценарий** — пользователь сам описывает клиента и ситуацию, а
+   система проверяет, что это вообще про продажи.
+10. **Текстовый диалог** `/dialog/[bundleId]/[modeId]` — переосмысли смелее: не чат, а сцена.
+    Портрет клиента, его роль и настрой, цель разговора, живая обратная связь по ходу, история
+    прошлых заходов. В конце — карточка разбора по осям (контакт, выявление, работа с
+    возражением, закрытие).
+11. **Голосовой звонок** `/dialog/[bundleId]/[modeId]/voice` — самый сложный экран продукта и
+    главный кандидат на «вау». Звонок реальный: детекция речи, потоковое распознавание, синтез
+    ответа, задержка до ~700 мс, собеседника можно перебивать. Нужны отдельные внятные состояния:
+    ожидание → набор → слушаю → вы говорите → думаю → собеседник говорит → перебито → помехи →
+    завершён. Плюс живая расшифровка (в том числе промежуточная, ещё не финальная), таймер,
+    остаток голосовых минут, разбор после звонка с возможностью повторить генерацию разбора, и
+    состояние «браузер не умеет микрофон».
+12. **`/dialog-reviews`** — разборы разговоров сотрудника, включая ответ РОПа и спор об оценке.
 
-## 5. What to REIMAGINE — make these screens feel premium
+### Компании (мини-CRM проспектов)
+13. **`/companies`** — список компаний-проспектов пользователя со статусом сделки и напоминанием
+    о следующем шаге (в срок / просрочено).
+14. **`/companies/[id]`** — карточка: описание, контакты, цель следующего звонка, единая лента
+    (репетиции с ИИ + журнал настоящих звонков), запланированный follow-up.
+15. **`/companies/[id]/call/chat` и `/call/voice`** — та же практика, но с подставленным
+    контекстом этой компании: «репетиция перед звонком».
 
-These parts can break from the current UX. Go further than the baseline:
+### Социальное и профиль
+16. **`/friends`** — вкладки: друзья (поиск людей, лента активности), заявки, чаты 1-на-1.
+    Публичный профиль коллеги. Никакого рейтинга.
+17. **`/profile`** — аватар (загружаемое фото либо процедурный геометрический), имя, должность,
+    редактирование профиля модалкой, прогресс по навыкам, остаток голосовых минут, управление
+    подписками на навыки.
+18. **`/settings`** — темы, плотность, уведомления по email, выход.
+19. **Колокольчик уведомлений** — панель со списком, «прочитать всё», типы: заявка в друзья,
+    её принятие, сообщение в чате, задание выдано / дедлайн, напоминание по компании.
 
-### Handbook `/guidebook` — add depth and recognition
-- **Mastery level per technique** (Novice → Practitioner → Expert → Master), shown as a progress ring or level badge on each card.
-- **"Techniques mastered" hero stat** at the top.
-- **Inside each expanded card:** a **Sample Dialog** section with alternating prospect/rep chat bubbles (scripted example), a short **Case study** snippet, and 2–3 micro-prompts ("Practice this now →" deep-linking into a matching exercise).
-- A "Coach" sidecar in expanded cards: a mentor persona (e.g. "Skeptic Sergey") giving a one-paragraph insight on this technique.
-- Filter chips stay, but treat categories as visually distinct "collections" — almost like Pokédex-style sets, not flat filters.
+### Панель организации `/org/*` (РОП) — рисовать наравне с обучением
+20. **`Команда`** — воронка обучения по этапам с именами, тепловая карта навыков команды и панель
+    провалов рядом с ней.
+21. **`Задания`** — список, создание (аудитория задаётся правилом, а не списком; правило
+    завершения — по оценке диалога или точности упражнений; дедлайн; автоповторы), карточка задания
+    с пятиэтапной воронкой прохождения и действием «напомнить тем, кто не начал».
+22. **`Разговоры`** — записи диалогов сотрудников с оценками, цитатами из разговора и коуч-заметкой.
+23. **`Спорные оценки`** — очередь оспоренных оценок с решением.
+24. **`Контент`** — генерация уроков из материалов компании: это **двухтактный процесс с
+    обязательной остановкой** — сначала структура, человек её утверждает, только потом генерация
+    (она платная). Нужны состояния: материала недостаточно (с перечнем, что принести), структура на
+    утверждении, генерация идёт, готово. Плюс очереди пакетной адаптации тона и ИИ-ревью контента,
+    где каждый пункт принимают или отклоняют **по одному, никогда автоматически**, и очередь
+    устаревших правок.
+25. **`Профиль компании`** — не форма из семи полей, а интервью: продукт, тон, запрещённые
+    обещания. Эти ответы подставляются в контент и в поведение ИИ-клиента.
+26. **`Программа`**, **`Люди`** (роли, инвайты), **`Расход ИИ`** (минуты и токены против лимита).
 
-### AI Dialog `/dialog/[bundleId]/[modeId]` — make it a scene, not a chat
-- **Customer avatar + scene frame** at the top: large character illustration/portrait, name, job title, company, mood indicator. Background hints at setting (office, phone call, video call).
-- **Live in-session feedback rail** on the side (or collapsible): as the user types, a coach panel shows tips, spotted mistakes, and technique flags ("You used open-ended question ✓", "Missed the objection hook ⚠️"). Feels like live commentary.
-- **Turn timer** and **objective chips** at the top ("Цель: выявить потребность", "Обойти возражение о цене").
-- **End-of-session scorecard:** axes like Rapport / Discovery / Objection-handling / Close with radar/bar chart + progress points + transcript replay with highlighted moments.
-- History sidebar becomes a **"Case files"** tray — past dialogs as labelled case folders with outcomes.
+### Платформенная админка `/admin/*`
+Английская, табличная, сейчас заметно беднее остального. Достаточно дать ей общий каркас и
+компоненты (таблица, фильтры, форма, модалка) — постранично рисовать не нужно.
 
-### New mode: **Live Call with NPC Mentor**
-- Add a dedicated entry on `/dialog` (distinct from regular bundles): a rotating NPC mentor card ("Skeptic Sergey", "Mentor Marcus", etc.) with a motivational line + "CHALLENGE" CTA.
-- Opens a stylized "call" screen: ringing phone transition, avatar answers, live voice roleplay, post-call review with mentor's verdict.
+---
 
-### Voice mic button
-- Make it the hero of the voice screen — a big, tactile, alive control with waveform/particle feedback while listening and a distinct "AI speaking" state.
+## Обязательные состояния
 
-## 6. Interaction & motion
+Для каждого экрана: загрузка (скелетоны, не спиннеры), пусто, ошибка (в том числе «ИИ недоступен»),
+частичные данные. Пустых экранов в продукте много по определению — новая организация, новый
+сотрудник, ни одной компании, ни одного задания.
 
-- Path/tree screens deserve **real motion**: animated dashed path between active and next node, ping/pulse on the active node, node unlock micro-celebration.
-- Exercise result: slide-up banner with spring easing, subtle confirmation animation on correct-answer runs.
-- Milestone toast: clean slide-in, auto-dismiss after ~4s.
-- Team-progress tier transitions and advancement outcome banner: make them feel like a meaningful, professional moment.
-- Respect `prefers-reduced-motion`.
+## Ограничения
 
-## 7. Constraints
+- Адаптив: мобильный и десктоп для каждого экрана. На мобильном навигация уходит вниз; учти
+  safe-area на iOS. Урок и голосовой звонок на мобильном — отдельные важные раскладки.
+- Доступность: контраст WCAG AA, видимый фокус, состояние «верно/неверно» не только цветом,
+  подсказки горячих клавиш только там, где есть клавиатура.
+- Движение: осмысленное и короткое, `prefers-reduced-motion` уважать.
+- Технически интерфейс собирается на Next.js App Router + Tailwind поверх CSS-переменных, иконки —
+  свой SVG-набор. Значит: любой твой токен должен выражаться переменной, а иконки — приходить
+  единым набором, а не набором эмодзи (сейчас эмодзи местами протекли — это долг, а не приём).
 
-- **Languages in UI:** Russian (keep labels verbatim where quoted above).
-- **Responsive:** mobile-first, but produce explicit mobile AND desktop layouts for every screen. Bottom nav on mobile, top nav on desktop.
-- **Accessibility:** WCAG AA contrast, visible focus rings, don't rely on color alone for correct/wrong, keyboard hints on exercises.
-- **Safe areas:** respect iOS safe-area-inset on bottom nav and session footer.
-- **Empty states:** design empty states for friends, chats, notifications, team progress view, no-lessons tree.
-- **Loading states:** skeleton layouts, not spinners.
-- **Error states:** OpenAI not configured (dialog/voice), network errors, etc.
+## Что сдать
 
-## 8. Deliverables
-
-For each screen listed in section 2, produce:
-- Mobile layout
-- Desktop layout (where applicable — session and auth screens can be single-layout)
-- Key interactive states (hover/focus/active/loading/empty/error)
-- Component tokens (color, type, spacing, radius, shadow) consolidated into a single design system page
-
-Deliver the design system page first (brand, typography, color system, core components: buttons, cards, chips, inputs, modals, toasts, progress, milestones, avatars, path nodes, chat bubbles, bottom/top nav) — then the screens. All exported as interactive, clickable prototypes where the main flows (onboarding → tree → session → completion → league) are navigable end-to-end.
+1. **Сначала дизайн-система одной страницей:** марка, типографическая шкала, цветовая система
+   с тремя ролями лайма, отступы, радиусы, тени, и компоненты — кнопки, поля, карточки, чипы,
+   таблица, модалка, тосты, прогресс, аватары, узел пути, реплики диалога, навигация (рельс и
+   мобильная).
+2. Затем экраны по списку, мобайл + десктоп, с ключевыми состояниями.
+3. Кликабельный прототип хотя бы для двух сквозных сценариев: онбординг → путь → урок → сводка,
+   и РОП: команда → задание → воронка задания.
