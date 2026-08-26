@@ -75,7 +75,8 @@ Most main pages share a "hero header" pattern:
 ### Public / auth (centered-card layout)
 | Route | Screen |
 |---|---|
-| `/landing` | Landing (`/` redirects here) |
+| `/landing` | Landing — public, never redirects |
+| `/` | Fork: signed in → `/tree`, otherwise → `/landing` |
 | `/login`, `/register` | Auth forms |
 | `/onboarding` | First-run setup |
 
@@ -134,7 +135,11 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 
 ## 6. Screen-by-screen inventory
 
-### 6.1 Landing `/landing` — `app/landing/page.tsx` (`/` is a server redirect to it, `app/page.tsx`)
+### 6.1 Landing `/landing` — `app/landing/page.tsx`
+- Server component, no auth logic: a signed-in visitor who asks for `/landing` by name sees it.
+- The default path `/` (`app/page.tsx`) is the auth-aware fork instead — a client component, because
+  the access token lives in `localStorage` and the server cannot tell the two visitors apart. Signed
+  in → `router.replace("/tree")`, anonymous → `router.replace("/landing")`.
 - Header: wordmark + login link.
 - Hero: 🚀 emoji, title "Прокачай продажи за 5 минут в день" (accent phrase in rust), subtitle, single CTA — primary dark "Начать бесплатно" (→ register).
 - 4 feature cards (emoji + title + description): real scenarios, AI grading, activity consistency & team progress, guidebook.

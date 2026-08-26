@@ -1,9 +1,7 @@
-"use client";
-
+// Deliberately not auth-aware: `/landing` is the public marketing page and stays reachable for
+// everyone, signed in or not (a signed-in РОП still needs to show it to their team). The
+// "already signed in → go to the app" hop lives on the default path instead — see `app/page.tsx`.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useAuthStore } from "@/shared/stores/auth-store";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
 import { Wordmark } from "@/shared/components/wordmark";
@@ -43,15 +41,6 @@ const FEATURE_LIST: {
 ];
 
 export default function LandingPage() {
-    const router = useRouter();
-    const { accessToken } = useAuthStore();
-
-    useEffect(() => {
-        if (accessToken) {
-            router.replace("/tree");
-        }
-    }, [accessToken, router]);
-
     return (
         <div className="landing">
             <div className="app-backdrop" />

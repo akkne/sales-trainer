@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const redirect = vi.fn();
+const replace = vi.fn();
 
 vi.mock("next/navigation", () => ({
-    useRouter: () => ({ replace: vi.fn() }),
-    redirect: (path: string) => redirect(path),
+    useRouter: () => ({ replace }),
 }));
 
 import LandingPage from "@/app/landing/page";
@@ -13,17 +12,29 @@ import RootPage from "@/app/page";
 import { useAuthStore } from "@/shared/stores/auth-store";
 
 describe("RootPage", () => {
-    it("redirects the default path to /landing", () => {
-        redirect.mockClear();
+    beforeEach(() => {
+        replace.mockClear();
+        useAuthStore.getState().clearAuthSession();
+    });
 
-        RootPage();
+    it("sends an anonymous visitor to the landing", () => {
+        render(<RootPage />);
 
-        expect(redirect).toHaveBeenCalledWith("/landing");
+        expect(replace).toHaveBeenCalledWith("/landing");
+    });
+
+    it("sends a signed-in visitor straight into the app", () => {
+        useAuthStore.getState().setAccessToken("token");
+
+        render(<RootPage />);
+
+        expect(replace).toHaveBeenCalledWith("/tree");
     });
 });
 
 describe("LandingPage", () => {
     beforeEach(() => {
+        replace.mockClear();
         useAuthStore.getState().clearAuthSession();
     });
 
@@ -45,5 +56,14 @@ describe("LandingPage", () => {
         for (const link of loginLinks) {
             expect(link).toHaveAttribute("href", "/login");
         }
+    });
+
+    it("stays put for a signed-in visitor instead of bouncing them to /tree", () => {
+        useAuthStore.getState().setAccessToken("token");
+
+        render(<LandingPage />);
+
+        expect(replace).not.toHaveBeenCalled();
+        expect(screen.getAllByRole("link", { name: /Запросить демо/ }).length).toBeGreaterThan(0);
     });
 });
