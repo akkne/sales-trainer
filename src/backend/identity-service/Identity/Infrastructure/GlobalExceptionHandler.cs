@@ -8,6 +8,11 @@ namespace Sellevate.Identity.Infrastructure;
 /// Turns the domain exceptions this service throws into ProblemDetails responses, and everything else
 /// into a 500. Exception messages are echoed to the caller only below 500: a 4xx message is written for
 /// a human to act on, while a 500 could carry internal detail and is logged instead.
+///
+/// Only exception types this service defines may be mapped below 500. Matching a framework type such as
+/// <see cref="InvalidOperationException"/> is not safe here: Entity Framework raises it for transient
+/// database failures, so a mapping like that turns an outage into a 400 and tells the browser the user's
+/// input was at fault.
 /// </summary>
 internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
@@ -22,7 +27,7 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
             EmailNotVerifiedException => (StatusCodes.Status403Forbidden, "Email not verified"),
             OrganizationSuspendedException => (StatusCodes.Status403Forbidden, "Organization suspended"),
             EmailVerificationCooldownException => (StatusCodes.Status429TooManyRequests, "Too many requests"),
-            InvalidOperationException => (StatusCodes.Status400BadRequest, "Bad request"),
+            EmailAlreadyRegisteredException => (StatusCodes.Status400BadRequest, "Bad request"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };

@@ -1,3 +1,4 @@
+using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Features.Auth.Services.Abstract;
@@ -17,7 +18,7 @@ public interface IAuthenticationService
     /// The account carries **no** membership, and this method never creates one — joining an
     /// organization stays the invite's job. What the caller gets is therefore an identity that can
     /// log in and reach nothing but the "waiting for an invitation" screen, which is why the
-    /// duplicate-address answer here can be honest (<see cref="InvalidOperationException"/>) while
+    /// duplicate-address answer here can be honest (<see cref="EmailAlreadyRegisteredException"/>) while
     /// the login and Google paths keep their deliberately uninformative wording: a form that
     /// refuses to tell you the address is taken cannot let you register either.
     /// </para>

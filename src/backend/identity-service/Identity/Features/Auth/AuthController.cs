@@ -138,8 +138,10 @@ public sealed class AuthController(
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
-        catch (InvalidOperationException exception)
+        catch (EmailAlreadyRegisteredException exception)
         {
+            // Catching the bare InvalidOperationException here used to answer 409 for a database
+            // outage too, since that is what Entity Framework raises when it cannot connect.
             return Conflict(new { message = exception.Message });
         }
     }
@@ -319,10 +321,11 @@ public sealed class AuthController(
         {
             return Unauthorized(new { message = exception.Message });
         }
-        catch (Exception exception) when (
-            exception is InvalidOperationException
-            or Google.Apis.Auth.InvalidJwtException)
+        catch (Google.Apis.Auth.InvalidJwtException)
         {
+            // Only a token Google itself rejects is a 401. InvalidOperationException used to be
+            // caught alongside it, which blamed the caller's token for two failures that are ours:
+            // an unreachable database, and a missing Google:ClientId.
             return Unauthorized(new { message = "Invalid Google token." });
         }
     }

@@ -4,6 +4,60 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-26 — `GlobalExceptionHandler` maps only exception types we define, never framework ones
+
+Login was failing on the front end with `400 Bad request` and the detail
+`"An exception has been raised that is likely due to a transient failure."` The trigger was
+infrastructure — the Docker engine was down, so Postgres on `5433` refused connections — but the
+status code was ours. The handler carried an arm matching `InvalidOperationException => 400`, and
+that is exactly the type Entity Framework's retrying execution strategy throws when it cannot reach
+the database. A total outage was therefore reported to the browser as a client error.
+
+Two things went wrong at once, which is what made it worth writing down:
+
+- **Wrong class of status.** A 400 tells the caller their input was at fault, so the login screen
+  showed a form error and the front end had no reason to retry or degrade. Nothing distinguished
+  "your address is malformed" from "the database is gone".
+- **Leaked internals.** The handler echoes `exception.Message` for anything below 500 on purpose.
+  With the outage classified as 400, that rule handed the caller `Failed to connect to
+  127.0.0.1:5433` — an internal host and port.
+
+**Chosen: give the one genuine 400 its own type and delete the framework arm.** Registration's
+duplicate-address case was the only caller relying on it, so it now throws
+`EmailAlreadyRegisteredException` (alongside the existing `EmailNotVerifiedException` and
+`OrganizationSuspendedException`) and everything else falls through to 500.
+
+Auditing for the same shape turned up two more `catch (InvalidOperationException)` sites in
+`AuthController`, both mistranslating an outage into a caller-blaming answer:
+
+- **`POST /auth/register`** caught it to answer `409 Conflict` with the exception message. So the
+  duplicate-address contract is 409 and always was — the handler's 400 arm was never reached for
+  this route — but with the database down the same catch answered `409 Conflict: An exception has
+  been raised that is likely due to a transient failure`. Narrowed to
+  `EmailAlreadyRegisteredException`, which keeps 409 and lets an outage be a 500.
+- **`POST /auth/google`** caught it beside `InvalidJwtException` to answer
+  `401 Invalid Google token.` That blamed the caller's token for two failures that are ours: an
+  unreachable database, and a missing `Google:ClientId` (`GoogleTokenValidator` throws
+  `InvalidOperationException` for the unconfigured case). Narrowed to `InvalidJwtException`, the
+  only one that means Google actually rejected the token.
+
+The alternative was to keep the arm and special-case the transient wrapper — match on the message
+text, or unwrap and test the inner `NpgsqlException`. Rejected: it inverts the safe default. Every
+framework exception that reaches the handler would keep being a 400 until someone notices the next
+one and adds another exclusion, and message-text matching breaks on an EF Core upgrade. Matching
+only our own types fails the other way — an unmapped domain exception becomes a 500, which is loud
+and safe rather than quiet and wrong.
+
+The rule is now stated on the handler itself: **only exception types this service defines may be
+mapped below 500.** `GlobalExceptionHandlerStatusMappingTests` pins it, including that a 500
+withholds the message.
+
+Worth noting the failure was invisible in the logs. Sub-500 responses are logged at Warning by
+design, so a hard outage produced no error line in `logs/identity.log` from the handler — only the
+unrelated outbox relay was loud enough to reveal the dead connection.
+
+---
+
 ## 2026-08-20 — Night contract-audit fix: C-3 — populate `DialogBundleDto.skillSlug`/`skillTitle` via a new ai→learning internal call, rather than dropping the fields
 
 Fixing docs/AUDIT_CONTRACTS.md C-3 (major) unattended (owner asleep). The finding gave explicit

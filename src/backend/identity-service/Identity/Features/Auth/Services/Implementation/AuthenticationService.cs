@@ -59,12 +59,6 @@ internal sealed class AuthenticationService(
         "This Google account cannot be used to sign in.";
 
     /// <summary>
-    /// Sign-up is the one place an honest duplicate answer is unavoidable: a form that refuses to
-    /// say the address is taken cannot create the account either.
-    /// </summary>
-    private const string EmailAlreadyRegisteredMessage = "Email already registered.";
-
-    /// <summary>
     /// Public sign-up, reopened in Phase 40.37 (docs/TENANCY/TENANCY.md §4.1a) after 40.7 had
     /// deleted it.
     ///
@@ -110,7 +104,7 @@ internal sealed class AuthenticationService(
         if (existingUser is not null)
         {
             logger.LogWarning("Registration failed — email already registered {Email}", normalizedEmail);
-            throw new InvalidOperationException(EmailAlreadyRegisteredMessage);
+            throw new EmailAlreadyRegisteredException(normalizedEmail);
         }
 
         var newUserId = Guid.NewGuid();
@@ -140,7 +134,7 @@ internal sealed class AuthenticationService(
         {
             logger.LogWarning(
                 "Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
-            throw new InvalidOperationException(EmailAlreadyRegisteredMessage);
+            throw new EmailAlreadyRegisteredException(normalizedEmail);
         }
 
         logger.LogInformation(

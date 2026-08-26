@@ -397,7 +397,7 @@ public class AuthenticationServiceSecurityTests
 
         var act = async () => await service.RegisterWithEmailAsync("TAKEN@test.com", "Password1!", "Second");
 
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Email already registered.");
+        await act.Should().ThrowAsync<EmailAlreadyRegisteredException>().WithMessage("Email already registered.");
         (await databaseContext.Users.CountAsync()).Should().Be(1);
     }
 

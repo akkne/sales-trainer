@@ -101,6 +101,15 @@ writes are unchanged and still require an explicit organization. See TENANCY.md 
 > organization identity-service has not heard of yet reads as **active**, never as suspended — the
 > registry projection is eventually consistent and a lagging consumer must not lock a customer out.
 
+> **A failed dependency is a 5xx on every auth route (2026-08-26).** Identity-service classifies
+> only exception types it defines below 500; anything else — an unreachable database above all — is
+> a `500` with no `detail`. This is a contract the client can rely on: a 4xx from `/auth/*` means the
+> request was genuinely refused, so a login screen may show it to the user, while a 5xx means the
+> service is down and the request is worth retrying. It did not hold before: `/auth/login/start`
+> answered `400`, `/auth/register` answered `409` and `/auth/google` answered `401` when Postgres was
+> simply unreachable, because each caught the `InvalidOperationException` Entity Framework raises for
+> a transient failure. See `docs/DECISIONS.md` (2026-08-26).
+
 **Three-step login (Phase 40.8).** The login method is a per-organization setting
 (`organization_auth_config`, owned by identity-service), so the client asks first and sends a
 credential second:
