@@ -37,6 +37,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Monitoring & Product Metrics](MONITORING.md) | Usage metrics on Prometheus/Grafana: online users, visits/day/week, page views, UI events, logins/registrations — catalog, cardinality rules, dashboard |
 | [Content Pipeline](CONTENT_PIPELINE.md) | Phases 40.27–40.28: the РОП's «структурировать → **остановиться** → сгенерировать» run — `ContentGenerationJobs` in learning-db, the two internal ai-service calls, and the checkpoint enforced by a CHECK constraint. 40.28 added the input sufficiency threshold: the pipeline refuses thin material and says what to bring instead, as a job state with a machine-readable list rather than an error — and the refusal is arguable, since adding material resumes the run without re-paying for structuring what was already read. **Phase 40.32 added §6a — batch adaptation:** «перепиши все упражнения этапа "закрытие" под наш продукт и тон» as a batch of per-exercise proposals a person accepts or rejects **one at a time, never automatically**, plus an AI review of content the РОП wrote by hand (ambiguous answers, obvious distractors, unmeasurable criteria) as a closed vocabulary of seven codes. Same two tables serve both, applying a rewrite to a global exercise forks the lesson through 40.18's copy-on-write, and the worker cannot write an `Exercise` at all. API-only; the screen is 40.20 |
 | [Seeder](SEEDER.md) | JSON import format for skills, topics, lessons and whole bundles — plus §0 (Phase 40.19): the seeder writes the global library only, requires an explicit `target=global`, and narrows every read to `organization_id IS NULL` |
+| [Demo Data](DEMO_DATA.md) | `scripts/seed-demo-data.py` — fills a local stack with the *lived* layer the content seeder does not write (teammates, attempts, dialog sessions, companies, discuss threads, assignments, notifications) so no screen renders an empty state. Idempotent, local-only |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
 | [UI Current State](UI_CURRENT_STATE.md) | Exhaustive baseline snapshot of all screens, elements, and visual tokens for the redesign |
@@ -95,6 +96,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | Document | Scope |
 |----------|-------|
 | [CORE.md](TESTING/CORE.md) | Test strategy, tooling, how to run |
+| [DEMO_DATA.md](TESTING/DEMO_DATA.md) | `scripts/seed-demo-data.py`: dry-run smoke check, idempotency re-run, failure modes, and the two invariants that decide whether the screens actually come out non-empty |
 | [REGISTRATION.md](TESTING/REGISTRATION.md) | Public sign-up (40.37), Google provisioning, the `EMAIL_VERIFICATION_ENABLED` flag, and the no-organization waiting screen |
 | [EMAIL_VERIFICATION.md](TESTING/EMAIL_VERIFICATION.md) | Registration code flow: unit, integration, manual checklist |
 | [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |

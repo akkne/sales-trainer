@@ -60,6 +60,12 @@ Open http://localhost:3000 (frontend) → talks to http://localhost:5001 (backen
 > free ports 5001/3000:
 > `docker stop code-backend-1 code-frontend-1`
 
+A stack seeded only with the content library has nobody who has practised, so every
+summary screen shows its empty state. To fill that in — teammates, attempts, dialog
+sessions, companies, discuss threads, assignments, notifications — run
+`python3 scripts/seed-demo-data.py`. It is idempotent and local-only; see
+**[DEMO_DATA.md](DEMO_DATA.md)**.
+
 ## Running the full stack in Docker on this machine
 
 `docker-compose.yml` on its own is the **server** shape and does not come up on a
