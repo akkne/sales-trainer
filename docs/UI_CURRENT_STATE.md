@@ -75,7 +75,7 @@ Most main pages share a "hero header" pattern:
 ### Public / auth (centered-card layout)
 | Route | Screen |
 |---|---|
-| `/` | Landing |
+| `/landing` | Landing (`/` redirects here) |
 | `/login`, `/register` | Auth forms |
 | `/onboarding` | First-run setup |
 
@@ -134,7 +134,7 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 
 ## 6. Screen-by-screen inventory
 
-### 6.1 Landing `/` — `app/page.tsx`
+### 6.1 Landing `/landing` — `app/landing/page.tsx` (`/` is a server redirect to it, `app/page.tsx`)
 - Header: wordmark + login link.
 - Hero: 🚀 emoji, title "Прокачай продажи за 5 минут в день" (accent phrase in rust), subtitle, single CTA — primary dark "Начать бесплатно" (→ register).
 - 4 feature cards (emoji + title + description): real scenarios, AI grading, activity consistency & team progress, guidebook.

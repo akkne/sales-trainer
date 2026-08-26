@@ -75,7 +75,7 @@ export default function DemoRequestPage() {
             <div className="app-backdrop" />
             <div className="demo-shell">
                 <div className="demo-value">
-                    <Link href="/" className="demo-back">
+                    <Link href="/landing" className="demo-back">
                         <Icon name="arrow-left" size={16} />
                         На главную
                     </Link>
@@ -117,7 +117,7 @@ export default function DemoRequestPage() {
                             Заявка принята. Напишем вам на{" "}
                             <strong>{workEmail}</strong> в течение одного рабочего дня.
                         </p>
-                        <Link href="/" className="btn btn-outline btn-lg">
+                        <Link href="/landing" className="btn btn-outline btn-lg">
                             Вернуться на главную
                         </Link>
                     </div>
