@@ -1730,7 +1730,7 @@ a.assignment-item:hover { border-color: var(--primary); background: var(--primar
 
 /* padding-bottom keeps the Continue button clear of the home-indicator strip, matching
    what ExerciseActionFooter/ExerciseResultBanner already do inline. */
-.theory-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5; }
+.theory-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; background: linear-gradient(to top, var(--surface-2) 60%, transparent); z-index: 5; }
 
 /* ════════ COMPLETE (V2) ════════ */
 .complete {
