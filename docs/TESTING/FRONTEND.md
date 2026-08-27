@@ -43,6 +43,7 @@ All tests live in `src/frontend/__tests__/`.
 | `CompanyPage.test.tsx` | `/companies/[id]` page: loading/404/error states, description, pre-call CTA handoff, delete-company confirm (Phase 39.6) |
 | `LoginPage.test.tsx` | Two-stage `/login` (Phase 40.8): stage 1 shows no password field and posts `/auth/login/start`; the password form appears only after the server answers `password`; an `oidc` answer shows the "SSO not connected" notice and **no** password field; "Изменить" returns to stage 1 |
 | `roleGating.test.ts` | The 2026-08-16 role split's display gates (`isPlatformStaff`, `canManagePlatformUsers`): both Sellevate staff roles reach the platform admin panel, only `SuperAdmin` may add/remove users, no organization role ever reaches the platform panel, and the retired `OrgAdmin` name is gone from both role vocabularies |
+| `apiClient.test.ts` | `fetchWithAuthToken`'s 401 handling (2026-08-27, docs/DECISIONS.md): a wrong-password `/auth/login` 401 surfaces the server's own message with no extra `fetch` call (no refresh, no redirect); a protected endpoint's 401 still refreshes-and-retries on success, or clears the token and throws `SessionExpiredError` when refresh also fails; a non-401 `/auth/login` failure (e.g. 403) is still a plain `ApiError` |
 
 ## What NOT to test (yet)
 

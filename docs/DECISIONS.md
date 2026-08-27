@@ -4,6 +4,41 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-27 — `fetchWithAuthToken`'s 401 handler skips auth-bootstrap endpoints
+
+A correct password on `/auth/login` worked, but a *wrong* one didn't show "Invalid email or
+password." — the password form reset itself back to the email step and, moments later, showed
+`Session expired`. `useLogin`'s own `onError` never ran with the server's message at all.
+
+`fetchWithAuthToken` (`src/frontend/shared/api/api-client.ts`) treated **every** `401` response,
+regardless of which endpoint sent it, as "this request's access token has died": it tried
+`POST /auth/refresh`, and when that failed too (no refresh cookie exists yet — there is no session)
+it cleared `localStorage`, hard-navigated to `/login` via `window.location.href`, and threw
+`SessionExpiredError`. `/auth/login` answering `401Unauthorized` for a wrong password is exactly a
+`401`, so it went through the identical path: the caller's `useLogin` mutation received
+`SessionExpiredError` (message `"Session expired"`) instead of the `ApiError` carrying the server's
+`"Invalid email or password."`, and the hard reload wiped the in-progress form back to the email
+step. The same bug would have hit a rejected Google token on `/auth/google`.
+
+**Chosen: exclude the auth-bootstrap paths from the refresh-then-redirect branch.** Added
+`AUTH_BOOTSTRAP_PATH_PREFIXES` (`/auth/login`, `/auth/register`, `/auth/google`, `/auth/refresh`,
+`/auth/verify-email`, `/auth/resend-code`, `/auth/invites/`) and an `isAuthBootstrapPath` check: a
+`401` from one of these now falls through to the normal `ApiError` path below, so the caller's own
+`onError` sees the server's actual message. A `401` from every other (protected) endpoint is
+unaffected — refresh, then hard-redirect-and-`SessionExpiredError` on failure, exactly as before.
+
+The alternative was to key off whether the request carried an `Authorization` header at all
+(no token attached → never a session-expiry). Rejected: a stale leftover token can still be sitting
+in `localStorage` from an earlier session when someone retries `/auth/login`, and that stale token
+being attached says nothing about whether *this* login attempt is a real session dying — the
+signal that actually matters is the endpoint, not whether a header happened to be present.
+
+Covered by `src/frontend/__tests__/apiClient.test.ts`: a wrong-password `/auth/login` 401 surfaces
+the server's message without an extra `fetch` call; a protected endpoint's `401` still refreshes
+(and retries) or, on refresh failure, still throws `SessionExpiredError` and clears the token.
+
+---
+
 ## 2026-08-26 — `GlobalExceptionHandler` maps only exception types we define, never framework ones
 
 Login was failing on the front end with `400 Bad request` and the detail

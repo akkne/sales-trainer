@@ -69,6 +69,28 @@ export interface ApiRequestOptions {
     timeoutMs?: number;
 }
 
+/**
+ * Paths that authenticate or bootstrap a session rather than use one. A 401 from one of these
+ * means the credential in the request body was wrong (bad password, rejected Google token) —
+ * never that a prior session's access token has expired, since there is no session yet. Routing
+ * that 401 through the refresh-then-redirect logic below turned "wrong password" into a
+ * misleading "Session expired" message and an unwanted hard reload back to the very login form
+ * the caller was already on.
+ */
+const AUTH_BOOTSTRAP_PATH_PREFIXES = [
+    "/auth/login",
+    "/auth/register",
+    "/auth/google",
+    "/auth/refresh",
+    "/auth/verify-email",
+    "/auth/resend-code",
+    "/auth/invites/",
+];
+
+function isAuthBootstrapPath(path: string): boolean {
+    return AUTH_BOOTSTRAP_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 async function fetchWithAuthToken<TResponseBody>(
     path: string,
     requestOptions?: RequestInit,
@@ -108,7 +130,7 @@ async function fetchWithAuthToken<TResponseBody>(
         if (timeoutHandle) clearTimeout(timeoutHandle);
     }
 
-    if (response.status === 401) {
+    if (response.status === 401 && !isAuthBootstrapPath(path)) {
         const refreshSucceeded = await attemptTokenRefresh();
         if (refreshSucceeded) {
             return fetchWithAuthToken<TResponseBody>(path, requestOptions, apiRequestOptions);
