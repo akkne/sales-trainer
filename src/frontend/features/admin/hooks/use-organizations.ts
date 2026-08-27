@@ -9,7 +9,11 @@ import { clientLogger } from "@/shared/utils/client-logger";
  *
  * Two backends sit behind it and that split is deliberate: organization-service owns the tenant
  * registry (`/organizations`), identity-service owns anything that needs identity-db — minting a
- * token and creating an invite (`/admin/platform/*`). Both are gated by `RequireSuperAdmin` — inviting the first admin adds a user, and impersonation is superadmin-exclusive (docs/DECISIONS.md, 2026-08-16).
+ * token and creating an invite (`/admin/platform/*`). Both are gated by `RequireSuperAdmin` — inviting an admin adds a user, and impersonation is superadmin-exclusive (docs/DECISIONS.md, 2026-08-16).
+ *
+ * `useBootstrapOrganizationAdmin` is not once-per-organization: an organization may hold any number
+ * of admins and superadmins (docs/DECISIONS.md, 2026-08-27), so this mutation is callable as often
+ * as the customer needs staffing. A duplicate address is a `400` from the ordinary invite rules.
  */
 
 export type OrganizationStatus = "Active" | "Suspended";
@@ -122,13 +126,13 @@ export function useBootstrapOrganizationAdmin() {
                 { organizationId, email, role }
             ),
         onSuccess: (result) => {
-            clientLogger.info("First organization administrator invited", {
+            clientLogger.info("Organization administrator invited", {
                 organizationId: result.organization.id,
                 inviteId: result.inviteId,
             });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to invite the first organization administrator", {
+            clientLogger.error("Failed to invite an organization administrator", {
                 organizationId: variables.organizationId,
                 error: (error as Error).message,
             });

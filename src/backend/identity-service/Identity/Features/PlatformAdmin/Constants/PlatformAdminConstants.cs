@@ -13,9 +13,6 @@ public static class PlatformAdminConstants
     public const string OrganizationSuspendedMessage =
         "This organization is suspended.";
 
-    public const string OrganizationAlreadyBootstrappedMessage =
-        "This organization already has an administrator; invite further people from inside it.";
-
     public const string ImpersonationChainingForbiddenMessage =
         "An impersonation token cannot start another impersonation.";
 

@@ -346,23 +346,6 @@ describe("AdminDemoRequestsPage", () => {
             ).toHaveValue("acme-corp");
         });
 
-        it("renders a distinct message when the organization already has an administrator", async () => {
-            signIn("SuperAdmin");
-            mockGet.mockResolvedValue([buildDemoRequest({ companyName: "Acme Corp" })]);
-            mockPost.mockRejectedValueOnce(
-                fakeApiError(409, { code: "organization-has-admin", organizationId: "org-1" }),
-            );
-
-            renderDemoRequestsPage();
-
-            await userEvent.click(await screen.findByRole("button", { name: "Provision" }));
-            await userEvent.click(screen.getByRole("button", { name: "Confirm provision" }));
-
-            expect(
-                await screen.findByText(/already has an administrator — no invite was sent/i),
-            ).toBeInTheDocument();
-        });
-
         it("says the organization was created but the invite failed on a 503, and refreshes the row", async () => {
             signIn("SuperAdmin");
             mockGet.mockResolvedValue([buildDemoRequest({ companyName: "Acme Corp" })]);

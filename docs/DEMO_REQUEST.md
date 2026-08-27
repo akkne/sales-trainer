@@ -212,8 +212,8 @@ and tucks `jobTitle`/`comment` behind a per-row "Details" toggle. Data hooks:
 ### Provisioning: turning an approved lead into a tenant
 
 `POST /admin/demo-requests/{id}/provision` (`SuperAdmin` only) is the one-click version of what
-the "Organizations" screen otherwise does in two separate steps — create a tenant, then bootstrap
-its first admin. Body is `{organizationName?, slug?, adminEmail?, role?}`, all optional; the
+the "Organizations" screen otherwise does in two separate steps — create a tenant, then invite an
+admin into it. Body is `{organizationName?, slug?, adminEmail?, role?}`, all optional; the
 server defaults the name from the lead's `companyName`, the slug from a normalized name, the
 admin email from the lead's `workEmail`, and the role to `TenancySuperAdmin`. `DemoRequestDto`
 carries the outcome as `organizationId?`, `organizationName?`, `organizationSlug?`,
@@ -227,7 +227,7 @@ invite not sent" indicator with a "Finish provisioning" retry that calls the sam
 as either "done" or "failed", both of which would be lying about what actually happened.
 
 **The Provision action is SuperAdmin-only**, reusing `canManagePlatformUsers` — the same predicate
-that gates first-admin bootstrap and impersonation on the organizations screen — rather than a new
+that gates admin bootstrap and impersonation on the organizations screen — rather than a new
 check. A plain `Admin` sees the lead list and provisioning state exactly as a `SuperAdmin` does,
 just without the button.
 
@@ -236,8 +236,7 @@ the invited email before submitting — the slug is the one field that can colli
 organization (`409 slug-taken`). The client only sends a field when the admin actually edited it
 away from the previewed default; an untouched field is omitted from the request body entirely, so
 the server's own name/slug/email derivation stays the single source of truth for what "default"
-means. `409 organization-has-admin` (the tenant exists and already has an administrator — no
-invite is sent) and a plain `400` are rendered as their own distinct messages inline; a `503`
+means. A plain `400` is rendered as its own message inline; a `503`
 message says the organization was created and that pressing again finishes the job, then the list
 is refetched so the row does not keep showing `NotProvisioned` after the tenant already exists.
 
@@ -299,11 +298,15 @@ In order: **upsert `OrganizationReplica` from the payload** (not from Kafka — 
 on `OrganizationBootstrapService` for why this call would otherwise race its own consumer on every
 single provision); **re-check `actorUserId` is a platform `SuperAdmin`** in identity-db (`403` if
 not — the shared secret authorizes the channel, this check authorizes the actor, and skipping it
-would let a plain `Admin`'s click be laundered into a superadmin act); an active administrator
-already existing is `409`; **a pending admin invite already existing is `200` returning that
-invite**, not a fresh `409` — the same convergent-retry property `/provision` needs, because
+would let a plain `Admin`'s click be laundered into a superadmin act); administrators already
+existing in the organization is **not** a refusal — an organization may have any number of them
+(docs/DECISIONS.md, 2026-08-27); **a pending admin invite for the same address is `200` returning
+that invite**, which is the convergent-retry property `/provision` needs, because
 `InviteService.CreateAsync` sends its email after commit and outside any try/catch, so a mail
-failure can leave a committed invite behind a thrown exception. The role is validated and narrowed
+failure can leave a committed invite behind a thrown exception. That convergence is keyed on the
+invited address, not on the organization: a retry always carries the same `BootstrapAdminEmail` the
+first attempt used, while a call naming a different address means a different administrator and gets
+its own invite. The role is validated and narrowed
 to `TenancyAdmin`/`TenancySuperAdmin` by the exact rule `PlatformAdminService.ResolveBootstrapRole`
 already applies (promoted to `internal` rather than duplicated), defaulting to `TenancySuperAdmin`.
 Full contract: docs/API_CONTRACTS.md. The reversal of the Phase 40.9 decision against exactly this

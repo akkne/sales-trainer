@@ -65,11 +65,6 @@ internal sealed class IdentityOrganizationBootstrapClient(
             throw new IdentityOrganizationBootstrapBadRequestException(errorBody);
         }
 
-        if (response.StatusCode == HttpStatusCode.Conflict)
-        {
-            throw new IdentityOrganizationBootstrapConflictException(organizationId);
-        }
-
         logger.LogWarning(
             "identity-service returned {StatusCode} for bootstrap-admin on organization {OrganizationId}: {ErrorBody}",
             response.StatusCode, organizationId, errorBody);

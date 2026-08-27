@@ -193,10 +193,11 @@ internal sealed class DemoRequestProvisioningService(
 
     /// <summary>
     /// Step 5 of the write order, deliberately outside any database transaction — see the class
-    /// summary. Maps identity-service's three distinguishable outcomes onto the three exceptions the
-    /// controller knows how to render, and everything else onto
+    /// summary. Maps identity-service's distinguishable outcomes onto the exceptions the controller
+    /// knows how to render, and everything else onto
     /// <see cref="DemoRequestInviteFailedException"/> so the lead always stays retryable rather than
-    /// surfacing a 500.
+    /// surfacing a 500. An organization that already has administrators is not one of those outcomes:
+    /// it may have as many as it needs, so provisioning a second one is an ordinary success.
     /// </summary>
     private async Task<IdentityBootstrapAdminResult> BootstrapAdministratorAsync(
         DemoRequestEntity demoRequest,
@@ -215,10 +216,6 @@ internal sealed class DemoRequestProvisioningService(
                 request.Role,
                 actorUserId,
                 cancellationToken);
-        }
-        catch (IdentityOrganizationBootstrapConflictException)
-        {
-            throw new DemoRequestOrganizationHasAdminException(organizationReference.Id);
         }
         catch (IdentityOrganizationBootstrapBadRequestException badRequestException)
         {

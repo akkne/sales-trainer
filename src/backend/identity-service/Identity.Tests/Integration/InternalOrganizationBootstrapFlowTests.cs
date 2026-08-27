@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Data;
@@ -109,9 +110,8 @@ public class InternalOrganizationBootstrapFlowTests
             "the shared secret authorizes the channel, not the actor — a plain Admin must never be "
             + "laundered into a superadmin act");
 
-        using var scope = Factory.Services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        (await database.Invites.AnyAsync(invite => invite.OrganizationId == organizationId)).Should().BeFalse();
+        await WithOrganizationScopeAsync(organizationId, async database =>
+            (await database.Invites.AnyAsync(invite => invite.OrganizationId == organizationId)).Should().BeFalse());
     }
 
     [Test]
@@ -127,7 +127,7 @@ public class InternalOrganizationBootstrapFlowTests
     }
 
     [Test]
-    public async Task BootstrapAdministrator_WhenAnActiveAdministratorAlreadyExists_IsConflict()
+    public async Task BootstrapAdministrator_WhenAnActiveAdministratorAlreadyExists_StillInvitesAnotherOne()
     {
         var organizationId = Guid.NewGuid();
         var actorUserId = await SeedSuperAdminActorAsync();
@@ -139,30 +139,65 @@ public class InternalOrganizationBootstrapFlowTests
         var response = await client.PostAsJsonAsync(
             $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId));
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            "an organization may have any number of administrators, so provisioning a lead into one "
+            + "that already has some is not a conflict");
+
+        await WithOrganizationScopeAsync(organizationId, async database =>
+            (await database.Invites.CountAsync(candidate => candidate.OrganizationId == organizationId)).Should().Be(1));
     }
 
+    /// <summary>
+    /// The retry convergence is keyed on the invited address, not on the organization: a retry always
+    /// arrives with the same <c>BootstrapAdminEmail</c> the first attempt used, while a call for a
+    /// different address is a second administrator and must get its own invite.
+    /// </summary>
     [Test]
-    public async Task BootstrapAdministrator_WhenAPendingInviteAlreadyExists_ReturnsItInsteadOfAConflict()
+    public async Task BootstrapAdministrator_WhenTheSameAddressIsAlreadyPending_ReturnsThatInvite()
     {
         var organizationId = Guid.NewGuid();
         var actorUserId = await SeedSuperAdminActorAsync();
         var client = Factory.CreateInternalServiceClient();
-        var firstEmail = UniqueEmail();
+        var email = UniqueEmail();
 
         var firstResponse = await client.PostAsJsonAsync(
-            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId, email: firstEmail));
+            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId, email: email));
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var firstInvite = await firstResponse.Content.ReadFromJsonAsync<BootstrapAdministratorResult>();
 
         var secondResponse = await client.PostAsJsonAsync(
-            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId, email: UniqueEmail()));
+            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId, email: email));
 
         secondResponse.StatusCode.Should().Be(HttpStatusCode.OK,
-            "a pending admin invite must converge a retry, not turn it into a permanent 409");
+            "a pending invite for this same address must converge a retry, not turn it into an error");
         var secondInvite = await secondResponse.Content.ReadFromJsonAsync<BootstrapAdministratorResult>();
         secondInvite!.InviteId.Should().Be(firstInvite!.InviteId);
-        secondInvite.Email.Should().Be(firstEmail);
+        secondInvite.Email.Should().Be(email);
+    }
+
+    [Test]
+    public async Task BootstrapAdministrator_WhenAnotherAddressIsAlreadyPending_MintsASecondInvite()
+    {
+        var organizationId = Guid.NewGuid();
+        var actorUserId = await SeedSuperAdminActorAsync();
+        var client = Factory.CreateInternalServiceClient();
+
+        var firstResponse = await client.PostAsJsonAsync(
+            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId));
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var firstInvite = await firstResponse.Content.ReadFromJsonAsync<BootstrapAdministratorResult>();
+
+        var secondResponse = await client.PostAsJsonAsync(
+            $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId));
+
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondInvite = await secondResponse.Content.ReadFromJsonAsync<BootstrapAdministratorResult>();
+        secondInvite!.InviteId.Should().NotBe(firstInvite!.InviteId,
+            "a different address is a different administrator, and handing back somebody else's "
+            + "invite would send the wrong person's link");
+
+        await WithOrganizationScopeAsync(organizationId, async database =>
+            (await database.Invites.CountAsync(candidate => candidate.OrganizationId == organizationId)).Should().Be(2));
     }
 
     [Test]
@@ -190,10 +225,11 @@ public class InternalOrganizationBootstrapFlowTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var scope = Factory.Services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var invite = await database.Invites.SingleAsync(candidate => candidate.OrganizationId == organizationId);
-        invite.Role.Should().Be(OrgRole.TenancySuperAdmin);
+        await WithOrganizationScopeAsync(organizationId, async database =>
+        {
+            var invite = await database.Invites.SingleAsync(candidate => candidate.OrganizationId == organizationId);
+            invite.Role.Should().Be(OrgRole.TenancySuperAdmin);
+        });
     }
 
     [Test]
@@ -207,10 +243,11 @@ public class InternalOrganizationBootstrapFlowTests
             $"/internal/organizations/{organizationId}/bootstrap-admin", BuildRequestBody(actorUserId));
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var scope = Factory.Services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var invite = await database.Invites.SingleAsync(candidate => candidate.OrganizationId == organizationId);
-        invite.InvitedBy.Should().Be(actorUserId);
+        await WithOrganizationScopeAsync(organizationId, async database =>
+        {
+            var invite = await database.Invites.SingleAsync(candidate => candidate.OrganizationId == organizationId);
+            invite.InvitedBy.Should().Be(actorUserId);
+        });
     }
 
     [Test]
@@ -227,9 +264,24 @@ public class InternalOrganizationBootstrapFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "a committed invite must never surface as a 500 just because the mail send after it failed");
 
+        await WithOrganizationScopeAsync(organizationId, async database =>
+            (await database.Invites.CountAsync(candidate => candidate.OrganizationId == organizationId)).Should().Be(1));
+    }
+
+    /// <summary>
+    /// `Invites` is tenant-scoped and row-level security's `SET LOCAL app.organization_id` only fires
+    /// inside a transaction, so a read from a bare scope answers "no invites" for an organization that
+    /// has some. Same helper, same reason, as `InviteFlowTests`.
+    /// </summary>
+    private async Task WithOrganizationScopeAsync(Guid organizationId, Func<IdentityDbContext, Task> action)
+    {
         using var scope = Factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
         var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        (await database.Invites.CountAsync(candidate => candidate.OrganizationId == organizationId)).Should().Be(1);
+
+        await using var transaction = await database.Database.BeginTransactionAsync();
+        await action(database);
+        await transaction.CommitAsync();
     }
 
     private sealed record BootstrapAdministratorResult(Guid InviteId, string Email, DateTime ExpiresAt);

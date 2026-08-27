@@ -8,7 +8,4 @@ public static class OrganizationBootstrapConstants
 {
     public const string ActorNotAuthorizedMessage =
         "The acting user is not a known platform SuperAdmin.";
-
-    public const string ActiveAdministratorExistsMessage =
-        "This organization already has an active administrator.";
 }

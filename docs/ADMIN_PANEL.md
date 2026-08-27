@@ -332,7 +332,7 @@ operation needs. Full contracts in [API_CONTRACTS.md](API_CONTRACTS.md).
 |---|---|---|---|
 | GET / POST | /organizations | organization-service | list / create a tenant |
 | POST | /organizations/:id/suspend, /organizations/:id/reactivate | organization-service | suspend / resume |
-| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite the organization's first administrator, `TenancyAdmin` or `TenancySuperAdmin`, defaulting to `TenancySuperAdmin` |
+| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite an administrator into the organization, `TenancyAdmin` or `TenancySuperAdmin`, defaulting to `TenancySuperAdmin`; callable as many times as the customer needs administrators (2026-08-27) |
 | POST | /admin/platform/impersonation | identity-service | mint a short-lived token for another organization |
 | GET | /admin/platform/impersonation | identity-service | the impersonation audit trail |
 
@@ -486,7 +486,7 @@ app/(admin)/
     users/
       page.tsx         ← user list + role management (superadmin only)
     organizations/
-      page.tsx         ← tenant registry: create, invite the first admin, suspend/resume, impersonate (Phase 40.9)
+      page.tsx         ← tenant registry: create, invite admins, suspend/resume, impersonate (Phase 40.9)
     demo-requests/
       page.tsx         ← the demo-request pipeline: list, inline status change, confirm-gated Approve,
                           and (SuperAdmin only) one-click Provision — org + bootstrap invite

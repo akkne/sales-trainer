@@ -23,7 +23,7 @@ namespace Sellevate.Identity.Features.PlatformAdmin.Services.Implementation;
 
 /// <summary>
 /// The platform-superadmin operations that need identity-db: minting impersonation tokens, reading
-/// the audit trail, and inviting an organization's first administrator.
+/// the audit trail, and inviting an organization's administrators.
 ///
 /// <para>
 /// An impersonation audit row is written and committed <em>before</em> the token is handed back, so a
@@ -115,6 +115,21 @@ internal sealed class PlatformAdminService(
             .ToList();
     }
 
+    /// <summary>
+    /// Invites an administrator into the named organization. **There is no cap on how many an
+    /// organization may have**, at either rank: the 40.9 shape allowed exactly one and refused every
+    /// later call as "already bootstrapped", which made a company with two РОПs — or one whose only
+    /// administrator left — a support ticket rather than a form. Duplicate addresses are still
+    /// refused, but by <see cref="IInviteService.CreateAsync"/>'s ordinary
+    /// <c>already-a-member</c> / <c>invite-already-pending</c> rejections, which every invite obeys.
+    ///
+    /// <para>
+    /// The back-door concern the old cap answered is unchanged and is answered elsewhere: this route
+    /// is <c>RequireSuperAdmin</c>, and platform staff can already reach any running organization
+    /// through <see cref="StartImpersonationAsync"/> — which, unlike this, writes an audit row. The
+    /// cap never removed that reach; it only removed the ability to staff a customer properly.
+    /// </para>
+    /// </summary>
     public async Task<BootstrapOrganizationAdminResponseDto> BootstrapOrganizationAdminAsync(
         BootstrapOrganizationAdminRequestDto request,
         PlatformAdminActor actor,
@@ -124,26 +139,9 @@ internal sealed class PlatformAdminService(
 
         var organization = await RequireActiveOrganizationAsync(request.OrganizationId, cancellationToken);
 
-        var hasActiveOrganizationAdmin = await databaseContext.Memberships
-            .AsNoTracking()
-            .AnyAsync(
-                membership => membership.OrganizationId == organization.OrganizationId
-                    && (membership.Role == OrgRole.TenancyAdmin || membership.Role == OrgRole.TenancySuperAdmin)
-                    && membership.Status == MembershipStatus.Active,
-                cancellationToken);
-
-        if (hasActiveOrganizationAdmin)
-        {
-            throw new PlatformAdminOperationException(
-                PlatformAdminRejectionReason.OrganizationAlreadyBootstrapped,
-                PlatformAdminConstants.OrganizationAlreadyBootstrappedMessage);
-        }
-
         using var organizationScope = serviceScopeFactory.CreateScope();
         var scopedTenantContext = organizationScope.ServiceProvider.GetRequiredService<TenantContext>();
         scopedTenantContext.SetOrganization(organization.OrganizationId);
-
-        await EnsureNoPendingOrganizationAdminInviteAsync(organizationScope.ServiceProvider, cancellationToken);
 
         var inviteService = organizationScope.ServiceProvider.GetRequiredService<IInviteService>();
         var createInvitesResponse = await inviteService.CreateAsync(
@@ -162,7 +160,7 @@ internal sealed class PlatformAdminService(
         var createdInvite = createInvitesResponse.Created[0];
 
         logger.LogWarning(
-            "Bootstrap {Role} invited InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
+            "Platform-invited {Role} InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
             + "ActorUserId={ActorUserId}",
             requestedRole, createdInvite.Id, organization.OrganizationId, actor.UserId);
 
@@ -233,45 +231,6 @@ internal sealed class PlatformAdminService(
         }
 
         return organization;
-    }
-
-    /// <summary>
-    /// Refuses to bootstrap an organization that already has an unused administrator invite
-    /// waiting, of either <see cref="OrgRole.TenancyAdmin"/> or <see cref="OrgRole.TenancySuperAdmin"/>
-    /// rank — this answers "has this organization been bootstrapped already", not "does it have a
-    /// superadmin specifically", so a first <c>TenancyAdmin</c> invite counts exactly as much as a
-    /// <c>TenancySuperAdmin</c> one would. Runs in the target organization's own scope and inside an
-    /// explicit transaction so the row-level-security <c>SET LOCAL</c> has something to attach to —
-    /// a bare <c>SELECT</c> on a tenant-scoped table sees nothing otherwise
-    /// (docs/TENANCY/TENANCY.md §1.5).
-    /// </summary>
-    private static async Task EnsureNoPendingOrganizationAdminInviteAsync(
-        IServiceProvider scopedServices,
-        CancellationToken cancellationToken)
-    {
-        var scopedDatabaseContext = scopedServices.GetRequiredService<IdentityDbContext>();
-        var now = DateTime.UtcNow;
-
-        await using var transaction = await scopedDatabaseContext.Database
-            .BeginTransactionAsync(cancellationToken);
-
-        var hasPendingOrganizationAdminInvite = await scopedDatabaseContext.Invites
-            .AsNoTracking()
-            .AnyAsync(
-                invite => (invite.Role == OrgRole.TenancyAdmin || invite.Role == OrgRole.TenancySuperAdmin)
-                    && invite.AcceptedAt == null
-                    && invite.RevokedAt == null
-                    && invite.ExpiresAt > now,
-                cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        if (hasPendingOrganizationAdminInvite)
-        {
-            throw new PlatformAdminOperationException(
-                PlatformAdminRejectionReason.OrganizationAlreadyBootstrapped,
-                PlatformAdminConstants.OrganizationAlreadyBootstrappedMessage);
-        }
     }
 
     /// <summary>

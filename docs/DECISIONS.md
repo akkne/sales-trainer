@@ -4,6 +4,64 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-27 — an organization may have any number of admins and superadmins
+
+`POST /admin/platform/organizations/bootstrap-admin` and its internal twin
+`POST internal/organizations/{organizationId}/bootstrap-admin` both refused an organization that
+already had an active `TenancyAdmin`/`TenancySuperAdmin` membership — or, on the platform route, a
+pending invite for either — with `409`. That cap is removed. Both routes now invite as many
+administrators, at either rank, as the customer needs.
+
+**Why the cap was wrong.** It was written (40.9, below) to answer "has this organization been
+bootstrapped already", which is a fine question and the wrong one to gate on. Real customers have
+more than one РОП; a customer's only administrator leaves; a second office gets its own. Each of
+those was a support ticket rather than a form, because the panel had no other route to an
+organization admin and an in-organization `TenancySuperAdmin` — the only person who could invite
+one — might not exist any more. Nothing in the schema ever implied one administrator:
+`Membership` is keyed `(UserId, OrganizationId)` and `/invites` inside an organization has always
+accepted both administrator roles without limit. The cap only ever bound the platform panel.
+
+**Why the security reasoning behind it survives intact.** The 40.9 bullet called the endpoint "a
+permanent platform-side back door into any running customer's organization" without the check. It is
+that either way: this is a `RequireSuperAdmin` route, and the same staff can already enter any
+organization via `POST /admin/platform/impersonation` — which, unlike this, writes an audit row
+before it hands anything back. The cap never removed the reach; it removed the ability to staff a
+customer, and it did so while leaving the *unaudited* path (invite yourself, then accept) open for
+exactly as long as an organization had no administrator. *Alternative rejected:* keeping the cap and
+adding a separate "add another administrator" route — two routes doing one thing, with the second
+inheriting every property that supposedly made the first dangerous.
+
+**What still refuses a call.** The ordinary invite rules, unchanged and shared with every other
+invite: an address that already holds a live invite into this organization (`invite-already-pending`)
+or already has an active membership in it (`already-a-member`) comes back `400`. A suspended
+organization is still `403`, an unknown one still `404`, a role outside
+`TenancyAdmin`/`TenancySuperAdmin` still `400`.
+
+**The internal route's retry convergence is now keyed on the invited address.** It answers `200`
+with an existing pending invite instead of minting a second one — the property demo-request
+provisioning needs, because `InviteService.CreateAsync` mails after commit and outside any
+try/catch, so a mail failure can leave a committed invite behind a thrown exception. That match used
+to be "any pending administrator invite in this organization", which under the new rule would hand a
+call for a second administrator somebody else's invite — and therefore mail the wrong person's link.
+A demo request's `BootstrapAdminEmail` is resolved once and never re-derived, so a genuine retry
+always arrives with the address the first attempt used.
+
+**Removed rather than left dead:** `PlatformAdminRejectionReason.OrganizationAlreadyBootstrapped`,
+`OrganizationBootstrapRejectionReason.ActiveAdministratorExists`, their two messages, both `409`
+mappings, and — in organization-service — `IdentityOrganizationBootstrapConflictException`,
+`DemoRequestOrganizationHasAdminException`, the `organization-has-admin` error code and the frontend
+branch rendering it. An unexpected `409` from identity-service now falls into the generic
+"call did not complete" path, which is `503` and retryable, not a permanent refusal.
+
+Frontend: the organizations panel's per-row column is "Invite an admin" rather than "First admin",
+and its success line reads "Invited X as a TenancySuperAdmin of Y" rather than "as the first".
+
+Docs: [API_CONTRACTS.md](API_CONTRACTS.md), [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md),
+[ADMIN_PANEL.md](ADMIN_PANEL.md), [DEMO_REQUEST.md](DEMO_REQUEST.md),
+[TESTING/DEMO_REQUEST.md](TESTING/DEMO_REQUEST.md).
+
+---
+
 ## 2026-08-27 — `fetchWithAuthToken`'s 401 handler skips auth-bootstrap endpoints
 
 A correct password on `/auth/login` worked, but a *wrong* one didn't show "Invalid email or
@@ -3274,6 +3332,9 @@ written from memory.
   `bootstrap-admin` is a permanent platform-side back door into any running customer's
   organization. With it, it can only do the one thing it exists for. The check covers both an
   active `OrgAdmin` membership and a pending, unexpired `OrgAdmin` invite.
+  **Reversed on 2026-08-27** (entry at the top of this file): an organization may have any number of
+  administrators, and the reach this check was meant to close is already open — and audited — through
+  impersonation.
 
 - **The impersonation token is deliberately weaker than the token that asked for it.** It carries
   `role: User` — not `SuperAdmin` — plus `org_id` and `org_role: OrgAdmin` for the target
@@ -5816,6 +5877,10 @@ this change. Both now accept either administrator rank. They exist to answer "ha
 already got its first admin", not "does it specifically have a superadmin"; left unchanged, a first
 `TenancyAdmin` invite would have left an organization looking un-bootstrapped forever, and a second
 bootstrap call would have sailed straight through and issued a second, competing first-admin invite.
+
+> **Superseded on 2026-08-27** (entry at the top of this file): both guards are gone. An organization
+> may hold any number of administrators, so "has it already been bootstrapped" is no longer a
+> question either route asks.
 
 Frontend: the platform organizations panel gets a per-row role `<select>` next to the existing
 admin-email input, defaulting to `TenancySuperAdmin`. Its two options are labelled by what the role

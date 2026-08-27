@@ -162,7 +162,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 
 ---
 
-## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9 — unchanged by the 2026-08-16 role split: impersonation and bootstrapping an organization's first admin are both superadmin-exclusive)
+## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9 — unchanged by the 2026-08-16 role split: impersonation and inviting an organization's administrators are both superadmin-exclusive)
 
 > Served by **identity-service** under `/admin/platform/*` (gateway route `identity-admin-platform`).
 > Organization CRUD lives in organization-service; what lands here is everything that needs
@@ -172,7 +172,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 |---|---|---|---|
 | POST | /admin/platform/impersonation | `{organizationId, reason}` | `ImpersonationTokenDto`, `404` unknown org, `403` suspended / already impersonating |
 | GET | /admin/platform/impersonation | — | `ImpersonationAuditEntryDto[]`, newest first, max 100 |
-| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email, role?}` | `BootstrapOrganizationAdminResponseDto`, `400` role is not `TenancyAdmin`/`TenancySuperAdmin`, `404`, `409` already has an admin, `403` suspended |
+| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email, role?}` | `BootstrapOrganizationAdminResponseDto`, `400` role is not `TenancyAdmin`/`TenancySuperAdmin` or the address is already invited/a member, `404`, `403` suspended |
 
 `ImpersonationTokenDto`: `{accessToken, expiresAt, impersonationId, organization: {id, name}}`
 `ImpersonationAuditEntryDto`: `{id, actorUserId, actorEmail, organization: {id, name}, reason, issuedAt, expiresAt}`
@@ -208,10 +208,14 @@ already applies to an ordinary invite (including the retired `OrgAdmin` name che
 narrowed to `TenancyAdmin` or `TenancySuperAdmin` only — `Manager` and anything unrecognized are a
 `400`. Omitted or blank still defaults to `TenancySuperAdmin`, so every caller that predates this
 field keeps working unchanged. The endpoint still cannot mint an arbitrary organization role; it can
-only pick which rank of administrator it bootstraps. It answers `409` if the organization already
-has an active `TenancyAdmin` or `TenancySuperAdmin` membership, or a pending invite for either, so
-it cannot be used as a back door into a running customer's organization — see DECISIONS.md
-(2026-08-20).
+only pick which rank of administrator it bootstraps.
+
+**There is no limit on how many administrators an organization may have** (2026-08-27). Until then
+this route answered `409` for an organization that already had an active `TenancyAdmin` /
+`TenancySuperAdmin` membership or a pending invite for either, which made a customer with two РОПs —
+or one whose only administrator left — unstaffable from the panel. A duplicate address is still
+refused, but by the ordinary invite rules (`already-a-member` / `invite-already-pending` → `400`).
+See DECISIONS.md (2026-08-27) for why the back-door concern the `409` answered is unchanged.
 
 `404` also covers "organization-service created it seconds ago and identity-service has not
 consumed `organization.created` yet"; the message says so and the operation is safe to retry.
@@ -235,10 +239,13 @@ provision (unlike the `404` two paragraphs up, which tolerates exactly that race
 retrying a form); **re-checks `actorUserId` is a platform `SuperAdmin`** in identity-db (`403` — the
 shared secret authorizes organization-service's channel, this check authorizes the actor, and
 skipping it would let a plain `Admin`'s provisioning click be laundered into a superadmin act);
-`409` if an active `TenancyAdmin`/`TenancySuperAdmin` membership already exists; **`200` returning
-the existing invite, not `409`, if one is already pending** — required for convergent retry, since
+existing administrators in the organization are **not** a refusal (2026-08-27 — an organization may
+have any number); **`200` returning the existing invite if one is already pending for the same
+address** — required for convergent retry, since
 `InviteService.CreateAsync` sends its email after commit and outside any try/catch, so a mail
-failure can leave a committed invite behind a thrown exception; otherwise mints through
+failure can leave a committed invite behind a thrown exception. The match is on the invited address,
+not on the organization: a retry always carries the same `BootstrapAdminEmail`, while a different
+address means a second administrator and gets its own invite. Otherwise it mints through
 `IInviteService` with `InvitedBy = actorUserId`, role validated/narrowed by the same rule
 `PlatformAdminService.ResolveBootstrapRole` applies (`Manager`/unknown → `400`, omitted →
 `TenancySuperAdmin`), and the mail send is wrapped so a committed invite never surfaces as a `500`.
@@ -2598,7 +2605,7 @@ anonymous endpoint can be made to mail a third party.
 
 `RequireSuperAdmin`, not `RequirePlatformAdmin` — provisioning creates a membership, which
 `AuthorizationPolicies` reserves for a superadmin at either the platform or the organization level.
-Creates the organization and sends the bootstrap invite to its first administrator, in one call.
+Creates the organization and sends the bootstrap invite to an administrator of it, in one call.
 Full design and the write-order safety property: docs/DEMO_REQUEST.md, "How provisioning is
 actually written". Allowed from any status; sets `Status = Approved` itself.
 
@@ -2611,7 +2618,6 @@ optional, defaulting respectively to `CompanyName`, a normalized form of the nam
 | `200` | `{demoRequestId, status, provisioningState, organization: {id, name, slug}, inviteId, inviteEmail, inviteExpiresAt, alreadyProvisioned}` |
 | `404` | lead not found |
 | `409` | `{code: "slug-taken", slug, message}` |
-| `409` | `{code: "organization-has-admin", organizationId}` |
 | `503` | `{code: "invite-failed", organizationId, provisioningState: "OrganizationCreated"}` |
 | `400` | `{message}` — bad role or bad email |
 

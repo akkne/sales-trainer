@@ -189,7 +189,7 @@ never names the organization — the same anti-enumeration property 40.7 gave `P
 ## Platform superadmin surface (Phase 40.9)
 
 Two tables and one controller, all gated by `RequireSuperAdmin` (unchanged by the 2026-08-16 role
-split: impersonation and bootstrapping an organization's first admin are both superadmin-exclusive)
+split: impersonation and inviting an organization's administrators are both superadmin-exclusive)
 and none of them tenant-scoped —
 these routes act *on* organizations rather than *inside* one, so there is no `X-Organization-Id`
 header to scope by. Contracts: [API_CONTRACTS.md](API_CONTRACTS.md) → "Platform superadmin".
@@ -227,15 +227,21 @@ It is short-lived (`Impersonation:TokenLifetimeMinutes`, default 15) and has **n
 Built by hand in `PlatformAdminService` rather than through `AuthenticationService`'s token path,
 because every one of those differences *is* a security property.
 
-### Bootstrapping the first `TenancySuperAdmin`
+### Inviting an organization's administrators
 
 `POST /admin/platform/organizations/bootstrap-admin` opens a DI scope, points that scope's
 `TenantContext` at the target organization and calls the ordinary Phase 40.7 `IInviteService` — the
-same code, the same tenant guards, the same email. There is no second invite path. The role is
-always `TenancySuperAdmin` and is not read from the request — only a superadmin can invite, so a
-first admin one rank lower would leave the organization unable to add anybody. The endpoint answers
-`409` if the organization already has an active `TenancySuperAdmin` or a pending
-`TenancySuperAdmin` invite, so it cannot become a back door into a running customer's organization.
+same code, the same tenant guards, the same email. There is no second invite path. The role comes
+from the request, narrowed to `TenancyAdmin` or `TenancySuperAdmin` and defaulting to
+`TenancySuperAdmin` when omitted (2026-08-20) — only a superadmin can invite, so an organization
+whose only administrator is one rank lower cannot add anybody.
+
+**An organization may have any number of administrators at either rank** (2026-08-27). This route
+used to answer `409` once an organization had one, which made a customer with two РОПs — or one
+whose only administrator left — impossible to staff from the panel. A duplicate address is still
+refused, by the ordinary invite rules rather than by a cap. The back-door worry the `409` was
+written for is unchanged: this is a `RequireSuperAdmin` route, and platform staff can already enter
+any organization through impersonation, which writes an audit row that this does not.
 
 ## Frontend REST (unchanged paths, served via the gateway)
 

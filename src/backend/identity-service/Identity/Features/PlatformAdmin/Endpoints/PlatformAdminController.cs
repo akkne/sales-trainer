@@ -59,10 +59,11 @@ public sealed class PlatformAdminController(IPlatformAdminService platformAdminS
         => Ok(await platformAdminService.ListImpersonationsAsync(cancellationToken));
 
     /// <summary>
-    /// Invites the first administrator of a new organization — <c>TenancyAdmin</c> or
+    /// Invites an administrator into an organization — <c>TenancyAdmin</c> or
     /// <c>TenancySuperAdmin</c>, chosen by the request and defaulting to <c>TenancySuperAdmin</c>
     /// when the field is omitted — reusing the Phase 40.7 invite machinery rather than adding a
-    /// second way to create a membership.
+    /// second way to create a membership. Callable as many times as the organization needs
+    /// administrators; a duplicate address is a <c>400</c> from the ordinary invite rules.
     /// </summary>
     [HttpPost("organizations/bootstrap-admin")]
     public async Task<ActionResult<BootstrapOrganizationAdminResponseDto>> BootstrapOrganizationAdmin(
@@ -107,8 +108,6 @@ public sealed class PlatformAdminController(IPlatformAdminService platformAdminS
     {
         PlatformAdminRejectionReason.OrganizationNotKnown =>
             NotFound(new { message = exception.Message }),
-        PlatformAdminRejectionReason.OrganizationAlreadyBootstrapped =>
-            Conflict(new { message = exception.Message }),
         _ => StatusCode(StatusCodes.Status403Forbidden, new { message = exception.Message }),
     };
 }

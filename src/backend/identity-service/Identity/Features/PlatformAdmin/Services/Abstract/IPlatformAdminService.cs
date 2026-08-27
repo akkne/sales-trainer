@@ -22,8 +22,9 @@ public interface IPlatformAdminService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Invites the first <c>TenancySuperAdmin</c> of an organization that has none, reusing the Phase 40.7
-    /// invite machinery verbatim.
+    /// Invites a <c>TenancyAdmin</c> or <c>TenancySuperAdmin</c> into an organization, reusing the
+    /// Phase 40.7 invite machinery verbatim. An organization may have any number of either rank —
+    /// see the implementation for why the original one-administrator cap was dropped.
     /// </summary>
     Task<BootstrapOrganizationAdminResponseDto> BootstrapOrganizationAdminAsync(
         BootstrapOrganizationAdminRequestDto request,

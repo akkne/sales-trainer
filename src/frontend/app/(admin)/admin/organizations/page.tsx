@@ -34,7 +34,7 @@ export default function AdminOrganizationsPage() {
     const { accessToken, setAccessToken, authenticatedUser } = useAuthStore();
 
     // Creating, suspending and resuming an organization is ordinary platform administration, so
-    // an `Admin` does all of it. Inviting the organization's first admin adds a user, and
+    // an `Admin` does all of it. Inviting an organization admin adds a user, and
     // impersonation is superadmin-exclusive for its own reasons — both stay behind
     // RequireSuperAdmin on the backend (docs/DECISIONS.md, 2026-08-16).
     const canManageUsers = canManagePlatformUsers(authenticatedUser?.role);
@@ -78,7 +78,10 @@ export default function AdminOrganizationsPage() {
         }
     };
 
-    const inviteFirstAdmin = async (organization: PlatformOrganization) => {
+    // Callable as often as the customer needs: an organization may hold any number of admins and
+    // superadmins, so this row's form stays usable after the first one (docs/DECISIONS.md,
+    // 2026-08-27). The address field is cleared on success so the next one can be typed straight in.
+    const inviteAdmin = async (organization: PlatformOrganization) => {
         const email = (adminEmailByOrganizationId[organization.id] ?? "").trim();
         if (!email) return;
         const role = adminRoleByOrganizationId[organization.id] ?? defaultAdminRole;
@@ -92,7 +95,7 @@ export default function AdminOrganizationsPage() {
                 role,
             });
             setAdminEmailByOrganizationId((current) => ({ ...current, [organization.id]: "" }));
-            setFeedback(`Invited ${email} as the first ${role} of "${organization.name}".`);
+            setFeedback(`Invited ${email} as a ${role} of "${organization.name}".`);
         } catch (error) {
             setErrorMessage((error as Error).message);
         }
@@ -196,7 +199,7 @@ export default function AdminOrganizationsPage() {
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Name</th>
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Slug</th>
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Status</th>
-                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">First admin</th>
+                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Invite an admin</th>
                                 <th className="py-2 px-3" />
                             </tr>
                         </thead>
@@ -223,7 +226,7 @@ export default function AdminOrganizationsPage() {
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="email"
-                                                aria-label={`First admin email for ${organization.name}`}
+                                                aria-label={`Admin email for ${organization.name}`}
                                                 value={adminEmailByOrganizationId[organization.id] ?? ""}
                                                 onChange={(event) =>
                                                     setAdminEmailByOrganizationId((current) => ({
@@ -235,7 +238,7 @@ export default function AdminOrganizationsPage() {
                                                 className="px-2 py-1 text-xs rounded-lg border border-line bg-surface text-ink"
                                             />
                                             <select
-                                                aria-label={`First admin role for ${organization.name}`}
+                                                aria-label={`Admin role for ${organization.name}`}
                                                 value={adminRoleByOrganizationId[organization.id] ?? defaultAdminRole}
                                                 onChange={(event) =>
                                                     setAdminRoleByOrganizationId((current) => ({
@@ -253,7 +256,7 @@ export default function AdminOrganizationsPage() {
                                             </select>
                                             <button
                                                 type="button"
-                                                onClick={() => inviteFirstAdmin(organization)}
+                                                onClick={() => inviteAdmin(organization)}
                                                 disabled={bootstrapOrganizationAdmin.isPending}
                                                 className="text-xs text-indigo-ink hover:underline disabled:opacity-50"
                                             >

@@ -11,7 +11,6 @@ namespace Sellevate.Organization.Features.DemoRequests.Constants;
 public static class DemoRequestProvisioningConstants
 {
     public const string SlugTakenCode = "slug-taken";
-    public const string OrganizationHasAdminCode = "organization-has-admin";
     public const string InviteFailedCode = "invite-failed";
 
     public const string DefaultProvisioningRole = "TenancySuperAdmin";

@@ -39,6 +39,14 @@ namespace Sellevate.Identity.Features.Organizations.Services.Implementation;
 /// provisioning click into a superadmin act, which is exactly the boundary
 /// <c>AuthorizationPolicies</c> draws between the two ranks.
 /// </para>
+///
+/// <para>
+/// <b>An organization that already has administrators is not refused.</b> This route used to answer
+/// <c>409</c> for one, which made provisioning a lead into an existing organization — a second РОП,
+/// a replacement for one who left — impossible from the panel. The reasoning is on
+/// <c>PlatformAdminService.BootstrapOrganizationAdminAsync</c>; what remains here is the retry
+/// convergence, now keyed on the invited address rather than on the organization.
+/// </para>
 /// </summary>
 internal sealed class OrganizationBootstrapService(
     IdentityDbContext databaseContext,
@@ -70,15 +78,10 @@ internal sealed class OrganizationBootstrapService(
         scopedTenantContext.SetOrganization(organizationId);
         var scopedDatabaseContext = organizationScope.ServiceProvider.GetRequiredService<IdentityDbContext>();
 
-        var (hasActiveAdministrator, pendingInvite) =
-            await InspectExistingBootstrapStateAsync(scopedDatabaseContext, organizationId, cancellationToken);
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-        if (hasActiveAdministrator)
-        {
-            throw new OrganizationBootstrapOperationException(
-                OrganizationBootstrapRejectionReason.ActiveAdministratorExists,
-                OrganizationBootstrapConstants.ActiveAdministratorExistsMessage);
-        }
+        var pendingInvite = await FindPendingAdministratorInviteAsync(
+            scopedDatabaseContext, normalizedEmail, cancellationToken);
 
         if (pendingInvite is not null)
         {
@@ -104,7 +107,8 @@ internal sealed class OrganizationBootstrapService(
                 + "recovering the committed invite instead of surfacing a 500",
                 organizationId);
 
-            var recoveredInvite = await FindPendingAdministratorInviteAsync(scopedDatabaseContext, cancellationToken);
+            var recoveredInvite = await FindPendingAdministratorInviteAsync(
+                scopedDatabaseContext, normalizedEmail, cancellationToken);
             if (recoveredInvite is null)
             {
                 throw;
@@ -160,56 +164,41 @@ internal sealed class OrganizationBootstrapService(
     }
 
     /// <summary>
-    /// Reads inside an explicit transaction for the reason <c>PlatformAdminService
-    /// .EnsureNoPendingOrganizationAdminInviteAsync</c> already documents: <c>Invites</c> is tenant-scoped
-    /// and row-level security's <c>SET LOCAL app.organization_id</c> only fires on a transaction, so a
-    /// bare <c>SELECT</c> against it would fail closed and answer "no pending invite" for an
-    /// organization that has one.
+    /// The pending invite this route converges a retry onto, matched **on the invited address**, not
+    /// on "does this organization have any administrator invite at all". The organization may have as
+    /// many administrators as it likes (see <c>PlatformAdminService.BootstrapOrganizationAdminAsync</c>
+    /// for why that cap is gone), so the only thing a second call for a *different* address may mean
+    /// is a second administrator, and answering it with somebody else's invite would send the lead the
+    /// wrong person's link. A demo request's <c>BootstrapAdminEmail</c> is resolved once and never
+    /// re-derived, so a genuine retry always arrives with the same address it did the first time.
+    ///
+    /// <para>
+    /// Reads inside an explicit transaction because <c>Invites</c> is tenant-scoped and row-level
+    /// security's <c>SET LOCAL app.organization_id</c> only fires on a transaction — a bare
+    /// <c>SELECT</c> would fail closed and answer "no pending invite" for an organization that has one
+    /// (docs/TENANCY/TENANCY.md §1.5).
+    /// </para>
     /// </summary>
-    private static async Task<(bool HasActiveAdministrator, Invite? PendingInvite)> InspectExistingBootstrapStateAsync(
-        IdentityDbContext scopedDatabaseContext, Guid organizationId, CancellationToken cancellationToken)
-    {
-        await using var transaction = await scopedDatabaseContext.Database.BeginTransactionAsync(cancellationToken);
-
-        var hasActiveAdministrator = await scopedDatabaseContext.Memberships
-            .AsNoTracking()
-            .AnyAsync(
-                membership => membership.OrganizationId == organizationId
-                    && (membership.Role == OrgRole.TenancyAdmin || membership.Role == OrgRole.TenancySuperAdmin)
-                    && membership.Status == MembershipStatus.Active,
-                cancellationToken);
-
-        Invite? pendingInvite = hasActiveAdministrator
-            ? null
-            : await ReadPendingAdministratorInviteAsync(scopedDatabaseContext, cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        return (hasActiveAdministrator, pendingInvite);
-    }
-
     private static async Task<Invite?> FindPendingAdministratorInviteAsync(
-        IdentityDbContext scopedDatabaseContext, CancellationToken cancellationToken)
-    {
-        await using var transaction = await scopedDatabaseContext.Database.BeginTransactionAsync(cancellationToken);
-        var pendingInvite = await ReadPendingAdministratorInviteAsync(scopedDatabaseContext, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return pendingInvite;
-    }
-
-    private static Task<Invite?> ReadPendingAdministratorInviteAsync(
-        IdentityDbContext scopedDatabaseContext, CancellationToken cancellationToken)
+        IdentityDbContext scopedDatabaseContext, string normalizedEmail, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
 
-        return scopedDatabaseContext.Invites
+        await using var transaction = await scopedDatabaseContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var pendingInvite = await scopedDatabaseContext.Invites
             .Where(
-                invite => (invite.Role == OrgRole.TenancyAdmin || invite.Role == OrgRole.TenancySuperAdmin)
+                invite => invite.Email == normalizedEmail
+                    && (invite.Role == OrgRole.TenancyAdmin || invite.Role == OrgRole.TenancySuperAdmin)
                     && invite.AcceptedAt == null
                     && invite.RevokedAt == null
                     && invite.ExpiresAt > now)
             .OrderByDescending(invite => invite.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return pendingInvite;
     }
 
     private static InternalBootstrapAdministratorResponseDto ToResponse(Invite invite)

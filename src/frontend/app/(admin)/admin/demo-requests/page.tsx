@@ -67,9 +67,9 @@ export default function AdminDemoRequestsPage() {
     const provisionDemoRequest = useProvisionDemoRequest();
 
     const authenticatedUser = useAuthStore((state) => state.authenticatedUser);
-    // Provisioning creates a real tenant and adds it a first administrator, which is exactly the
+    // Provisioning creates a real tenant and adds it an administrator, which is exactly the
     // kind of add-a-user operation `RequireSuperAdmin` gates everywhere else in this panel
-    // (organizations' first-admin bootstrap, users' role changes) — reusing the same predicate
+    // (organizations' admin bootstrap, users' role changes) — reusing the same predicate
     // rather than inventing a new one.
     const canProvision = canManagePlatformUsers(authenticatedUser?.role);
 
@@ -179,14 +179,6 @@ export default function AdminDemoRequestsPage() {
                         // slug and resubmit without re-opening anything.
                         reportProvisionOutcome({
                             errorMessage: `The slug "${String(apiError.payload?.slug ?? trimmedSlug)}" is already taken — change it and try again.`,
-                        });
-                        return;
-                    }
-
-                    if (apiError.status === 409 && code === "organization-has-admin") {
-                        reportProvisionOutcome({
-                            errorMessage:
-                                "This organization already has an administrator — no invite was sent.",
                         });
                         return;
                     }

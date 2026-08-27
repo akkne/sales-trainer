@@ -159,25 +159,6 @@ public sealed class AdminDemoRequestControllerTests
     }
 
     [Test]
-    public async Task ProvisionDemoRequest_returns_409_organization_has_admin()
-    {
-        var organizationId = Guid.NewGuid();
-        _demoRequestProvisioningService.ProvisionAsync(
-                Arg.Any<Guid>(), Arg.Any<ProvisionDemoRequestRequestDto>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns<DemoRequestProvisioningResultDto?>(
-                _ => throw new DemoRequestOrganizationHasAdminException(organizationId));
-
-        var result = await _controller.ProvisionDemoRequest(Guid.NewGuid(), null, CancellationToken.None);
-
-        var conflictResult = result.Result.Should().BeOfType<ConflictObjectResult>().Subject;
-        conflictResult.Value.Should().BeEquivalentTo(new
-        {
-            code = DemoRequestProvisioningConstants.OrganizationHasAdminCode,
-            organizationId,
-        });
-    }
-
-    [Test]
     public async Task ProvisionDemoRequest_returns_503_invite_failed()
     {
         var organizationId = Guid.NewGuid();

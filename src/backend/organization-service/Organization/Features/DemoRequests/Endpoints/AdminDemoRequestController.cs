@@ -85,14 +85,6 @@ public sealed class AdminDemoRequestController(
                 message = conflictException.Message,
             });
         }
-        catch (DemoRequestOrganizationHasAdminException organizationHasAdminException)
-        {
-            return Conflict(new
-            {
-                code = DemoRequestProvisioningConstants.OrganizationHasAdminCode,
-                organizationId = organizationHasAdminException.OrganizationId,
-            });
-        }
         catch (DemoRequestInviteFailedException inviteFailedException)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new

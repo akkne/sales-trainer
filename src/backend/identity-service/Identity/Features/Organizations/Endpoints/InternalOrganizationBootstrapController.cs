@@ -39,18 +39,11 @@ public sealed class InternalOrganizationBootstrapController(IOrganizationBootstr
         }
         catch (OrganizationBootstrapOperationException operationException)
         {
-            return ToErrorResult(operationException);
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = operationException.Message });
         }
         catch (ArgumentException argumentException)
         {
             return BadRequest(new { message = argumentException.Message });
         }
     }
-
-    private ObjectResult ToErrorResult(OrganizationBootstrapOperationException exception) => exception.Reason switch
-    {
-        OrganizationBootstrapRejectionReason.ActiveAdministratorExists =>
-            Conflict(new { message = exception.Message }),
-        _ => StatusCode(StatusCodes.Status403Forbidden, new { message = exception.Message }),
-    };
 }

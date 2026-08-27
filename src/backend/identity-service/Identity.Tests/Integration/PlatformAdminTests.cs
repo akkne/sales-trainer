@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Features.Organizations.Models;
@@ -15,9 +16,9 @@ using Sellevate.Identity.Tests.Helpers;
 namespace Sellevate.Identity.Tests.Integration;
 
 /// <summary>
-/// Phase 40.9 — the platform superadmin surface: impersonation and bootstrapping a new
-/// organization's first administrator, at whichever of <c>TenancyAdmin</c> or
-/// <c>TenancySuperAdmin</c> the request chose (2026-08-20).
+/// Phase 40.9 — the platform superadmin surface: impersonation and inviting an organization's
+/// administrators, at whichever of <c>TenancyAdmin</c> or <c>TenancySuperAdmin</c> the request chose
+/// (2026-08-20). There is no limit on how many an organization may have (2026-08-27).
 /// </summary>
 [TestFixture]
 [Category("Integration")]
@@ -252,13 +253,14 @@ public class PlatformAdminTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        using var scope = Factory.Services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var invite = await database.Invites
-            .SingleAsync(candidate => candidate.OrganizationId == organizationId);
-        invite.Role.Should().Be(OrgRole.TenancySuperAdmin,
-            "every caller that predates the role field sends none at all and must keep getting "
-            + "exactly what it always got");
+        await WithOrganizationScopeAsync(organizationId, async database =>
+        {
+            var invite = await database.Invites
+                .SingleAsync(candidate => candidate.OrganizationId == organizationId);
+            invite.Role.Should().Be(OrgRole.TenancySuperAdmin,
+                "every caller that predates the role field sends none at all and must keep getting "
+                + "exactly what it always got");
+        });
     }
 
     [Test]
@@ -293,7 +295,7 @@ public class PlatformAdminTests
 
     [TestCase(OrgRole.TenancySuperAdmin)]
     [TestCase(OrgRole.TenancyAdmin)]
-    public async Task BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflictRegardlessOfItsRole(
+    public async Task BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_InvitesTheSecondAddressToo(
         OrgRole pendingInviteRole)
     {
         var organizationId = Guid.NewGuid();
@@ -309,12 +311,38 @@ public class PlatformAdminTests
             "/admin/platform/organizations/bootstrap-admin",
             new { organizationId, email = UniqueEmail() });
 
-        secondResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK,
+            "an organization may have as many administrators as it needs — a pending invite for "
+            + "somebody else is not a reason to refuse the next one");
+
+        await WithOrganizationScopeAsync(organizationId, async database =>
+            (await database.Invites.CountAsync(candidate => candidate.OrganizationId == organizationId))
+                .Should().Be(2));
+    }
+
+    [Test]
+    public async Task BootstrapOrganizationAdmin_ForAnAddressThatAlreadyHasAPendingInvite_IsBadRequest()
+    {
+        var organizationId = Guid.NewGuid();
+        await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
+        var client = CreateSuperAdminClient();
+        var email = UniqueEmail();
+
+        var firstResponse = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin", new { organizationId, email });
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var secondResponse = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin", new { organizationId, email });
+
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "dropping the one-administrator cap does not drop the ordinary invite rules — one "
+            + "address still cannot hold two live invites into the same organization");
     }
 
     [TestCase(OrgRole.TenancySuperAdmin)]
     [TestCase(OrgRole.TenancyAdmin)]
-    public async Task BootstrapOrganizationAdmin_WhenAnAdministratorAlreadyExists_IsConflictRegardlessOfRank(
+    public async Task BootstrapOrganizationAdmin_WhenAnAdministratorAlreadyExists_InvitesAnotherOne(
         OrgRole existingAdministratorRole)
     {
         var organizationId = Guid.NewGuid();
@@ -328,14 +356,14 @@ public class PlatformAdminTests
             "/admin/platform/organizations/bootstrap-admin",
             new { organizationId, email = UniqueEmail() });
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict,
-            "the pre-check answers \"has this organization been bootstrapped already\", not "
-            + "\"does it have a superadmin specifically\"");
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            "a company with two РОПs is ordinary, and staffing the second one must not need a "
+            + "support ticket");
     }
 
     [TestCase(OrgRole.TenancySuperAdmin)]
     [TestCase(OrgRole.TenancyAdmin)]
-    public async Task BootstrapOrganizationAdmin_AfterTheFirstAdministratorAcceptsTheInvite_ASecondBootstrapIsConflict(
+    public async Task BootstrapOrganizationAdmin_AfterTheFirstAdministratorAcceptsTheInvite_ASecondBootstrapSucceeds(
         OrgRole firstAdministratorRole)
     {
         var organizationId = Guid.NewGuid();
@@ -358,9 +386,17 @@ public class PlatformAdminTests
             "/admin/platform/organizations/bootstrap-admin",
             new { organizationId, email = UniqueEmail() });
 
-        secondResponse.StatusCode.Should().Be(HttpStatusCode.Conflict,
-            $"an organization whose first administrator accepted at {firstAdministratorRole} must "
-            + "read as already bootstrapped, or a second call would sail straight through");
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK,
+            $"an organization whose administrator accepted at {firstAdministratorRole} may still be "
+            + "given another one");
+
+        var sameAddressResponse = await client.PostAsJsonAsync(
+            "/admin/platform/organizations/bootstrap-admin",
+            new { organizationId, email = bootstrapInvite.Email });
+
+        sameAddressResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "the person who already accepted is already a member, which the ordinary invite rules "
+            + "refuse");
     }
 
     [Test]
@@ -376,6 +412,22 @@ public class PlatformAdminTests
             new { organizationId, email = UniqueEmail() });
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// `Invites` is tenant-scoped and row-level security's `SET LOCAL app.organization_id` only fires
+    /// inside a transaction, so a read from a bare scope answers "no invites" for an organization that
+    /// has some. Same helper, same reason, as `InviteFlowTests`.
+    /// </summary>
+    private async Task WithOrganizationScopeAsync(Guid organizationId, Func<IdentityDbContext, Task> action)
+    {
+        using var scope = Factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
+        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+
+        await using var transaction = await database.Database.BeginTransactionAsync();
+        await action(database);
+        await transaction.CommitAsync();
     }
 
     private sealed record OrganizationReferenceResult(Guid Id, string Name);

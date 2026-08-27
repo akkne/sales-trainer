@@ -95,7 +95,7 @@ describe("platform organization hooks", () => {
         expect(mockPost).toHaveBeenLastCalledWith(`/organizations/${ORGANIZATION_ID}/reactivate`, {});
     });
 
-    it("invites the first tenancy superadmin through the platform endpoint, never through /invites", async () => {
+    it("invites a tenancy superadmin through the platform endpoint, never through /invites", async () => {
         mockPost.mockResolvedValueOnce({
             inviteId: "invite-1",
             organization: { id: ORGANIZATION_ID, name: "Acme Sales" },
